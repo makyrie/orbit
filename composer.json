@@ -1,0 +1,21 @@
+{
+	"name": "orbit/orbit",
+	"description": "Orbit — person-centric social activity tool for WordPress",
+	"type": "wordpress-plugin",
+	"license": "GPL-2.0-or-later",
+	"require": {
+		"php": ">=8.0",
+		"woocommerce/action-scheduler": "^3.9"
+	},
+	"autoload": {
+		"classmap": [
+			"includes/",
+			"cli/"
+		]
+	},
+	"config": {
+		"allow-plugins": {
+			"composer/installers": true
+		}
+	}
+}
