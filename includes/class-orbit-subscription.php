@@ -129,6 +129,38 @@ class Orbit_Subscription {
 	}
 
 	/**
+	 * Get multiple subscriptions by IDs in a single query.
+	 *
+	 * @param array $ids Array of subscription IDs.
+	 * @return array Associative array keyed by subscription ID.
+	 */
+	public static function get_by_ids( $ids ) {
+		global $wpdb;
+
+		if ( empty( $ids ) ) {
+			return array();
+		}
+
+		$table        = $wpdb->prefix . ORBIT_TABLE_SUBSCRIPTIONS;
+		$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+		$values       = array_map( 'absint', $ids );
+
+		$results = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE id IN ({$placeholders})",
+				...$values
+			)
+		);
+
+		$keyed = array();
+		foreach ( $results as $row ) {
+			$keyed[ (int) $row->id ] = $row;
+		}
+
+		return $keyed;
+	}
+
+	/**
 	 * Get a subscription by user ID and profile ID.
 	 *
 	 * @param int $user_id    User ID.

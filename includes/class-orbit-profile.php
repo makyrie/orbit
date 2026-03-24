@@ -164,6 +164,38 @@ class Orbit_Profile {
 	}
 
 	/**
+	 * Get multiple profiles by IDs in a single query.
+	 *
+	 * @param array $ids Array of profile IDs.
+	 * @return array Associative array keyed by profile ID.
+	 */
+	public static function get_by_ids( $ids ) {
+		global $wpdb;
+
+		if ( empty( $ids ) ) {
+			return array();
+		}
+
+		$table        = $wpdb->prefix . ORBIT_TABLE_PROFILES;
+		$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+		$values       = array_map( 'absint', $ids );
+
+		$results = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE id IN ({$placeholders})",
+				...$values
+			)
+		);
+
+		$keyed = array();
+		foreach ( $results as $row ) {
+			$keyed[ (int) $row->id ] = $row;
+		}
+
+		return $keyed;
+	}
+
+	/**
 	 * Update a profile.
 	 *
 	 * @param int   $id   Profile ID.

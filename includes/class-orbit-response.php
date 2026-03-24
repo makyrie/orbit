@@ -191,6 +191,43 @@ class Orbit_Response {
 	}
 
 	/**
+	 * Batch count responses for multiple activities in a single query.
+	 *
+	 * @param array $activity_ids Array of activity IDs.
+	 * @return array Associative array: [ activity_id => [ 'going' => N, 'maybe' => N, 'total' => N ] ]
+	 */
+	public static function count_by_activity_ids( $activity_ids ) {
+		global $wpdb;
+
+		if ( empty( $activity_ids ) ) {
+			return array();
+		}
+
+		$table        = $wpdb->prefix . ORBIT_TABLE_RESPONSES;
+		$placeholders = implode( ',', array_fill( 0, count( $activity_ids ), '%d' ) );
+		$values       = array_map( 'absint', $activity_ids );
+
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT activity_id, response, COUNT(*) AS cnt FROM {$table} WHERE activity_id IN ({$placeholders}) GROUP BY activity_id, response",
+				...$values
+			)
+		);
+
+		$counts = array();
+		foreach ( $rows as $row ) {
+			$aid = (int) $row->activity_id;
+			if ( ! isset( $counts[ $aid ] ) ) {
+				$counts[ $aid ] = array( 'going' => 0, 'maybe' => 0, 'total' => 0 );
+			}
+			$counts[ $aid ][ $row->response ] = (int) $row->cnt;
+			$counts[ $aid ]['total']          += (int) $row->cnt;
+		}
+
+		return $counts;
+	}
+
+	/**
 	 * Count responses for an activity, optionally filtered by response type.
 	 *
 	 * @param int         $activity_id Activity ID.

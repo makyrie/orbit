@@ -466,7 +466,18 @@ class Orbit_Notifier {
 	 * @param int $user_id User ID.
 	 * @return object Preferences row.
 	 */
+	/**
+	 * Static request-level cache for preferences.
+	 *
+	 * @var array
+	 */
+	private static $preferences_cache = array();
+
 	public static function get_or_create_preferences( $user_id ) {
+		if ( isset( self::$preferences_cache[ $user_id ] ) ) {
+			return self::$preferences_cache[ $user_id ];
+		}
+
 		global $wpdb;
 
 		$table = $wpdb->prefix . ORBIT_TABLE_NOTIFICATION_PREFERENCES;
@@ -476,6 +487,7 @@ class Orbit_Notifier {
 		);
 
 		if ( $prefs ) {
+			self::$preferences_cache[ $user_id ] = $prefs;
 			return $prefs;
 		}
 
@@ -496,9 +508,13 @@ class Orbit_Notifier {
 			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s' )
 		);
 
-		return $wpdb->get_row(
+		$prefs = $wpdb->get_row(
 			$wpdb->prepare( "SELECT * FROM {$table} WHERE user_id = %d", $user_id )
 		);
+
+		self::$preferences_cache[ $user_id ] = $prefs;
+
+		return $prefs;
 	}
 
 	/**

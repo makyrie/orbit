@@ -331,6 +331,64 @@ class Orbit_Activity {
 	}
 
 	/**
+	 * List activities for multiple profile IDs in a single query.
+	 *
+	 * @param array $profile_ids Array of profile IDs.
+	 * @param array $args        Optional. Same filters as list() except profile_id.
+	 * @return array Array of activity rows.
+	 */
+	public static function list_by_profile_ids( $profile_ids, $args = array() ) {
+		global $wpdb;
+
+		if ( empty( $profile_ids ) ) {
+			return array();
+		}
+
+		$args = wp_parse_args(
+			$args,
+			array(
+				'status'   => null,
+				'tier'     => null,
+				'per_page' => 100,
+				'page'     => 1,
+				'orderby'  => 'created_at',
+				'order'    => 'DESC',
+			)
+		);
+
+		$table  = $wpdb->prefix . ORBIT_TABLE_ACTIVITIES;
+		$where  = array();
+		$values = array();
+
+		$placeholders = implode( ',', array_fill( 0, count( $profile_ids ), '%d' ) );
+		$where[]      = "profile_id IN ({$placeholders})";
+		$values       = array_map( 'absint', $profile_ids );
+
+		if ( $args['status'] && in_array( $args['status'], self::VALID_STATUSES, true ) ) {
+			$where[]  = 'status = %s';
+			$values[] = $args['status'];
+		}
+
+		if ( $args['tier'] && in_array( absint( $args['tier'] ), self::VALID_TIERS, true ) ) {
+			$where[]  = 'tier = %d';
+			$values[] = absint( $args['tier'] );
+		}
+
+		$allowed_orderby = array( 'created_at', 'date_time', 'tier', 'id' );
+		$orderby         = in_array( $args['orderby'], $allowed_orderby, true ) ? $args['orderby'] : 'created_at';
+		$order           = 'ASC' === strtoupper( $args['order'] ) ? 'ASC' : 'DESC';
+		$offset          = max( 0, ( absint( $args['page'] ) - 1 ) * absint( $args['per_page'] ) );
+
+		$where_clause = implode( ' AND ', $where );
+
+		$sql      = "SELECT * FROM {$table} WHERE {$where_clause} ORDER BY {$orderby} {$order} LIMIT %d OFFSET %d";
+		$values[] = absint( $args['per_page'] );
+		$values[] = $offset;
+
+		return $wpdb->get_results( $wpdb->prepare( $sql, ...$values ) );
+	}
+
+	/**
 	 * Get human-readable tier labels.
 	 *
 	 * @return array Associative array of tier number => label string.
