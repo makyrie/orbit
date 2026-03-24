@@ -57,6 +57,28 @@ require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-notifier.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-api.php';
 
 /**
+ * Register WP-CLI commands.
+ */
+if ( defined( 'WP_CLI' ) && WP_CLI ) {
+	require_once ORBIT_PLUGIN_DIR . 'cli/class-orbit-cli.php';
+	require_once ORBIT_PLUGIN_DIR . 'cli/class-orbit-cli-profile.php';
+	require_once ORBIT_PLUGIN_DIR . 'cli/class-orbit-cli-activity.php';
+	require_once ORBIT_PLUGIN_DIR . 'cli/class-orbit-cli-subscription.php';
+	require_once ORBIT_PLUGIN_DIR . 'cli/class-orbit-cli-subscriber.php';
+	require_once ORBIT_PLUGIN_DIR . 'cli/class-orbit-cli-response.php';
+	require_once ORBIT_PLUGIN_DIR . 'cli/class-orbit-cli-notification.php';
+	require_once ORBIT_PLUGIN_DIR . 'cli/class-orbit-cli-status.php';
+
+	WP_CLI::add_command( 'orbit profile', 'Orbit_CLI_Profile' );
+	WP_CLI::add_command( 'orbit activity', 'Orbit_CLI_Activity' );
+	WP_CLI::add_command( 'orbit subscription', 'Orbit_CLI_Subscription' );
+	WP_CLI::add_command( 'orbit subscriber', 'Orbit_CLI_Subscriber' );
+	WP_CLI::add_command( 'orbit response', 'Orbit_CLI_Response' );
+	WP_CLI::add_command( 'orbit notification', 'Orbit_CLI_Notification' );
+	WP_CLI::add_command( 'orbit status', 'Orbit_CLI_Status' );
+}
+
+/**
  * Activation hook.
  */
 function orbit_activate() {

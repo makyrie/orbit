@@ -236,15 +236,15 @@ Full CLI parity for agent-native access.
 
 **Tasks:**
 
-- [ ] `class-orbit-cli.php`: Register `orbit` namespace, base command class
-- [ ] `class-orbit-cli-profile.php`: `create`, `get` (by ID or slug), `update`, `delete` (with --force for hard delete), `list`, `regenerate-token`
-- [ ] `class-orbit-cli-activity.php`: `create` (queues notifications), `get`, `update`, `cancel`, `list` (with --profile, --status, --tier, --after, --before filters), `responses`
-- [ ] `class-orbit-cli-subscription.php`: `list` (with --profile, --status filters), `approve`, `deny`, `remove`, bulk approve (--all --status=pending)
-- [ ] `class-orbit-cli-subscriber.php`: `subscriptions` (list user's subscriptions), `get`, `set-preferences`, `set-role`
-- [ ] `class-orbit-cli-response.php`: `set` (idempotent create/update), `remove`, `list` (by user)
-- [ ] `class-orbit-cli-notification.php`: `send-digest` (manual trigger for user), `preview-digest` (dry run), `log` (with --user, --method, --status, --after filters)
-- [ ] `class-orbit-cli-status.php`: System overview — counts, config state, recent activity, Twilio/SMTP status
-- [ ] All commands: `--format=json|csv|table` support, JSON output on mutations, exit code 0/1, errors to STDERR
+- [x] `class-orbit-cli.php`: Register `orbit` namespace, base command class
+- [x] `class-orbit-cli-profile.php`: `create`, `get` (by ID or slug), `update`, `delete` (with --force for hard delete), `list`, `regenerate-token`
+- [x] `class-orbit-cli-activity.php`: `create` (queues notifications), `get`, `update`, `cancel`, `list` (with --profile, --status, --tier, --after, --before filters), `responses`
+- [x] `class-orbit-cli-subscription.php`: `list` (with --profile, --status filters), `approve`, `deny`, `remove`, bulk approve (--all --status=pending)
+- [x] `class-orbit-cli-subscriber.php`: `subscriptions` (list user's subscriptions), `get`, `set-preferences`, `set-role`
+- [x] `class-orbit-cli-response.php`: `set` (idempotent create/update), `remove`, `list` (by user)
+- [x] `class-orbit-cli-notification.php`: `send-digest` (manual trigger for user), `preview-digest` (dry run), `log` (with --user, --method, --status, --after filters)
+- [x] `class-orbit-cli-status.php`: System overview — counts, config state, recent activity, Twilio/SMTP status
+- [x] All commands: `--format=json|csv|table` support, JSON output on mutations, exit code 0/1, errors to STDERR
 
 **Success criteria:**
 - Full parity with capability map from spec
