@@ -186,7 +186,7 @@ class Orbit_REST_Activity {
 	public static function handle_respond( $request ) {
 		// Rate limit unauthenticated response attempts.
 		if ( ! is_user_logged_in() ) {
-			$ip = sanitize_text_field( $_SERVER['REMOTE_ADDR'] ?? '' );
+			$ip = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ?? '' ) );
 			if ( $ip && ! Orbit_Rate_Limiter::attempt( 'respond', $ip, 30, HOUR_IN_SECONDS ) ) {
 				return new WP_Error( 'rate_limited', __( 'Too many response attempts. Please try again later.', 'orbit' ), array( 'status' => 429 ) );
 			}

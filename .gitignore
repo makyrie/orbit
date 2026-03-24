@@ -19,6 +19,9 @@ build/
 .DS_Store
 Thumbs.db
 
+# Test config (contains local DB credentials)
+tests/wp-tests-config.php
+
 # IDE
 .idea/
 .vscode/

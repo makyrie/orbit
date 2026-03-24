@@ -193,13 +193,8 @@ class Orbit_Notifier {
 			$action_url = "\n" . home_url( '/activity/' . $activity_id . '?act=' . urlencode( $token ) );
 		}
 
-		$tier_labels = array(
-			1 => __( 'Just an idea', 'orbit' ),
-			2 => __( "I'll go if you will", 'orbit' ),
-			3 => __( "I'm going — join me", 'orbit' ),
-		);
-
-		$tier_label = isset( $tier_labels[ $activity->tier ] ) ? $tier_labels[ $activity->tier ] : '';
+		$tier_labels = Orbit_Activity::get_tier_labels();
+		$tier_label  = isset( $tier_labels[ $activity->tier ] ) ? $tier_labels[ $activity->tier ] : '';
 
 		$body = sprintf(
 			"%s: %s\n%s%s",
@@ -243,13 +238,8 @@ class Orbit_Notifier {
 			$unsub_url  = home_url( '/unsubscribe?token=' . urlencode( $subscription->subscription_secret ) );
 		}
 
-		$tier_labels = array(
-			1 => __( 'Just an idea', 'orbit' ),
-			2 => __( "I'll go if you will", 'orbit' ),
-			3 => __( "I'm going — join me", 'orbit' ),
-		);
-
-		$tier_label = isset( $tier_labels[ $activity->tier ] ) ? $tier_labels[ $activity->tier ] : '';
+		$tier_labels = Orbit_Activity::get_tier_labels();
+		$tier_label  = isset( $tier_labels[ $activity->tier ] ) ? $tier_labels[ $activity->tier ] : '';
 
 		$subject = sprintf(
 			/* translators: 1: poster name, 2: activity title */
@@ -588,6 +578,9 @@ class Orbit_Notifier {
 				)
 			);
 		}
+
+		// Invalidate the request-level cache so subsequent reads return fresh data.
+		unset( self::$preferences_cache[ $user_id ] );
 
 		return true;
 	}

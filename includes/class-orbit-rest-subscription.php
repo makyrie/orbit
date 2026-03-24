@@ -133,7 +133,7 @@ class Orbit_REST_Subscription {
 	 */
 	public static function handle_subscribe( $request ) {
 		// Rate limit: 5 subscription attempts per hour per IP.
-		$ip = sanitize_text_field( $_SERVER['REMOTE_ADDR'] ?? '' );
+		$ip = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ?? '' ) );
 		if ( $ip && ! Orbit_Rate_Limiter::attempt( 'subscribe', $ip, 5, HOUR_IN_SECONDS ) ) {
 			return new WP_Error( 'rate_limited', __( 'Too many subscription attempts. Please try again later.', 'orbit' ), array( 'status' => 429 ) );
 		}
