@@ -149,27 +149,27 @@ The most complex subsystem — SMS, email, digest batching, ActionScheduler inte
 
 **Tasks:**
 
-- [ ] `class-orbit-notifier.php`:
+- [x] `class-orbit-notifier.php`:
   - `dispatch_for_activity($activity_id)` — for each approved subscriber: check tier preference, check SMS daily cap (count today's SMS from `orbit_notification_log`), route to immediate or digest accordingly, log to `orbit_notification_log` with status=queued
   - `send_immediate_sms($user_id, $activity_id, $action_token)` — format SMS per spec template, call Twilio, update log status
   - `send_immediate_email($user_id, $activity_id, $action_token)` — format email (HTML + plain text), use `wp_mail()`, update log status
   - `compile_digest($user_id)` — query activities since last digest, group by poster, sort by tier desc then date, include SMS-overflow items, generate action tokens per activity
   - `send_digest($user_id)` — compile + send via `wp_mail()`, skip if nothing new
   - SMS cap prompt logic: if user received >3 SMS today and has no cap set, flag for dashboard prompt
-- [ ] `class-orbit-twilio.php`:
+- [x] `class-orbit-twilio.php`:
   - `send_sms($to, $body)` — `wp_remote_post()` to Twilio REST API using `ORBIT_TWILIO_*` constants
   - `validate_webhook($request)` — verify Twilio request signature on incoming webhooks
   - `handle_incoming($request)` — process STOP/START keywords, update user preferences
-- [ ] `class-orbit-phone-verify.php`:
+- [x] `class-orbit-phone-verify.php`:
   - `send_code($user_id, $phone)` — generate 6-digit code, store in `orbit_phone_verification` with expiry (10 min), rate limit (3 requests/phone/hour), send via Twilio
   - `verify_code($user_id, $code)` — check code, check attempts (max 3), check expiry, on success set `orbit_phone_verified=1`
   - `reset_on_phone_change($user_id)` — clear verification when phone number changes
-- [ ] ActionScheduler job registration:
+- [x] ActionScheduler job registration:
   - `orbit_send_immediate_notification` — one-off, queued on activity creation
   - `orbit_send_daily_digest` — recurring per-user, scheduled at their `digest_time` in their timezone
   - `orbit_mark_past_activities` — recurring daily, batch update past activities
   - `orbit_cleanup_notification_log` — recurring weekly, prune old entries
-- [ ] `orbit_notification_preferences` — created per-user with defaults on first subscription (tier1=digest, tier2=digest, tier3=sms, digest_time=18:00)
+- [x] `orbit_notification_preferences` — created per-user with defaults on first subscription (tier1=digest, tier2=digest, tier3=sms, digest_time=18:00)
 
 **Success criteria:**
 - Activity creation triggers correct notification routing per subscriber preferences

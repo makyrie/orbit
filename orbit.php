@@ -51,6 +51,9 @@ require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-activity.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-subscription.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-response.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-privacy.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-twilio.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-phone-verify.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-notifier.php';
 
 /**
  * Activation hook.
@@ -74,6 +77,12 @@ register_deactivation_hook( ORBIT_PLUGIN_FILE, 'orbit_deactivate' );
  * Initialize roles on every load (ensures capabilities are current).
  */
 add_action( 'init', array( 'Orbit_Roles', 'register' ) );
+
+/**
+ * Register ActionScheduler hooks and schedule recurring jobs.
+ */
+Orbit_Notifier::register_hooks();
+add_action( 'init', array( 'Orbit_Notifier', 'schedule_recurring_jobs' ) );
 
 /**
  * Clean up Orbit data when a WordPress user is deleted.
