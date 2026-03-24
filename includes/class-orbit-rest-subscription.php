@@ -19,7 +19,7 @@ class Orbit_REST_Subscription {
 	 * Register subscription-related routes.
 	 */
 	public static function register_routes() {
-		$ns = Orbit_REST_API::NAMESPACE;
+		$ns = Orbit_REST_API::API_NAMESPACE;
 
 		register_rest_route(
 			$ns,
@@ -118,7 +118,11 @@ class Orbit_REST_Subscription {
 					'tier1_method'  => array( 'sanitize_callback' => 'sanitize_text_field' ),
 					'tier2_method'  => array( 'sanitize_callback' => 'sanitize_text_field' ),
 					'tier3_method'  => array( 'sanitize_callback' => 'sanitize_text_field' ),
-					'sms_daily_cap' => array(),
+					'sms_daily_cap' => array(
+						'sanitize_callback' => function ( $value ) {
+							return null === $value ? null : absint( $value );
+						},
+					),
 					'digest_time'   => array( 'sanitize_callback' => 'sanitize_text_field' ),
 				),
 			)

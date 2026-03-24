@@ -17,8 +17,21 @@ class OrbitNotifierTest extends WP_UnitTestCase {
 	 */
 	public static function wpSetUpBeforeClass( $factory ) {
 		self::$user_id = $factory->user->create( array( 'role' => 'subscriber' ) );
+	}
 
-		Orbit_Activator::create_tables();
+	/**
+	 * Clean up notification preferences and static cache after each test.
+	 */
+	public function tear_down() {
+		global $wpdb;
+		$wpdb->query( "DELETE FROM {$wpdb->prefix}" . ORBIT_TABLE_NOTIFICATION_PREFERENCES . " WHERE user_id = " . self::$user_id );
+
+		// Reset static cache.
+		$reflection = new ReflectionProperty( 'Orbit_Notifier', 'preferences_cache' );
+		$reflection->setAccessible( true );
+		$reflection->setValue( null, array() );
+
+		parent::tear_down();
 	}
 
 	/**

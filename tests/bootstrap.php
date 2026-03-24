@@ -40,3 +40,6 @@ tests_add_filter(
 
 // Start up the WP testing environment.
 require $_tests_dir . '/includes/bootstrap.php';
+
+// Create plugin tables once for the entire test suite.
+Orbit_Activator::create_tables();

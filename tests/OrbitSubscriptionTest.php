@@ -35,9 +35,6 @@ class OrbitSubscriptionTest extends WP_UnitTestCase {
 		self::$poster_id     = $factory->user->create( array( 'role' => 'administrator' ) );
 		self::$subscriber_id = $factory->user->create( array( 'role' => 'subscriber' ) );
 
-		// Activate plugin tables.
-		Orbit_Activator::create_tables();
-
 		self::$profile_id = Orbit_Profile::create(
 			array(
 				'user_id'      => self::$poster_id,
@@ -45,6 +42,15 @@ class OrbitSubscriptionTest extends WP_UnitTestCase {
 				'display_name' => 'Test Poster',
 			)
 		);
+	}
+
+	/**
+	 * Clean up subscription rows after each test.
+	 */
+	public function tear_down() {
+		global $wpdb;
+		$wpdb->query( "DELETE FROM {$wpdb->prefix}" . ORBIT_TABLE_SUBSCRIPTIONS . " WHERE user_id = " . self::$subscriber_id );
+		parent::tear_down();
 	}
 
 	/**

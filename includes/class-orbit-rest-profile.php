@@ -18,7 +18,7 @@ class Orbit_REST_Profile {
 	 * Register profile-related routes.
 	 */
 	public static function register_routes() {
-		$ns = Orbit_REST_API::NAMESPACE;
+		$ns = Orbit_REST_API::API_NAMESPACE;
 
 		register_rest_route(
 			$ns,

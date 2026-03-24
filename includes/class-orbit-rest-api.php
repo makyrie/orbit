@@ -20,7 +20,7 @@ class Orbit_REST_API {
 	 *
 	 * @var string
 	 */
-	const NAMESPACE = 'orbit/v1';
+	const API_NAMESPACE = 'orbit/v1';
 
 	/**
 	 * Register all REST API routes by delegating to controllers.

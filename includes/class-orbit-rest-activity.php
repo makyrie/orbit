@@ -18,7 +18,7 @@ class Orbit_REST_Activity {
 	 * Register activity-related routes.
 	 */
 	public static function register_routes() {
-		$ns = Orbit_REST_API::NAMESPACE;
+		$ns = Orbit_REST_API::API_NAMESPACE;
 
 		register_rest_route(
 			$ns,
@@ -113,6 +113,7 @@ class Orbit_REST_Activity {
 						'date_flexible'    => array(
 							'required'          => false,
 							'default'           => false,
+							'sanitize_callback' => 'rest_sanitize_boolean',
 						),
 						'show_attendees'   => array(
 							'required'          => false,
@@ -138,7 +139,7 @@ class Orbit_REST_Activity {
 						'location_name'    => array( 'sanitize_callback' => 'sanitize_text_field' ),
 						'location_address' => array( 'sanitize_callback' => 'sanitize_textarea_field' ),
 						'date_time'        => array( 'sanitize_callback' => 'sanitize_text_field' ),
-						'date_flexible'    => array(),
+						'date_flexible'    => array( 'sanitize_callback' => 'rest_sanitize_boolean' ),
 						'show_attendees'   => array( 'sanitize_callback' => 'sanitize_text_field' ),
 					),
 				),
