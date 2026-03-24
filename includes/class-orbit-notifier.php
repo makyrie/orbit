@@ -324,10 +324,27 @@ class Orbit_Notifier {
 			return new WP_Error( 'nothing_to_send', __( 'No activities to include in digest.', 'orbit' ) );
 		}
 
+		// Batch-load profiles for grouping.
+		$profile_ids  = array_unique( array_map( function ( $i ) { return (int) $i->profile_id; }, $queued_items ) );
+		$profiles_map = Orbit_Profile::get_by_ids( $profile_ids );
+
+		// Batch-load subscriptions for action token generation.
+		$subscriptions = Orbit_Subscription::list(
+			array(
+				'user_id'  => $user_id,
+				'status'   => 'approved',
+				'per_page' => 100,
+			)
+		);
+		$sub_by_profile = array();
+		foreach ( $subscriptions as $sub ) {
+			$sub_by_profile[ (int) $sub->profile_id ] = $sub;
+		}
+
 		// Group by poster.
 		$grouped = array();
 		foreach ( $queued_items as $item ) {
-			$profile = Orbit_Profile::get( $item->profile_id );
+			$profile     = isset( $profiles_map[ (int) $item->profile_id ] ) ? $profiles_map[ (int) $item->profile_id ] : null;
 			$poster_name = $profile ? $profile->display_name : __( 'Unknown', 'orbit' );
 
 			if ( ! isset( $grouped[ $poster_name ] ) ) {
@@ -337,11 +354,7 @@ class Orbit_Notifier {
 		}
 
 		// Build digest message.
-		$tier_labels = array(
-			1 => __( 'Just an idea', 'orbit' ),
-			2 => __( "I'll go if you will", 'orbit' ),
-			3 => __( "I'm going — join me", 'orbit' ),
-		);
+		$tier_labels = Orbit_Activity::get_tier_labels();
 
 		$message = __( "Here's what's new from people you follow:\n\n", 'orbit' );
 
@@ -349,7 +362,7 @@ class Orbit_Notifier {
 			$message .= "--- {$poster_name} ---\n\n";
 
 			foreach ( $items as $item ) {
-				$subscription = Orbit_Subscription::get_by_user_and_profile( $user_id, $item->profile_id );
+				$subscription = isset( $sub_by_profile[ (int) $item->profile_id ] ) ? $sub_by_profile[ (int) $item->profile_id ] : null;
 				$action_url   = '';
 
 				if ( $subscription ) {
@@ -377,15 +390,6 @@ class Orbit_Notifier {
 			}
 		}
 
-		// Add unsubscribe links.
-		$subscriptions = Orbit_Subscription::list(
-			array(
-				'user_id'  => $user_id,
-				'status'   => 'approved',
-				'per_page' => 100,
-			)
-		);
-
 		if ( ! empty( $subscriptions ) ) {
 			$message .= "---\n" . __( "Manage your subscriptions at: ", 'orbit' ) . home_url( '/dashboard' ) . "\n";
 		}
@@ -403,16 +407,17 @@ class Orbit_Notifier {
 		$status = $sent ? 'sent' : 'failed';
 		$now    = current_time( 'mysql', true );
 
-		foreach ( $queued_items as $item ) {
-			$wpdb->update(
-				$log_table,
-				array(
-					'status'  => $status,
-					'sent_at' => $now,
-				),
-				array( 'id' => $item->log_id ),
-				array( '%s', '%s' ),
-				array( '%d' )
+		// Bulk update all queued items in a single query.
+		$log_ids = array_map( function ( $item ) { return (int) $item->log_id; }, $queued_items );
+		if ( ! empty( $log_ids ) ) {
+			$placeholders = implode( ',', array_fill( 0, count( $log_ids ), '%d' ) );
+			$wpdb->query(
+				$wpdb->prepare(
+					"UPDATE {$log_table} SET status = %s, sent_at = %s WHERE id IN ({$placeholders})",
+					$status,
+					$now,
+					...$log_ids
+				)
 			);
 		}
 

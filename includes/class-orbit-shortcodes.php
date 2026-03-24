@@ -54,48 +54,27 @@ class Orbit_Shortcodes {
 			)
 		);
 
-		// Get activities from all subscribed profiles.
-		$activities = array();
-		foreach ( $subscriptions as $sub ) {
-			$profile_activities = Orbit_Activity::list(
-				array(
-					'profile_id' => $sub->profile_id,
-					'status'     => 'active',
-					'per_page'   => 20,
-					'order'      => 'DESC',
-				)
-			);
-			$activities = array_merge( $activities, $profile_activities );
-		}
+		// Collect all profile IDs (subscriptions + own profile).
+		$profile_ids = array_map( function ( $s ) {
+			return (int) $s->profile_id;
+		}, $subscriptions );
 
-		// Also include own activities if poster.
 		$own_profile = Orbit_Profile::get_by_user_id( $user_id );
 		if ( $own_profile ) {
-			$own_activities = Orbit_Activity::list(
-				array(
-					'profile_id' => $own_profile->id,
-					'status'     => 'active',
-					'per_page'   => 20,
-				)
-			);
-			$activities = array_merge( $activities, $own_activities );
+			$profile_ids[] = (int) $own_profile->id;
 		}
 
-		// Sort by created_at desc, deduplicate.
-		$seen = array();
-		$activities = array_filter( $activities, function ( $a ) use ( &$seen ) {
-			if ( isset( $seen[ $a->id ] ) ) {
-				return false;
-			}
-			$seen[ $a->id ] = true;
-			return true;
-		} );
+		$profile_ids = array_unique( $profile_ids );
 
-		usort( $activities, function ( $a, $b ) {
-			return strcmp( $b->created_at, $a->created_at );
-		} );
-
-		$activities = array_slice( $activities, 0, 50 );
+		// Single query for all activities across all profiles.
+		$activities = Orbit_Activity::list_by_profile_ids(
+			$profile_ids,
+			array(
+				'status'   => 'active',
+				'per_page' => 50,
+				'order'    => 'DESC',
+			)
+		);
 
 		ob_start();
 
@@ -107,8 +86,17 @@ class Orbit_Shortcodes {
 
 		$tier_labels = Orbit_Activity::get_tier_labels();
 
+		// Batch-load profiles and response counts.
+		$needed_profile_ids = array_unique( array_map( function ( $a ) {
+			return (int) $a->profile_id;
+		}, $activities ) );
+		$profiles_map = Orbit_Profile::get_by_ids( $needed_profile_ids );
+
+		$activity_ids    = array_map( function ( $a ) { return (int) $a->id; }, $activities );
+		$response_counts = Orbit_Response::count_by_activity_ids( $activity_ids );
+
 		foreach ( $activities as $activity ) {
-			$profile    = Orbit_Profile::get( $activity->profile_id );
+			$profile    = isset( $profiles_map[ (int) $activity->profile_id ] ) ? $profiles_map[ (int) $activity->profile_id ] : null;
 			$tier_label = isset( $tier_labels[ $activity->tier ] ) ? $tier_labels[ $activity->tier ] : '';
 
 			echo '<div class="orbit-activity-card" data-tier="' . esc_attr( $activity->tier ) . '">';
@@ -134,9 +122,10 @@ class Orbit_Shortcodes {
 				echo '<p class="orbit-activity-location">' . esc_html( $activity->location_name ) . '</p>';
 			}
 
-			// Show response counts.
-			$going_count = Orbit_Response::count_by_activity( $activity->id, 'going' );
-			$maybe_count = Orbit_Response::count_by_activity( $activity->id, 'maybe' );
+			// Show response counts (from batch-loaded data).
+			$counts      = isset( $response_counts[ $activity->id ] ) ? $response_counts[ $activity->id ] : array( 'going' => 0, 'maybe' => 0 );
+			$going_count = $counts['going'];
+			$maybe_count = $counts['maybe'];
 
 			if ( 'none' !== $activity->show_attendees && ( $going_count || $maybe_count ) ) {
 				echo '<p class="orbit-response-counts">';
@@ -265,6 +254,10 @@ class Orbit_Shortcodes {
 		echo '</a></p>';
 
 		if ( ! empty( $activities ) ) {
+			// Batch-load response counts.
+			$activity_ids    = array_map( function ( $a ) { return (int) $a->id; }, $activities );
+			$response_counts = Orbit_Response::count_by_activity_ids( $activity_ids );
+
 			echo '<table class="orbit-table">';
 			echo '<thead><tr>';
 			echo '<th>' . esc_html__( 'Title', 'orbit' ) . '</th>';
@@ -275,7 +268,7 @@ class Orbit_Shortcodes {
 			echo '</tr></thead><tbody>';
 
 			foreach ( $activities as $activity ) {
-				$response_count = Orbit_Response::count_by_activity( $activity->id );
+				$response_count = isset( $response_counts[ $activity->id ]['total'] ) ? $response_counts[ $activity->id ]['total'] : 0;
 
 				echo '<tr>';
 				echo '<td><a href="' . esc_url( home_url( '/activity/' . $activity->id ) ) . '">' . esc_html( $activity->title ) . '</a></td>';
@@ -492,6 +485,10 @@ class Orbit_Shortcodes {
 			echo '<p class="orbit-share-link"><strong>' . esc_html__( 'Share link:', 'orbit' ) . '</strong> ';
 			echo '<code>' . esc_html( $share_url ) . '</code></p>';
 		} else {
+			// Pre-populate WordPress user cache to avoid N+1 user lookups.
+			$user_ids = array_map( function ( $s ) { return (int) $s->user_id; }, $subscriptions );
+			cache_users( $user_ids );
+
 			echo '<table class="orbit-table">';
 			echo '<thead><tr>';
 			echo '<th>' . esc_html__( 'Name', 'orbit' ) . '</th>';

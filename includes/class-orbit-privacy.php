@@ -61,19 +61,33 @@ class Orbit_Privacy {
 			return $result;
 		}
 
-		// For 'names' mode, resolve each response's visibility.
+		// For 'names' mode, batch-load subscriptions and users, then resolve visibility.
+		$sub_ids          = array_unique( array_map( function ( $r ) {
+			return (int) $r->subscription_id;
+		}, $responses ) );
+		$subscriptions_map = Orbit_Subscription::get_by_ids( $sub_ids );
+
+		// Pre-populate WordPress user cache.
+		$user_ids = array();
+		foreach ( $subscriptions_map as $sub ) {
+			$user_ids[] = (int) $sub->user_id;
+		}
+		if ( ! empty( $user_ids ) ) {
+			cache_users( $user_ids );
+		}
+
 		foreach ( $responses as $response ) {
-			$effective_visibility = self::resolve_effective_visibility( $response );
+			$subscription         = isset( $subscriptions_map[ (int) $response->subscription_id ] ) ? $subscriptions_map[ (int) $response->subscription_id ] : null;
+			$effective_visibility = self::resolve_effective_visibility( $response, $subscription );
 
 			$entry = array(
-				'response'    => $response->response,
-				'visible'     => false,
+				'response'     => $response->response,
+				'visible'      => false,
 				'display_name' => null,
 			);
 
 			if ( 'visible' === $effective_visibility ) {
 				$entry['visible'] = true;
-				$subscription     = Orbit_Subscription::get( $response->subscription_id );
 
 				if ( $subscription ) {
 					$user = get_userdata( $subscription->user_id );
@@ -236,17 +250,20 @@ class Orbit_Privacy {
 	 *
 	 * Priority: per-activity visibility_override > subscription visibility_default.
 	 *
-	 * @param object $response Response row (must include visibility_override and subscription_id).
+	 * @param object      $response     Response row (must include visibility_override).
+	 * @param object|null $subscription Pre-loaded subscription, or null to fetch.
 	 * @return string 'anonymous' or 'visible'.
 	 */
-	private static function resolve_effective_visibility( $response ) {
+	private static function resolve_effective_visibility( $response, $subscription = null ) {
 		// If the response has a non-default override, use it.
 		if ( 'default' !== $response->visibility_override ) {
 			return $response->visibility_override;
 		}
 
 		// Fall back to subscription default.
-		$subscription = Orbit_Subscription::get( $response->subscription_id );
+		if ( null === $subscription ) {
+			$subscription = Orbit_Subscription::get( $response->subscription_id );
+		}
 
 		if ( $subscription ) {
 			return $subscription->visibility_default;

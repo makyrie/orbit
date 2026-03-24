@@ -726,31 +726,17 @@ class Orbit_REST_API {
 			return new WP_REST_Response( array(), 200 );
 		}
 
-		// Fetch activities from all subscribed profiles.
-		$all_activities = array();
-		foreach ( $profile_ids as $pid ) {
-			$activities = Orbit_Activity::list(
-				array(
-					'profile_id' => $pid,
-					'status'     => $request->get_param( 'status' ) ? $request->get_param( 'status' ) : 'active',
-					'tier'       => $request->get_param( 'tier' ),
-					'per_page'   => 50,
-				)
-			);
-			$all_activities = array_merge( $all_activities, $activities );
-		}
-
-		// Sort by created_at descending.
-		usort( $all_activities, function ( $a, $b ) {
-			return strcmp( $b->created_at, $a->created_at );
-		} );
-
-		// Apply pagination.
-		$per_page = $request->get_param( 'per_page' ) ?: 20;
-		$page     = $request->get_param( 'page' ) ?: 1;
-		$offset   = ( $page - 1 ) * $per_page;
-
-		$all_activities = array_slice( $all_activities, $offset, $per_page );
+		// Single query for all activities across all subscribed profiles.
+		$profile_ids    = array_unique( $profile_ids );
+		$all_activities = Orbit_Activity::list_by_profile_ids(
+			$profile_ids,
+			array(
+				'status'   => $request->get_param( 'status' ) ? $request->get_param( 'status' ) : 'active',
+				'tier'     => $request->get_param( 'tier' ),
+				'per_page' => $request->get_param( 'per_page' ) ?: 20,
+				'page'     => $request->get_param( 'page' ) ?: 1,
+			)
+		);
 
 		return new WP_REST_Response( $all_activities, 200 );
 	}
