@@ -127,9 +127,9 @@ The relationship layer — who subscribes to whom, who's going to what.
 
 **Tasks:**
 
-- [ ] `class-orbit-subscription.php`: Subscribe (create with status based on poster's `require_approval`), approve/deny/remove (status transitions), list (by profile with status filter, by user), unsubscribe (sets status=unsubscribed), unique constraint enforcement (user_id + profile_id), `subscription_secret` generation on creation, prevent duplicate subscriptions
-- [ ] `class-orbit-response.php`: Set response (upsert — going/maybe, with unique constraint on activity_id + subscription_id), remove response, list by activity (with visibility resolution), list by user, validate that subscription is approved before allowing response
-- [ ] `class-orbit-privacy.php`: Visibility resolution — given an activity and a list of responses, resolve what the viewer sees based on: (1) poster's `show_attendees` setting → none/count/names, (2) each responder's effective visibility (per-activity override > account default). Location address: only show to approved subscribers (check via session or valid action token)
+- [x] `class-orbit-subscription.php`: Subscribe (create with status based on poster's `require_approval`), approve/deny/remove (status transitions), list (by profile with status filter, by user), unsubscribe (sets status=unsubscribed), unique constraint enforcement (user_id + profile_id), `subscription_secret` generation on creation, prevent duplicate subscriptions
+- [x] `class-orbit-response.php`: Set response (upsert — going/maybe, with unique constraint on activity_id + subscription_id), remove response, list by activity (with visibility resolution), list by user, validate that subscription is approved before allowing response
+- [x] `class-orbit-privacy.php`: Visibility resolution — given an activity and a list of responses, resolve what the viewer sees based on: (1) poster's `show_attendees` setting → none/count/names, (2) each responder's effective visibility (per-activity override > account default). Location address: only show to approved subscribers (check via session or valid action token)
 
 **Success criteria:**
 - Subscription lifecycle works: pending → approved → unsubscribed

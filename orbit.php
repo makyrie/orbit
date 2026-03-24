@@ -48,6 +48,9 @@ require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-roles.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-token.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-profile.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-activity.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-subscription.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-response.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-privacy.php';
 
 /**
  * Activation hook.
