@@ -54,6 +54,7 @@ require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-privacy.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-twilio.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-phone-verify.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-notifier.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-api.php';
 
 /**
  * Activation hook.
@@ -83,6 +84,11 @@ add_action( 'init', array( 'Orbit_Roles', 'register' ) );
  */
 Orbit_Notifier::register_hooks();
 add_action( 'init', array( 'Orbit_Notifier', 'schedule_recurring_jobs' ) );
+
+/**
+ * Register REST API routes.
+ */
+add_action( 'rest_api_init', array( 'Orbit_REST_API', 'register_routes' ) );
 
 /**
  * Clean up Orbit data when a WordPress user is deleted.

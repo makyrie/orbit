@@ -189,12 +189,12 @@ Full REST API surface under `/wp-json/orbit/v1/`.
 
 **Tasks:**
 
-- [ ] Public endpoints (no auth):
+- [x] Public endpoints (no auth):
   - `POST /subscribe` — subscription request with valid share_token, account creation or existing user subscription
   - `POST /unsubscribe` — via subscription_secret, no login required
   - `POST /respond` — via action token (validates HMAC, checks expiry) OR logged-in user
   - `POST /twilio/incoming` — Twilio webhook handler with signature validation
-- [ ] Authenticated endpoints:
+- [x] Authenticated endpoints:
   - `POST /verify-phone` — submit verification code (logged-in or token)
   - `GET /activities` — list activities for a profile (logged-in subscriber)
   - `POST /activities` — create activity (orbit_poster)
@@ -206,12 +206,12 @@ Full REST API surface under `/wp-json/orbit/v1/`.
   - `PATCH /subscribers/{id}` — approve/deny/remove (poster/owner)
   - `PATCH /preferences` — update notification preferences
   - `DELETE /respond` — remove response (logged-in subscriber)
-- [ ] Admin endpoints:
+- [x] Admin endpoints:
   - `GET /profiles`, `POST /profiles`, `PATCH /profiles/{id}`, `DELETE /profiles/{id}` — profile CRUD
   - `POST /profiles/{id}/regenerate-token` — regenerate share token
   - `GET /status` — system status summary
   - `GET /notifications` — notification log (filtered)
-- [ ] All endpoints: proper permission callbacks, input sanitization, nonce verification for logged-in actions, schema validation, WP_Error responses
+- [x] All endpoints: proper permission callbacks, input sanitization, nonce verification for logged-in actions, schema validation, WP_Error responses
 
 **Success criteria:**
 - All endpoints from capability map are implemented
