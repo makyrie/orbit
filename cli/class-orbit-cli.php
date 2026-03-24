@@ -30,48 +30,6 @@ if ( ! defined( 'WP_CLI' ) || ! WP_CLI ) {
 class Orbit_CLI extends WP_CLI_Command {
 
 	/**
-	 * Output a result as JSON or table.
-	 *
-	 * @param mixed  $data   Data to output.
-	 * @param string $format Output format.
-	 * @param array  $fields Fields for table/csv format.
-	 */
-	protected static function format_output( $data, $format = 'table', $fields = array() ) {
-		if ( 'json' === $format ) {
-			WP_CLI::line( wp_json_encode( $data, JSON_PRETTY_PRINT ) );
-			return;
-		}
-
-		if ( is_array( $data ) && ! empty( $data ) ) {
-			if ( empty( $fields ) && is_object( $data[0] ) ) {
-				$fields = array_keys( get_object_vars( $data[0] ) );
-			}
-
-			$formatter = new \WP_CLI\Formatter(
-				new \WP_CLI\Formatter\Args( array( 'format' => $format, 'fields' => $fields ) ),
-				$fields
-			);
-			$formatter->display_items( $data );
-			return;
-		}
-
-		if ( is_object( $data ) ) {
-			if ( empty( $fields ) ) {
-				$fields = array_keys( get_object_vars( $data ) );
-			}
-
-			$formatter = new \WP_CLI\Formatter(
-				new \WP_CLI\Formatter\Args( array( 'format' => $format, 'fields' => $fields ) ),
-				$fields
-			);
-			$formatter->display_items( array( $data ) );
-			return;
-		}
-
-		WP_CLI::line( wp_json_encode( $data, JSON_PRETTY_PRINT ) );
-	}
-
-	/**
 	 * Output a single item in the specified format.
 	 *
 	 * @param object $item   The item to display.

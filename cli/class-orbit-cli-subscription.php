@@ -23,6 +23,7 @@ class Orbit_CLI_Subscription extends Orbit_CLI {
 	 *
 	 * ## OPTIONS
 	 *
+	 * [--user_id=<id>]
 	 * [--profile_id=<id>]
 	 * [--status=<status>]
 	 * [--format=<format>]
@@ -38,6 +39,7 @@ class Orbit_CLI_Subscription extends Orbit_CLI {
 	public function list_( $args, $assoc_args ) {
 		$subscriptions = Orbit_Subscription::list(
 			array(
+				'user_id'    => isset( $assoc_args['user_id'] ) ? $assoc_args['user_id'] : null,
 				'profile_id' => isset( $assoc_args['profile_id'] ) ? $assoc_args['profile_id'] : null,
 				'status'     => isset( $assoc_args['status'] ) ? $assoc_args['status'] : null,
 			)
@@ -115,6 +117,69 @@ class Orbit_CLI_Subscription extends Orbit_CLI {
 		}
 
 		WP_CLI::success( 'Subscription removed.' );
+		self::output_item( Orbit_Subscription::get( absint( $args[0] ) ), array( 'format' => 'json' ) );
+	}
+
+	/**
+	 * Create a subscription (subscribe a user to a profile).
+	 *
+	 * ## OPTIONS
+	 *
+	 * --user_id=<id>
+	 * : Subscriber's WordPress user ID.
+	 *
+	 * --profile_id=<id>
+	 * : Profile ID to subscribe to.
+	 *
+	 * [--connection_note=<note>]
+	 * : Optional connection note.
+	 *
+	 * [--format=<format>]
+	 * : Output format. Default: json.
+	 *
+	 * @param array $args       Positional args.
+	 * @param array $assoc_args Associative args.
+	 */
+	public function create( $args, $assoc_args ) {
+		$result = Orbit_Subscription::subscribe(
+			array(
+				'user_id'         => $assoc_args['user_id'],
+				'profile_id'      => $assoc_args['profile_id'],
+				'connection_note' => isset( $assoc_args['connection_note'] ) ? $assoc_args['connection_note'] : null,
+			)
+		);
+
+		if ( is_wp_error( $result ) ) {
+			WP_CLI::error( $result->get_error_message() );
+		}
+
+		Orbit_Notifier::get_or_create_preferences( $assoc_args['user_id'] );
+
+		WP_CLI::success( "Subscription created (ID: {$result})." );
+		self::output_item( Orbit_Subscription::get( $result ), $assoc_args );
+	}
+
+	/**
+	 * Unsubscribe (subscriber-initiated opt-out).
+	 *
+	 * ## OPTIONS
+	 *
+	 * <id>
+	 * : Subscription ID.
+	 *
+	 * [--format=<format>]
+	 *
+	 * @param array $args       Positional args.
+	 * @param array $assoc_args Associative args.
+	 */
+	public function unsubscribe( $args, $assoc_args ) {
+		$result = Orbit_Subscription::unsubscribe( absint( $args[0] ) );
+
+		if ( is_wp_error( $result ) ) {
+			WP_CLI::error( $result->get_error_message() );
+		}
+
+		WP_CLI::success( 'Unsubscribed.' );
 		self::output_item( Orbit_Subscription::get( absint( $args[0] ) ), array( 'format' => 'json' ) );
 	}
 }

@@ -105,11 +105,7 @@ class Orbit_Shortcodes {
 			echo '<p>' . esc_html__( 'No activities yet. Subscribe to someone to see their activities here.', 'orbit' ) . '</p>';
 		}
 
-		$tier_labels = array(
-			1 => __( 'Just an idea', 'orbit' ),
-			2 => __( "I'll go if you will", 'orbit' ),
-			3 => __( "I'm going — join me", 'orbit' ),
-		);
+		$tier_labels = Orbit_Activity::get_tier_labels();
 
 		foreach ( $activities as $activity ) {
 			$profile    = Orbit_Profile::get( $activity->profile_id );
@@ -178,11 +174,7 @@ class Orbit_Shortcodes {
 		$user_id = get_current_user_id();
 		$prefs   = Orbit_Notifier::get_or_create_preferences( $user_id );
 
-		$tier_labels = array(
-			1 => __( 'Just an idea', 'orbit' ),
-			2 => __( "I'll go if you will", 'orbit' ),
-			3 => __( "I'm going — join me", 'orbit' ),
-		);
+		$tier_labels = Orbit_Activity::get_tier_labels();
 
 		ob_start();
 
@@ -646,11 +638,7 @@ class Orbit_Shortcodes {
 				echo '<p class="orbit-notice">' . esc_html__( 'Your subscription is awaiting approval.', 'orbit' ) . '</p>';
 			}
 
-			$tier_labels = array(
-				1 => __( 'Just an idea', 'orbit' ),
-				2 => __( "I'll go if you will", 'orbit' ),
-				3 => __( "I'm going — join me", 'orbit' ),
-			);
+			$tier_labels = Orbit_Activity::get_tier_labels();
 
 			foreach ( $activities as $activity ) {
 				$tier_label = isset( $tier_labels[ $activity->tier ] ) ? $tier_labels[ $activity->tier ] : '';
@@ -792,19 +780,14 @@ class Orbit_Shortcodes {
 		$subscription = null;
 
 		if ( $act_token ) {
-			// Find subscription via token validation.
-			$subscriptions = Orbit_Subscription::list(
-				array(
-					'profile_id' => $activity->profile_id,
-					'status'     => 'approved',
-					'per_page'   => 9999,
-				)
-			);
-
-			foreach ( $subscriptions as $sub ) {
-				if ( Orbit_Token::validate_action_token( $act_token, $sub->subscription_secret, $activity->id ) ) {
-					$subscription = $sub;
-					break;
+			// Extract subscription ID from token for O(1) lookup.
+			$sub_id = Orbit_Token::extract_subscription_id( $act_token );
+			if ( $sub_id ) {
+				$sub = Orbit_Subscription::get( $sub_id );
+				if ( $sub && 'approved' === $sub->status && (int) $sub->profile_id === (int) $activity->profile_id ) {
+					if ( Orbit_Token::validate_action_token( $act_token, $sub->subscription_secret, $activity->id ) ) {
+						$subscription = $sub;
+					}
 				}
 			}
 		} elseif ( $viewer_id ) {
@@ -815,11 +798,7 @@ class Orbit_Shortcodes {
 			}
 		}
 
-		$tier_labels = array(
-			1 => __( 'Just an idea', 'orbit' ),
-			2 => __( "I'll go if you will", 'orbit' ),
-			3 => __( "I'm going — join me", 'orbit' ),
-		);
+		$tier_labels = Orbit_Activity::get_tier_labels();
 
 		$tier_label = isset( $tier_labels[ $activity->tier ] ) ? $tier_labels[ $activity->tier ] : '';
 

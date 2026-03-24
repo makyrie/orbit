@@ -19,6 +19,7 @@ class Orbit_Notifier {
 	const HOOK_DIGEST     = 'orbit_send_daily_digest';
 	const HOOK_MARK_PAST  = 'orbit_mark_past_activities';
 	const HOOK_CLEANUP    = 'orbit_cleanup_notification_log';
+	const HOOK_DISPATCH   = 'orbit_dispatch_activity_notifications';
 
 	/**
 	 * Register ActionScheduler hooks.
@@ -28,6 +29,7 @@ class Orbit_Notifier {
 		add_action( self::HOOK_DIGEST, array( __CLASS__, 'send_digest' ), 10, 1 );
 		add_action( self::HOOK_MARK_PAST, array( __CLASS__, 'process_mark_past' ) );
 		add_action( self::HOOK_CLEANUP, array( __CLASS__, 'process_cleanup' ) );
+		add_action( self::HOOK_DISPATCH, array( __CLASS__, 'process_dispatch' ), 10, 1 );
 	}
 
 	/**
@@ -58,6 +60,30 @@ class Orbit_Notifier {
 	 * @param int $activity_id Activity ID.
 	 */
 	public static function dispatch_for_activity( $activity_id ) {
+		$activity = Orbit_Activity::get( $activity_id );
+		if ( ! $activity || 'active' !== $activity->status ) {
+			return;
+		}
+
+		if ( function_exists( 'as_enqueue_async_action' ) ) {
+			as_enqueue_async_action(
+				self::HOOK_DISPATCH,
+				array( $activity_id ),
+				'orbit'
+			);
+		} else {
+			self::process_dispatch( $activity_id );
+		}
+	}
+
+	/**
+	 * Process notification dispatch for an activity (ActionScheduler callback).
+	 *
+	 * Iterates subscribers and routes each to immediate or digest notification.
+	 *
+	 * @param int $activity_id Activity ID.
+	 */
+	public static function process_dispatch( $activity_id ) {
 		$activity = Orbit_Activity::get( $activity_id );
 		if ( ! $activity || 'active' !== $activity->status ) {
 			return;
@@ -163,7 +189,7 @@ class Orbit_Notifier {
 		$action_url   = '';
 
 		if ( $subscription ) {
-			$token      = Orbit_Token::generate_action_token( $subscription->subscription_secret, $activity_id );
+			$token      = Orbit_Token::generate_action_token( $subscription->subscription_secret, $activity_id, $subscription->id );
 			$action_url = "\n" . home_url( '/activity/' . $activity_id . '?act=' . urlencode( $token ) );
 		}
 
@@ -212,7 +238,7 @@ class Orbit_Notifier {
 		$unsub_url    = '';
 
 		if ( $subscription ) {
-			$token      = Orbit_Token::generate_action_token( $subscription->subscription_secret, $activity_id );
+			$token      = Orbit_Token::generate_action_token( $subscription->subscription_secret, $activity_id, $subscription->id );
 			$action_url = home_url( '/activity/' . $activity_id . '?act=' . urlencode( $token ) );
 			$unsub_url  = home_url( '/unsubscribe?token=' . urlencode( $subscription->subscription_secret ) );
 		}
@@ -327,7 +353,7 @@ class Orbit_Notifier {
 				$action_url   = '';
 
 				if ( $subscription ) {
-					$token      = Orbit_Token::generate_action_token( $subscription->subscription_secret, $item->activity_id );
+					$token      = Orbit_Token::generate_action_token( $subscription->subscription_secret, $item->activity_id, $subscription->id );
 					$action_url = home_url( '/activity/' . $item->activity_id . '?act=' . urlencode( $token ) );
 				}
 
@@ -463,12 +489,11 @@ class Orbit_Notifier {
 				'tier1_method' => 'digest',
 				'tier2_method' => 'digest',
 				'tier3_method' => 'sms',
-				'sms_daily_cap' => null,
 				'digest_time'  => '18:00:00',
 				'created_at'   => $now,
 				'updated_at'   => $now,
 			),
-			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
+			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s' )
 		);
 
 		return $wpdb->get_row(
@@ -489,10 +514,11 @@ class Orbit_Notifier {
 		// Ensure preferences exist.
 		self::get_or_create_preferences( $user_id );
 
-		$table        = $wpdb->prefix . ORBIT_TABLE_NOTIFICATION_PREFERENCES;
-		$valid_methods = array( 'sms', 'email', 'digest', 'none' );
-		$data         = array();
-		$formats      = array();
+		$table          = $wpdb->prefix . ORBIT_TABLE_NOTIFICATION_PREFERENCES;
+		$valid_methods  = array( 'sms', 'email', 'digest', 'none' );
+		$data           = array();
+		$formats        = array();
+		$set_cap_null   = false;
 
 		foreach ( array( 'tier1_method', 'tier2_method', 'tier3_method' ) as $key ) {
 			if ( isset( $args[ $key ] ) && in_array( $args[ $key ], $valid_methods, true ) ) {
@@ -502,8 +528,13 @@ class Orbit_Notifier {
 		}
 
 		if ( array_key_exists( 'sms_daily_cap', $args ) ) {
-			$data['sms_daily_cap'] = null === $args['sms_daily_cap'] ? null : absint( $args['sms_daily_cap'] );
-			$formats[]             = '%d';
+			if ( null === $args['sms_daily_cap'] ) {
+				// Set NULL directly via raw SQL after the main update.
+				$set_cap_null = true;
+			} else {
+				$data['sms_daily_cap'] = absint( $args['sms_daily_cap'] );
+				$formats[]             = '%d';
+			}
 		}
 
 		if ( isset( $args['digest_time'] ) ) {
@@ -511,17 +542,30 @@ class Orbit_Notifier {
 			$formats[]           = '%s';
 		}
 
-		if ( empty( $data ) ) {
+		if ( empty( $data ) && ! $set_cap_null ) {
 			return new WP_Error( 'nothing_to_update', __( 'No valid fields to update.', 'orbit' ) );
 		}
 
-		$data['updated_at'] = current_time( 'mysql', true );
-		$formats[]          = '%s';
+		if ( ! empty( $data ) ) {
+			$data['updated_at'] = current_time( 'mysql', true );
+			$formats[]          = '%s';
 
-		$result = $wpdb->update( $table, $data, array( 'user_id' => $user_id ), $formats, array( '%d' ) );
+			$result = $wpdb->update( $table, $data, array( 'user_id' => $user_id ), $formats, array( '%d' ) );
 
-		if ( false === $result ) {
-			return new WP_Error( 'db_error', __( 'Failed to update preferences.', 'orbit' ) );
+			if ( false === $result ) {
+				return new WP_Error( 'db_error', __( 'Failed to update preferences.', 'orbit' ) );
+			}
+		}
+
+		// Handle sms_daily_cap = NULL separately since wpdb cannot bind NULL values.
+		if ( $set_cap_null ) {
+			$wpdb->query(
+				$wpdb->prepare(
+					"UPDATE {$table} SET sms_daily_cap = NULL, updated_at = %s WHERE user_id = %d",
+					current_time( 'mysql', true ),
+					$user_id
+				)
+			);
 		}
 
 		return true;
@@ -638,16 +682,19 @@ class Orbit_Notifier {
 
 		$table = $wpdb->prefix . ORBIT_TABLE_NOTIFICATION_LOG;
 
-		$data = array( 'status' => $status );
+		$data    = array( 'status' => $status );
+		$formats = array( '%s' );
+
 		if ( 'sent' === $status ) {
 			$data['sent_at'] = current_time( 'mysql', true );
+			$formats[]       = '%s';
 		}
 
 		$wpdb->update(
 			$table,
 			$data,
 			array( 'id' => $log_id ),
-			array( '%s' ),
+			$formats,
 			array( '%d' )
 		);
 	}

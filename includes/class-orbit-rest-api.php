@@ -348,7 +348,7 @@ class Orbit_REST_API {
 				array(
 					'methods'             => 'PATCH',
 					'callback'            => array( __CLASS__, 'admin_update_profile' ),
-					'permission_callback' => array( __CLASS__, 'is_admin' ),
+					'permission_callback' => array( __CLASS__, 'can_manage_profile_or_admin' ),
 				),
 				array(
 					'methods'             => 'DELETE',
@@ -553,23 +553,18 @@ class Orbit_REST_API {
 		$subscription = null;
 
 		if ( $act_token ) {
-			// Validate action token — find subscription by trying all approved subscriptions.
-			$subscriptions = Orbit_Subscription::list(
-				array(
-					'profile_id' => $activity->profile_id,
-					'status'     => 'approved',
-					'per_page'   => 9999,
-				)
-			);
-
-			foreach ( $subscriptions as $sub ) {
-				if ( Orbit_Token::validate_action_token( $act_token, $sub->subscription_secret, $activity_id ) ) {
-					$subscription = $sub;
-					break;
-				}
+			// Extract subscription ID from token for O(1) lookup.
+			$sub_id = Orbit_Token::extract_subscription_id( $act_token );
+			if ( ! $sub_id ) {
+				return new WP_Error( 'invalid_token', __( 'Invalid or expired action token.', 'orbit' ), array( 'status' => 403 ) );
 			}
 
-			if ( ! $subscription ) {
+			$subscription = Orbit_Subscription::get( $sub_id );
+			if ( ! $subscription || 'approved' !== $subscription->status || (int) $subscription->profile_id !== (int) $activity->profile_id ) {
+				return new WP_Error( 'invalid_token', __( 'Invalid or expired action token.', 'orbit' ), array( 'status' => 403 ) );
+			}
+
+			if ( ! Orbit_Token::validate_action_token( $act_token, $subscription->subscription_secret, $activity_id ) ) {
 				return new WP_Error( 'invalid_token', __( 'Invalid or expired action token.', 'orbit' ), array( 'status' => 403 ) );
 			}
 		} elseif ( is_user_logged_in() ) {
@@ -615,10 +610,12 @@ class Orbit_REST_API {
 			return new WP_Error( 'invalid_signature', __( 'Invalid webhook signature.', 'orbit' ), array( 'status' => 403 ) );
 		}
 
-		$result = Orbit_Twilio::handle_incoming( $request );
+		Orbit_Twilio::handle_incoming( $request );
 
-		// Twilio expects TwiML response.
-		return new WP_REST_Response( $result, 200 );
+		// Twilio expects TwiML XML response.
+		header( 'Content-Type: text/xml; charset=UTF-8' );
+		echo '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
+		exit;
 	}
 
 	// =========================================================================
@@ -863,6 +860,8 @@ class Orbit_REST_API {
 			)
 		);
 
+		$subscriptions = array_map( array( __CLASS__, 'shape_subscription' ), $subscriptions );
+
 		return new WP_REST_Response( $subscriptions, 200 );
 	}
 
@@ -886,6 +885,8 @@ class Orbit_REST_API {
 				'per_page'   => 100,
 			)
 		);
+
+		$subscribers = array_map( array( __CLASS__, 'shape_subscription' ), $subscribers );
 
 		return new WP_REST_Response( $subscribers, 200 );
 	}
@@ -930,7 +931,7 @@ class Orbit_REST_API {
 			return new WP_Error( $result->get_error_code(), $result->get_error_message(), array( 'status' => 400 ) );
 		}
 
-		return new WP_REST_Response( Orbit_Subscription::get( $id ), 200 );
+		return new WP_REST_Response( self::shape_subscription( Orbit_Subscription::get( $id ) ), 200 );
 	}
 
 	/**
@@ -1207,11 +1208,47 @@ class Orbit_REST_API {
 	}
 
 	/**
+	 * Check if the current user is the profile owner or an admin.
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return bool True if authorized.
+	 */
+	public static function can_manage_profile_or_admin( $request ) {
+		if ( ! is_user_logged_in() ) {
+			return false;
+		}
+
+		if ( current_user_can( 'orbit_admin' ) ) {
+			return true;
+		}
+
+		$profile = Orbit_Profile::get( $request->get_param( 'id' ) );
+
+		return $profile && (int) $profile->user_id === get_current_user_id();
+	}
+
+	/**
 	 * Check if the current user is an admin.
 	 *
 	 * @return bool True if admin.
 	 */
 	public static function is_admin() {
 		return is_user_logged_in() && current_user_can( 'orbit_admin' );
+	}
+
+	// =========================================================================
+	// Helpers
+	// =========================================================================
+
+	/**
+	 * Strip sensitive fields from a subscription object before returning via API.
+	 *
+	 * @param object $sub Subscription row object.
+	 * @return object Subscription without secret fields.
+	 */
+	private static function shape_subscription( $sub ) {
+		$shaped = clone $sub;
+		unset( $shaped->subscription_secret );
+		return $shaped;
 	}
 }

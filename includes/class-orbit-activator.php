@@ -133,7 +133,8 @@ class Orbit_Activator {
 			PRIMARY KEY  (id),
 			KEY user_id (user_id),
 			KEY activity_id (activity_id),
-			KEY user_method_date (user_id, method, created_at)
+			KEY user_method_date (user_id, method, created_at),
+			KEY created_at (created_at)
 		) {$charset_collate};";
 
 		// orbit_phone_verification.
@@ -147,7 +148,8 @@ class Orbit_Activator {
 			expires_at datetime NOT NULL,
 			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY  (id),
-			KEY user_id (user_id)
+			KEY user_id (user_id),
+			KEY phone_created (phone, created_at)
 		) {$charset_collate};";
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';

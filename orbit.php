@@ -19,7 +19,6 @@ defined( 'ABSPATH' ) || exit;
  */
 define( 'ORBIT_VERSION', '1.0.0' );
 define( 'ORBIT_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
-define( 'ORBIT_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ORBIT_PLUGIN_FILE', __FILE__ );
 
 /**
@@ -95,14 +94,35 @@ register_activation_hook( ORBIT_PLUGIN_FILE, 'orbit_activate' );
  * Deactivation hook.
  */
 function orbit_deactivate() {
+	if ( function_exists( 'as_unschedule_all_actions' ) ) {
+		as_unschedule_all_actions( 'orbit_send_immediate_notification' );
+		as_unschedule_all_actions( 'orbit_send_daily_digest' );
+		as_unschedule_all_actions( 'orbit_mark_past_activities' );
+		as_unschedule_all_actions( 'orbit_cleanup_notification_log' );
+		as_unschedule_all_actions( 'orbit_dispatch_activity_notifications' );
+	}
+
 	flush_rewrite_rules();
 }
 register_deactivation_hook( ORBIT_PLUGIN_FILE, 'orbit_deactivate' );
 
 /**
- * Initialize roles on every load (ensures capabilities are current).
+ * Database upgrade mechanism.
+ *
+ * Compares the stored DB version against the current plugin version.
+ * On mismatch, re-runs table creation (dbDelta is safe for updates)
+ * and re-registers roles/capabilities.
  */
-add_action( 'init', array( 'Orbit_Roles', 'register' ) );
+function orbit_maybe_upgrade() {
+	$installed_version = get_option( 'orbit_db_version' );
+
+	if ( $installed_version !== ORBIT_VERSION ) {
+		Orbit_Activator::create_tables();
+		Orbit_Roles::register();
+		update_option( 'orbit_db_version', ORBIT_VERSION );
+	}
+}
+add_action( 'plugins_loaded', 'orbit_maybe_upgrade' );
 
 /**
  * Register ActionScheduler hooks and schedule recurring jobs.
@@ -124,59 +144,8 @@ add_action( 'init', array( 'Orbit_Shortcodes', 'register' ) );
 /**
  * Clean up Orbit data when a WordPress user is deleted.
  *
- * Handles the cascade defined in the spec: removes subscriptions, responses,
- * notification preferences, notification log entries, phone verification records,
- * and soft-deletes profiles (notifying subscribers).
+ * Handles the full cascade: activities, cross-user responses, cross-user
+ * subscriptions, notification preferences, notification log entries,
+ * phone verification records, and profile deletion.
  */
-add_action(
-	'delete_user',
-	function ( $user_id ) {
-		global $wpdb;
-
-		$profiles_table       = $wpdb->prefix . ORBIT_TABLE_PROFILES;
-		$subscriptions_table  = $wpdb->prefix . ORBIT_TABLE_SUBSCRIPTIONS;
-		$responses_table      = $wpdb->prefix . ORBIT_TABLE_RESPONSES;
-		$notif_prefs_table    = $wpdb->prefix . ORBIT_TABLE_NOTIFICATION_PREFERENCES;
-		$notif_log_table      = $wpdb->prefix . ORBIT_TABLE_NOTIFICATION_LOG;
-		$phone_verify_table   = $wpdb->prefix . ORBIT_TABLE_PHONE_VERIFICATION;
-
-		// Delete notification preferences.
-		$wpdb->delete( $notif_prefs_table, array( 'user_id' => $user_id ), array( '%d' ) );
-
-		// Delete notification log entries.
-		$wpdb->delete( $notif_log_table, array( 'user_id' => $user_id ), array( '%d' ) );
-
-		// Delete phone verification records.
-		$wpdb->delete( $phone_verify_table, array( 'user_id' => $user_id ), array( '%d' ) );
-
-		// Delete responses via subscriptions owned by this user.
-		$subscription_ids = $wpdb->get_col(
-			$wpdb->prepare(
-				"SELECT id FROM {$subscriptions_table} WHERE user_id = %d",
-				$user_id
-			)
-		);
-
-		if ( ! empty( $subscription_ids ) ) {
-			$placeholders = implode( ',', array_fill( 0, count( $subscription_ids ), '%d' ) );
-			$wpdb->query(
-				$wpdb->prepare(
-					"DELETE FROM {$responses_table} WHERE subscription_id IN ({$placeholders})",
-					...$subscription_ids
-				)
-			);
-		}
-
-		// Delete subscriptions.
-		$wpdb->delete( $subscriptions_table, array( 'user_id' => $user_id ), array( '%d' ) );
-
-		// Soft-delete profile if user is a poster (delete the profile record).
-		$wpdb->delete( $profiles_table, array( 'user_id' => $user_id ), array( '%d' ) );
-
-		// Clean up usermeta.
-		delete_user_meta( $user_id, 'orbit_phone' );
-		delete_user_meta( $user_id, 'orbit_phone_verified' );
-		delete_user_meta( $user_id, 'orbit_timezone' );
-		delete_user_meta( $user_id, 'orbit_sms_opted_out' );
-	}
-);
+add_action( 'delete_user', array( 'Orbit_Privacy', 'cleanup_user_data' ) );

@@ -331,6 +331,19 @@ class Orbit_Activity {
 	}
 
 	/**
+	 * Get human-readable tier labels.
+	 *
+	 * @return array Associative array of tier number => label string.
+	 */
+	public static function get_tier_labels() {
+		return array(
+			1 => __( 'Just an idea', 'orbit' ),
+			2 => __( "I'll go if you will", 'orbit' ),
+			3 => __( "I'm going — join me", 'orbit' ),
+		);
+	}
+
+	/**
 	 * Batch update past activities.
 	 *
 	 * Sets status to 'past' for all active activities with date_time in the past.

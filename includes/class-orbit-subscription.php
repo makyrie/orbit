@@ -316,39 +316,6 @@ class Orbit_Subscription {
 	}
 
 	/**
-	 * Update visibility default for a subscription.
-	 *
-	 * @param int    $id         Subscription ID.
-	 * @param string $visibility 'anonymous' or 'visible'.
-	 * @return bool|WP_Error True on success.
-	 */
-	public static function set_visibility( $id, $visibility ) {
-		global $wpdb;
-
-		if ( ! in_array( $visibility, array( 'anonymous', 'visible' ), true ) ) {
-			return new WP_Error( 'invalid_visibility', __( 'Visibility must be anonymous or visible.', 'orbit' ) );
-		}
-
-		$table  = $wpdb->prefix . ORBIT_TABLE_SUBSCRIPTIONS;
-		$result = $wpdb->update(
-			$table,
-			array(
-				'visibility_default' => $visibility,
-				'updated_at'         => current_time( 'mysql', true ),
-			),
-			array( 'id' => $id ),
-			array( '%s', '%s' ),
-			array( '%d' )
-		);
-
-		if ( false === $result ) {
-			return new WP_Error( 'db_error', __( 'Failed to update visibility.', 'orbit' ) );
-		}
-
-		return true;
-	}
-
-	/**
 	 * Change subscription status with valid-from-status enforcement.
 	 *
 	 * @param int    $id             Subscription ID.

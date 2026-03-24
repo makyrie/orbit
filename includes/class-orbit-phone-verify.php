@@ -157,19 +157,4 @@ class Orbit_Phone_Verify {
 
 		return true;
 	}
-
-	/**
-	 * Reset verification when phone number changes.
-	 *
-	 * @param int $user_id User ID.
-	 */
-	public static function reset_on_phone_change( $user_id ) {
-		global $wpdb;
-
-		update_user_meta( $user_id, 'orbit_phone_verified', 0 );
-
-		// Clean up any pending verification records.
-		$table = $wpdb->prefix . ORBIT_TABLE_PHONE_VERIFICATION;
-		$wpdb->delete( $table, array( 'user_id' => $user_id ), array( '%d' ) );
-	}
 }

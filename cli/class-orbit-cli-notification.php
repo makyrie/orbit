@@ -80,11 +80,7 @@ class Orbit_CLI_Notification extends Orbit_CLI {
 		WP_CLI::log( sprintf( 'Digest preview for user %d (%d items):', $user_id, count( $queued_items ) ) );
 		WP_CLI::log( '' );
 
-		$tier_labels = array(
-			1 => 'Just an idea',
-			2 => "I'll go if you will",
-			3 => "I'm going — join me",
-		);
+		$tier_labels = Orbit_Activity::get_tier_labels();
 
 		foreach ( $queued_items as $item ) {
 			$profile     = Orbit_Profile::get( $item->profile_id );

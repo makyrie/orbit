@@ -43,25 +43,28 @@ class Orbit_Token {
 	/**
 	 * Generate an action token for a specific activity and subscription.
 	 *
-	 * Format: {base64(expiry_timestamp)}:{hmac_hex}
+	 * Format: {subscription_id}.{base64(expiry_timestamp)}:{hmac_hex}
 	 *
 	 * @param string   $subscription_secret The subscription's secret.
 	 * @param int      $activity_id         The activity ID.
+	 * @param int      $subscription_id     The subscription ID (embedded in token for O(1) lookup).
 	 * @param int|null $expiry_timestamp    Optional explicit expiry. Defaults based on activity date.
 	 * @return string The composite action token.
 	 */
-	public static function generate_action_token( $subscription_secret, $activity_id, $expiry_timestamp = null ) {
+	public static function generate_action_token( $subscription_secret, $activity_id, $subscription_id, $expiry_timestamp = null ) {
 		if ( null === $expiry_timestamp ) {
 			$expiry_timestamp = self::compute_default_expiry( $activity_id );
 		}
 
 		$hmac = self::compute_hmac( $subscription_secret, $activity_id, $expiry_timestamp );
 
-		return base64_encode( (string) $expiry_timestamp ) . ':' . $hmac;
+		return $subscription_id . '.' . base64_encode( (string) $expiry_timestamp ) . ':' . $hmac;
 	}
 
 	/**
 	 * Validate an action token.
+	 *
+	 * Parses format: {subscription_id}.{base64(expiry)}:{hmac}
 	 *
 	 * @param string $token               The composite action token.
 	 * @param string $subscription_secret  The subscription's secret.
@@ -69,7 +72,13 @@ class Orbit_Token {
 	 * @return bool True if valid and not expired.
 	 */
 	public static function validate_action_token( $token, $subscription_secret, $activity_id ) {
-		$parts = explode( ':', $token, 2 );
+		$dot_pos = strpos( $token, '.' );
+		if ( false === $dot_pos ) {
+			return false;
+		}
+
+		$remaining = substr( $token, $dot_pos + 1 );
+		$parts     = explode( ':', $remaining, 2 );
 
 		if ( 2 !== count( $parts ) ) {
 			return false;
@@ -92,6 +101,21 @@ class Orbit_Token {
 		$expected_hmac = self::compute_hmac( $subscription_secret, $activity_id, $expiry_timestamp );
 
 		return hash_equals( $expected_hmac, $parts[1] );
+	}
+
+	/**
+	 * Extract the subscription ID from an action token.
+	 *
+	 * @param string $token The composite action token.
+	 * @return int|null Subscription ID, or null if token format is invalid.
+	 */
+	public static function extract_subscription_id( $token ) {
+		$dot_pos = strpos( $token, '.' );
+		if ( false === $dot_pos ) {
+			return null;
+		}
+
+		return absint( substr( $token, 0, $dot_pos ) );
 	}
 
 	/**

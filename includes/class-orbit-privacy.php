@@ -121,6 +121,117 @@ class Orbit_Privacy {
 	}
 
 	/**
+	 * Clean up all Orbit data for a user being deleted.
+	 *
+	 * Cascade order:
+	 * 1. If the user is a poster, delete all activities for their profile,
+	 *    all responses to those activities (from any user), and all
+	 *    subscriptions TO that profile (from any user).
+	 * 2. Delete the user's own responses (via their subscriptions).
+	 * 3. Delete the user's own subscriptions.
+	 * 4. Delete notification preferences, notification log, and phone
+	 *    verification records.
+	 * 5. Delete the profile record.
+	 * 6. Clean up usermeta.
+	 *
+	 * @param int $user_id The WordPress user ID being deleted.
+	 */
+	public static function cleanup_user_data( $user_id ) {
+		global $wpdb;
+
+		$profiles_table      = $wpdb->prefix . ORBIT_TABLE_PROFILES;
+		$subscriptions_table = $wpdb->prefix . ORBIT_TABLE_SUBSCRIPTIONS;
+		$activities_table    = $wpdb->prefix . ORBIT_TABLE_ACTIVITIES;
+		$responses_table     = $wpdb->prefix . ORBIT_TABLE_RESPONSES;
+		$notif_prefs_table   = $wpdb->prefix . ORBIT_TABLE_NOTIFICATION_PREFERENCES;
+		$notif_log_table     = $wpdb->prefix . ORBIT_TABLE_NOTIFICATION_LOG;
+		$phone_verify_table  = $wpdb->prefix . ORBIT_TABLE_PHONE_VERIFICATION;
+
+		// Find the user's profile (if they are a poster).
+		$profile_id = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT id FROM {$profiles_table} WHERE user_id = %d",
+				$user_id
+			)
+		);
+
+		// If the user has a poster profile, cascade-delete profile-owned data.
+		if ( $profile_id ) {
+			// Get all activity IDs for this profile.
+			$activity_ids = $wpdb->get_col(
+				$wpdb->prepare(
+					"SELECT id FROM {$activities_table} WHERE profile_id = %d",
+					$profile_id
+				)
+			);
+
+			// Delete all responses to those activities (from any user).
+			if ( ! empty( $activity_ids ) ) {
+				$placeholders = implode( ',', array_fill( 0, count( $activity_ids ), '%d' ) );
+				$wpdb->query(
+					$wpdb->prepare(
+						"DELETE FROM {$responses_table} WHERE activity_id IN ({$placeholders})",
+						...$activity_ids
+					)
+				);
+
+				// Delete notification log entries for those activities.
+				$wpdb->query(
+					$wpdb->prepare(
+						"DELETE FROM {$notif_log_table} WHERE activity_id IN ({$placeholders})",
+						...$activity_ids
+					)
+				);
+			}
+
+			// Delete all activities for this profile.
+			$wpdb->delete( $activities_table, array( 'profile_id' => $profile_id ), array( '%d' ) );
+
+			// Delete all subscriptions TO this profile (from any user).
+			$wpdb->delete( $subscriptions_table, array( 'profile_id' => $profile_id ), array( '%d' ) );
+		}
+
+		// Delete notification preferences.
+		$wpdb->delete( $notif_prefs_table, array( 'user_id' => $user_id ), array( '%d' ) );
+
+		// Delete notification log entries for this user.
+		$wpdb->delete( $notif_log_table, array( 'user_id' => $user_id ), array( '%d' ) );
+
+		// Delete phone verification records.
+		$wpdb->delete( $phone_verify_table, array( 'user_id' => $user_id ), array( '%d' ) );
+
+		// Delete responses via subscriptions owned by this user.
+		$subscription_ids = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT id FROM {$subscriptions_table} WHERE user_id = %d",
+				$user_id
+			)
+		);
+
+		if ( ! empty( $subscription_ids ) ) {
+			$placeholders = implode( ',', array_fill( 0, count( $subscription_ids ), '%d' ) );
+			$wpdb->query(
+				$wpdb->prepare(
+					"DELETE FROM {$responses_table} WHERE subscription_id IN ({$placeholders})",
+					...$subscription_ids
+				)
+			);
+		}
+
+		// Delete the user's own subscriptions.
+		$wpdb->delete( $subscriptions_table, array( 'user_id' => $user_id ), array( '%d' ) );
+
+		// Delete the profile record.
+		$wpdb->delete( $profiles_table, array( 'user_id' => $user_id ), array( '%d' ) );
+
+		// Clean up usermeta.
+		delete_user_meta( $user_id, 'orbit_phone' );
+		delete_user_meta( $user_id, 'orbit_phone_verified' );
+		delete_user_meta( $user_id, 'orbit_timezone' );
+		delete_user_meta( $user_id, 'orbit_sms_opted_out' );
+	}
+
+	/**
 	 * Resolve the effective visibility for a response.
 	 *
 	 * Priority: per-activity visibility_override > subscription visibility_default.

@@ -77,7 +77,6 @@ class Orbit_Routes {
 	public static function handle_routes() {
 		$profile_slug = get_query_var( 'orbit_profile_slug' );
 		$activity_id  = get_query_var( 'orbit_activity_id' );
-		$unsubscribe  = get_query_var( 'orbit_unsubscribe' );
 
 		if ( $profile_slug ) {
 			self::handle_profile_route( $profile_slug );
@@ -85,10 +84,6 @@ class Orbit_Routes {
 
 		if ( $activity_id ) {
 			self::handle_activity_route( absint( $activity_id ) );
-		}
-
-		if ( $unsubscribe ) {
-			self::handle_unsubscribe_route();
 		}
 	}
 
@@ -128,14 +123,6 @@ class Orbit_Routes {
 
 		// Store activity data for shortcode consumption.
 		set_query_var( 'orbit_current_activity', $activity );
-	}
-
-	/**
-	 * Handle unsubscribe route.
-	 */
-	private static function handle_unsubscribe_route() {
-		// Token-based unsubscribe is handled by the shortcode or REST API.
-		// This route just needs to serve the unsubscribe page.
 	}
 
 	/**
