@@ -55,6 +55,8 @@ require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-twilio.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-phone-verify.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-notifier.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-api.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-routes.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-shortcodes.php';
 
 /**
  * Register WP-CLI commands.
@@ -111,6 +113,12 @@ add_action( 'init', array( 'Orbit_Notifier', 'schedule_recurring_jobs' ) );
  * Register REST API routes.
  */
 add_action( 'rest_api_init', array( 'Orbit_REST_API', 'register_routes' ) );
+
+/**
+ * Register custom routes and shortcodes.
+ */
+Orbit_Routes::register();
+add_action( 'init', array( 'Orbit_Shortcodes', 'register' ) );
 
 /**
  * Clean up Orbit data when a WordPress user is deleted.

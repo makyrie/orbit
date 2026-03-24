@@ -258,12 +258,12 @@ Custom URL routing and shortcodes for the theme to consume.
 
 **Tasks:**
 
-- [ ] Custom rewrite rules:
+- [x] Custom rewrite rules:
   - `/@{slug}` → profile page (query var: `orbit_profile_slug`)
   - `/@{slug}/subscribe` → subscription form (query var: `orbit_subscribe`)
   - `/activity/{id}` → activity detail (query var: `orbit_activity_id`)
   - `/unsubscribe` → unsubscribe handler (query var: `orbit_unsubscribe`)
-- [ ] Shortcode registration:
+- [x] Shortcode registration:
   - `[orbit_dashboard]` — subscriber's unified view
   - `[orbit_settings]` — notification preferences, visibility, timezone
   - `[orbit_manage]` — poster's management view
@@ -275,9 +275,9 @@ Custom URL routing and shortcodes for the theme to consume.
   - `[orbit_subscribe_form]` — subscription signup form
   - `[orbit_activity]` — activity detail page
 - [ ] Template redirects: `front-page.html` logic (logged out → landing, logged in → dashboard redirect)
-- [ ] `robots.txt` additions: block `/activity/`, `/dashboard/`, `/manage/`
-- [ ] `<meta name="robots" content="noindex, nofollow">` on activity and authenticated pages
-- [ ] Access control in shortcode callbacks: check roles, redirect unauthorized users
+- [x] `robots.txt` additions: block `/activity/`, `/dashboard/`, `/manage/`
+- [x] `<meta name="robots" content="noindex, nofollow">` on activity and authenticated pages
+- [x] Access control in shortcode callbacks: check roles, redirect unauthorized users
 
 **Success criteria:**
 - `/@sarah-k` resolves to the correct profile
