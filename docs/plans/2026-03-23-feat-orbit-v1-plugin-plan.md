@@ -1,7 +1,7 @@
 ---
 title: "feat: Build Orbit v1 WordPress Plugin"
 type: feat
-status: active
+status: completed
 date: 2026-03-23
 ---
 
@@ -292,27 +292,27 @@ Harden the plugin.
 
 **Tasks:**
 
-- [ ] Input validation (verify all entry points):
+- [x] Input validation (verify all entry points):
   - Phone numbers: E.164 format validation and normalization
   - Email: `is_email()`
   - Profile slugs: `sanitize_title()` + uniqueness + reserved slug list
   - Connection notes: `sanitize_textarea_field()`, max 500 chars
   - Activity titles: `sanitize_text_field()`, max 300 chars
   - All user input: appropriate WordPress sanitization functions
-- [ ] Nonce verification on all logged-in form submissions
-- [ ] Rate limiting via transients:
+- [x] Nonce verification on all logged-in form submissions
+- [x] Rate limiting via transients:
   - Subscription form: 5/hour/IP (`ORBIT_RATE_LIMIT_SUBSCRIBE`)
   - Phone verification: 3 requests/phone/hour
   - Basic rate limiting on unauthenticated API endpoints
-- [ ] Token security:
+- [x] Token security:
   - Share tokens: `wp_generate_password(32, false)`, regeneratable
   - Subscription secrets: `wp_generate_password(32, false)`, stable per subscription
   - Action tokens: HMAC-SHA256, activity-scoped, time-limited
   - Validate all tokens on every request
-- [ ] Twilio webhook signature validation on `/twilio/incoming`
-- [ ] SQL injection prevention: use `$wpdb->prepare()` for all queries
-- [ ] XSS prevention: escape all output with appropriate `esc_*()` functions
-- [ ] CSRF: nonces on all state-changing forms
+- [x] Twilio webhook signature validation on `/twilio/incoming`
+- [x] SQL injection prevention: use `$wpdb->prepare()` for all queries
+- [x] XSS prevention: escape all output with appropriate `esc_*()` functions
+- [x] CSRF: nonces on all state-changing forms
 
 **Success criteria:**
 - No raw SQL queries without `$wpdb->prepare()`

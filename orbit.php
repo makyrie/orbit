@@ -55,6 +55,7 @@ require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-twilio.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-phone-verify.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-notifier.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-api.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rate-limiter.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-routes.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-shortcodes.php';
 

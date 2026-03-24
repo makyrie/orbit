@@ -405,6 +405,12 @@ class Orbit_REST_API {
 	 * @return WP_REST_Response|WP_Error Response.
 	 */
 	public static function handle_subscribe( $request ) {
+		// Rate limit: 5 subscription attempts per hour per IP.
+		$ip = sanitize_text_field( $_SERVER['REMOTE_ADDR'] ?? '' );
+		if ( $ip && ! Orbit_Rate_Limiter::attempt( 'subscribe', $ip, 5, HOUR_IN_SECONDS ) ) {
+			return new WP_Error( 'rate_limited', __( 'Too many subscription attempts. Please try again later.', 'orbit' ), array( 'status' => 429 ) );
+		}
+
 		$share_token     = $request->get_param( 'share_token' );
 		$email           = $request->get_param( 'email' );
 		$display_name    = $request->get_param( 'display_name' );
@@ -527,6 +533,14 @@ class Orbit_REST_API {
 	 * @return WP_REST_Response|WP_Error Response.
 	 */
 	public static function handle_respond( $request ) {
+		// Rate limit unauthenticated response attempts.
+		if ( ! is_user_logged_in() ) {
+			$ip = sanitize_text_field( $_SERVER['REMOTE_ADDR'] ?? '' );
+			if ( $ip && ! Orbit_Rate_Limiter::attempt( 'respond', $ip, 30, HOUR_IN_SECONDS ) ) {
+				return new WP_Error( 'rate_limited', __( 'Too many response attempts. Please try again later.', 'orbit' ), array( 'status' => 429 ) );
+			}
+		}
+
 		$activity_id = $request->get_param( 'activity_id' );
 		$response    = $request->get_param( 'response' );
 		$act_token   = $request->get_param( 'act' );
