@@ -104,10 +104,10 @@ CRUD classes for the two primary entities.
 
 **Tasks:**
 
-- [ ] `class-orbit-token.php`: Token generation (`wp_generate_password(32, false)` for share tokens and subscription secrets), HMAC-SHA256 action token generation/validation (input: subscription_secret + activity_id + expiry), expiry logic (7 days after activity date, 30 days for dateless)
-- [ ] `class-orbit-profile.php`: Create (with slug uniqueness check, share_token generation), get (by ID, by slug, by user_id), update, delete (soft: deactivate + notify subscribers), list (with filters), `regenerate_token()`
-- [ ] `class-orbit-activity.php`: Create (validates tier 1-3, optional date/time, defaults for show_attendees/status), get, update, cancel (sets status=cancelled), list (filter by profile, status, tier, date range), mark past (batch update where date_time < now and status = active)
-- [ ] Input validation: slug via `sanitize_title()` + reserved slug check (`dashboard`, `manage`, `activity`, `unsubscribe`, `api`, `wp-admin`), title via `sanitize_text_field()` max 300 chars, bio via `sanitize_textarea_field()`
+- [x] `class-orbit-token.php`: Token generation (`wp_generate_password(32, false)` for share tokens and subscription secrets), HMAC-SHA256 action token generation/validation (input: subscription_secret + activity_id + expiry), expiry logic (7 days after activity date, 30 days for dateless)
+- [x] `class-orbit-profile.php`: Create (with slug uniqueness check, share_token generation), get (by ID, by slug, by user_id), update, delete (soft: deactivate + notify subscribers), list (with filters), `regenerate_token()`
+- [x] `class-orbit-activity.php`: Create (validates tier 1-3, optional date/time, defaults for show_attendees/status), get, update, cancel (sets status=cancelled), list (filter by profile, status, tier, date range), mark past (batch update where date_time < now and status = active)
+- [x] Input validation: slug via `sanitize_title()` + reserved slug check (`dashboard`, `manage`, `activity`, `unsubscribe`, `api`, `wp-admin`), title via `sanitize_text_field()` max 300 chars, bio via `sanitize_textarea_field()`
 
 **Success criteria:**
 - Profiles can be created, read, updated, soft-deleted
