@@ -36,8 +36,13 @@ class OrbitResponseTest extends WP_UnitTestCase {
 	 * Set up test fixtures.
 	 */
 	public static function wpSetUpBeforeClass( $factory ) {
+		global $wpdb;
+
 		self::$poster_id     = $factory->user->create( array( 'role' => 'administrator' ) );
 		self::$subscriber_id = $factory->user->create( array( 'role' => 'subscriber' ) );
+
+		// Clean up any stale data from prior runs.
+		$wpdb->query( "DELETE FROM {$wpdb->prefix}" . ORBIT_TABLE_PROFILES . " WHERE slug = 'resp-test-poster'" );
 
 		self::$profile_id = Orbit_Profile::create(
 			array(
@@ -62,6 +67,20 @@ class OrbitResponseTest extends WP_UnitTestCase {
 				'title'      => 'Test Activity',
 			)
 		);
+	}
+
+	/**
+	 * Clean up class-level fixtures.
+	 */
+	public static function wpTearDownAfterClass() {
+		global $wpdb;
+
+		if ( is_int( self::$profile_id ) ) {
+			$wpdb->query( "DELETE FROM {$wpdb->prefix}" . ORBIT_TABLE_RESPONSES );
+			$wpdb->query( "DELETE FROM {$wpdb->prefix}" . ORBIT_TABLE_SUBSCRIPTIONS . " WHERE profile_id = " . self::$profile_id );
+			$wpdb->query( "DELETE FROM {$wpdb->prefix}" . ORBIT_TABLE_ACTIVITIES . " WHERE profile_id = " . self::$profile_id );
+			$wpdb->query( "DELETE FROM {$wpdb->prefix}" . ORBIT_TABLE_PROFILES . " WHERE id = " . self::$profile_id );
+		}
 	}
 
 	/**

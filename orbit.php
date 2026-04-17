@@ -146,6 +146,120 @@ Orbit_Routes::register();
 add_action( 'init', array( 'Orbit_Shortcodes', 'register' ) );
 
 /**
+ * Enqueue frontend scripts on pages that use Orbit shortcodes or routes.
+ */
+function orbit_enqueue_scripts() {
+	// Only load on pages that need it: Orbit pages, profile routes, activity routes.
+	$dominated_by_orbit = is_page( orbit_get_internal_page_slugs() );
+
+	$is_orbit_route = get_query_var( 'orbit_profile_slug' )
+		|| get_query_var( 'orbit_activity_id' )
+		|| get_query_var( 'orbit_unsubscribe' );
+
+	if ( ! $dominated_by_orbit && ! $is_orbit_route ) {
+		return;
+	}
+
+	wp_enqueue_style(
+		'orbit',
+		plugins_url( 'assets/css/orbit.css', ORBIT_PLUGIN_FILE ),
+		array(),
+		ORBIT_VERSION
+	);
+
+	wp_enqueue_script(
+		'orbit-forms',
+		plugins_url( 'assets/js/orbit-forms.js', ORBIT_PLUGIN_FILE ),
+		array(),
+		ORBIT_VERSION,
+		true
+	);
+
+	wp_localize_script(
+		'orbit-forms',
+		'orbitForms',
+		array(
+			'restUrl'   => esc_url_raw( rest_url( 'orbit/v1/' ) ),
+			'nonce'     => wp_create_nonce( 'wp_rest' ),
+			'homeUrl'   => esc_url_raw( home_url() ),
+			'manageUrl' => esc_url_raw( home_url( '/orbit-manage/' ) ),
+			'strings'   => array(
+				'success'       => __( 'Saved successfully.', 'orbit' ),
+				'responseSaved' => __( 'Response saved.', 'orbit' ),
+				'confirmCancel'       => __( 'Are you sure you want to cancel this activity?', 'orbit' ),
+				'confirmUnsubscribe' => __( 'Are you sure you want to unsubscribe?', 'orbit' ),
+			),
+		)
+	);
+}
+add_action( 'wp_enqueue_scripts', 'orbit_enqueue_scripts' );
+
+/**
+ * Hide Orbit's internal pages from navigation menus.
+ *
+ * These pages are app screens reached via in-app links, not top-level nav items.
+ * Filters both classic menus (wp_nav_menu_objects) and FSE page-list blocks (get_pages).
+ */
+function orbit_get_internal_page_slugs() {
+	return array(
+		'orbit-dashboard',
+		'orbit-settings',
+		'orbit-my-subscriptions',
+		'orbit-manage',
+		'orbit-new-activity',
+		'orbit-edit-activity',
+		'orbit-subscribers',
+		'orbit-edit-profile',
+	);
+}
+
+/**
+ * Filter classic nav menus.
+ *
+ * @param array $items Menu items.
+ * @return array Filtered items.
+ */
+function orbit_filter_nav_menu_items( $items ) {
+	$slugs = orbit_get_internal_page_slugs();
+
+	return array_filter(
+		$items,
+		function ( $item ) use ( $slugs ) {
+			if ( 'page' === $item->object ) {
+				$page = get_post( $item->object_id );
+				if ( $page && in_array( $page->post_name, $slugs, true ) ) {
+					return false;
+				}
+			}
+			return true;
+		}
+	);
+}
+add_filter( 'wp_nav_menu_objects', 'orbit_filter_nav_menu_items' );
+
+/**
+ * Filter FSE page-list blocks (used by block themes like Twenty Twenty-Five).
+ *
+ * @param WP_Post[] $pages Array of page objects.
+ * @return WP_Post[] Filtered pages.
+ */
+function orbit_filter_page_list_block( $pages ) {
+	if ( is_admin() ) {
+		return $pages;
+	}
+
+	$slugs = orbit_get_internal_page_slugs();
+
+	return array_filter(
+		$pages,
+		function ( $page ) use ( $slugs ) {
+			return ! in_array( $page->post_name, $slugs, true );
+		}
+	);
+}
+add_filter( 'get_pages', 'orbit_filter_page_list_block' );
+
+/**
  * Clean up Orbit data when a WordPress user is deleted.
  *
  * Handles the full cascade: activities, cross-user responses, cross-user

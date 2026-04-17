@@ -77,6 +77,16 @@ class Orbit_REST_Subscription {
 
 		register_rest_route(
 			$ns,
+			'/subscriptions/(?P<id>\d+)',
+			array(
+				'methods'             => 'DELETE',
+				'callback'            => array( __CLASS__, 'delete_own_subscription' ),
+				'permission_callback' => 'is_user_logged_in',
+			)
+		);
+
+		register_rest_route(
+			$ns,
 			'/subscribers',
 			array(
 				'methods'             => 'GET',
@@ -244,6 +254,38 @@ class Orbit_REST_Subscription {
 		}
 
 		$result = Orbit_Subscription::unsubscribe( $subscription->id );
+		if ( is_wp_error( $result ) ) {
+			return new WP_Error( $result->get_error_code(), $result->get_error_message(), array( 'status' => 400 ) );
+		}
+
+		return new WP_REST_Response(
+			array(
+				'status'  => 'unsubscribed',
+				'message' => __( 'You have been unsubscribed.', 'orbit' ),
+			),
+			200
+		);
+	}
+
+	/**
+	 * Unsubscribe the current user from a subscription by ID.
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return WP_REST_Response|WP_Error Response.
+	 */
+	public static function delete_own_subscription( $request ) {
+		$subscription = Orbit_Subscription::get( absint( $request->get_param( 'id' ) ) );
+
+		if ( ! $subscription ) {
+			return new WP_Error( 'not_found', __( 'Subscription not found.', 'orbit' ), array( 'status' => 404 ) );
+		}
+
+		if ( (int) $subscription->user_id !== get_current_user_id() ) {
+			return new WP_Error( 'forbidden', __( 'You can only unsubscribe yourself.', 'orbit' ), array( 'status' => 403 ) );
+		}
+
+		$result = Orbit_Subscription::unsubscribe( $subscription->id );
+
 		if ( is_wp_error( $result ) ) {
 			return new WP_Error( $result->get_error_code(), $result->get_error_message(), array( 'status' => 400 ) );
 		}
