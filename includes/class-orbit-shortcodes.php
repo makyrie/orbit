@@ -22,6 +22,7 @@ class Orbit_Shortcodes {
 	public static function register() {
 		add_shortcode( 'orbit_dashboard', array( __CLASS__, 'dashboard' ) );
 		add_shortcode( 'orbit_settings', array( __CLASS__, 'settings' ) );
+		add_shortcode( 'orbit_my_subscriptions', array( __CLASS__, 'my_subscriptions' ) );
 		add_shortcode( 'orbit_manage', array( __CLASS__, 'manage' ) );
 		add_shortcode( 'orbit_new_activity', array( __CLASS__, 'new_activity' ) );
 		add_shortcode( 'orbit_edit_activity', array( __CLASS__, 'edit_activity' ) );
@@ -78,10 +79,47 @@ class Orbit_Shortcodes {
 
 		ob_start();
 
+		echo self::app_nav( 'dashboard' );
 		echo '<div class="orbit-dashboard">';
 
 		if ( empty( $activities ) ) {
-			echo '<p>' . esc_html__( 'No activities yet. Subscribe to someone to see their activities here.', 'orbit' ) . '</p>';
+			// Check for pending subscriptions.
+			$pending_subs = Orbit_Subscription::list(
+				array(
+					'user_id'  => $user_id,
+					'status'   => 'pending',
+					'per_page' => 100,
+				)
+			);
+
+			if ( ! empty( $pending_subs ) ) {
+				$pending_count = count( $pending_subs );
+				echo '<p class="orbit-notice">';
+				echo esc_html( sprintf(
+					_n(
+						'You\'ve subscribed to %d person who hasn\'t approved you yet. Their activities will appear here once they do.',
+						'You\'ve subscribed to %d people who haven\'t approved you yet. Their activities will appear here once they do.',
+						$pending_count,
+						'orbit'
+					),
+					$pending_count
+				) );
+				echo '</p>';
+			} else {
+				echo '<p>' . esc_html__( 'No activities yet. Subscribe to someone to see their activities here.', 'orbit' ) . '</p>';
+			}
+
+			if ( current_user_can( 'orbit_create_activity' ) ) {
+				echo '<p><a href="' . esc_url( home_url( '/orbit-manage/' ) ) . '" class="orbit-btn">';
+				echo esc_html__( 'Manage Your Activities', 'orbit' );
+				echo '</a></p>';
+			} else {
+				echo '<p class="orbit-cta">';
+				echo esc_html__( 'Want to share your own activities?', 'orbit' ) . ' ';
+				echo '<a href="' . esc_url( home_url( '/orbit-edit-profile/' ) ) . '">';
+				echo esc_html__( 'Create a profile', 'orbit' );
+				echo '</a></p>';
+			}
 		}
 
 		$tier_labels = Orbit_Activity::get_tier_labels();
@@ -115,7 +153,7 @@ class Orbit_Shortcodes {
 			echo '</a></h3>';
 
 			if ( $activity->date_time ) {
-				echo '<p class="orbit-activity-date">' . esc_html( $activity->date_time ) . '</p>';
+				echo '<p class="orbit-activity-date">' . esc_html( self::format_datetime( $activity->date_time ) ) . '</p>';
 			}
 
 			if ( $activity->location_name ) {
@@ -167,6 +205,7 @@ class Orbit_Shortcodes {
 
 		ob_start();
 
+		echo self::app_nav( 'settings' );
 		echo '<div class="orbit-settings">';
 		echo '<h2>' . esc_html__( 'Notification Preferences', 'orbit' ) . '</h2>';
 		echo '<form method="post" class="orbit-settings-form" data-orbit-api="preferences">';
@@ -206,6 +245,89 @@ class Orbit_Shortcodes {
 	}
 
 	/**
+	 * My Subscriptions page.
+	 *
+	 * @param array $atts Shortcode attributes.
+	 * @return string HTML output.
+	 */
+	public static function my_subscriptions( $atts ) {
+		if ( ! is_user_logged_in() ) {
+			return self::login_prompt( __( 'Please log in to view your subscriptions.', 'orbit' ) );
+		}
+
+		$user_id = get_current_user_id();
+
+		$subscriptions = Orbit_Subscription::list(
+			array(
+				'user_id'  => $user_id,
+				'status'   => 'approved',
+				'per_page' => 100,
+			)
+		);
+
+		$pending_subs = Orbit_Subscription::list(
+			array(
+				'user_id'  => $user_id,
+				'status'   => 'pending',
+				'per_page' => 100,
+			)
+		);
+
+		$all_subs = array_merge( $subscriptions, $pending_subs );
+
+		ob_start();
+
+		echo self::app_nav( 'my-subscriptions' );
+		echo '<div class="orbit-my-subscriptions">';
+		echo '<h2>' . esc_html__( 'My Subscriptions', 'orbit' ) . '</h2>';
+
+		if ( empty( $all_subs ) ) {
+			echo '<p>' . esc_html__( 'You are not subscribed to anyone yet.', 'orbit' ) . '</p>';
+		} else {
+			// Batch-load profiles.
+			$profile_ids  = array_unique( array_map( function ( $s ) {
+				return (int) $s->profile_id;
+			}, $all_subs ) );
+			$profiles_map = Orbit_Profile::get_by_ids( $profile_ids );
+
+			echo '<table class="orbit-table">';
+			echo '<thead><tr>';
+			echo '<th>' . esc_html__( 'Poster', 'orbit' ) . '</th>';
+			echo '<th>' . esc_html__( 'Status', 'orbit' ) . '</th>';
+			echo '<th>' . esc_html__( 'Since', 'orbit' ) . '</th>';
+			echo '<th></th>';
+			echo '</tr></thead><tbody>';
+
+			foreach ( $all_subs as $sub ) {
+				$profile = isset( $profiles_map[ (int) $sub->profile_id ] ) ? $profiles_map[ (int) $sub->profile_id ] : null;
+				$name    = $profile ? $profile->display_name : __( 'Unknown', 'orbit' );
+				$url     = $profile ? home_url( '/@' . $profile->slug ) : '#';
+
+				echo '<tr>';
+				echo '<td><a href="' . esc_url( $url ) . '">' . esc_html( $name ) . '</a></td>';
+				echo '<td>' . esc_html( $sub->status ) . '</td>';
+				echo '<td>' . esc_html( self::format_datetime( $sub->created_at, 'M j, Y' ) ) . '</td>';
+				echo '<td>';
+
+				if ( 'approved' === $sub->status ) {
+					echo '<button class="orbit-btn orbit-btn-sm orbit-btn-danger" data-orbit-unsubscribe="' . esc_attr( $sub->id ) . '">';
+					echo esc_html__( 'Unsubscribe', 'orbit' );
+					echo '</button>';
+				}
+
+				echo '</td>';
+				echo '</tr>';
+			}
+
+			echo '</tbody></table>';
+		}
+
+		echo '</div>';
+
+		return ob_get_clean();
+	}
+
+	/**
 	 * Poster's management view.
 	 *
 	 * @param array $atts Shortcode attributes.
@@ -229,25 +351,11 @@ class Orbit_Shortcodes {
 			)
 		);
 
-		$pending_count = Orbit_Subscription::count(
-			array(
-				'profile_id' => $profile->id,
-				'status'     => 'pending',
-			)
-		);
-
 		ob_start();
 
+		echo self::app_nav( 'manage' );
 		echo '<div class="orbit-manage">';
 		echo '<h2>' . esc_html__( 'Manage Activities', 'orbit' ) . '</h2>';
-
-		if ( $pending_count > 0 ) {
-			echo '<div class="orbit-notice">';
-			echo '<a href="' . esc_url( home_url( '/orbit-subscribers/' ) ) . '">';
-			echo esc_html( sprintf( _n( '%d pending subscriber', '%d pending subscribers', $pending_count, 'orbit' ), $pending_count ) );
-			echo '</a>';
-			echo '</div>';
-		}
 
 		echo '<p><a href="' . esc_url( home_url( '/orbit-new-activity/' ) ) . '" class="orbit-btn">';
 		echo esc_html__( 'New Activity', 'orbit' );
@@ -274,7 +382,7 @@ class Orbit_Shortcodes {
 				echo '<td><a href="' . esc_url( home_url( '/activity/' . $activity->id ) ) . '">' . esc_html( $activity->title ) . '</a></td>';
 				echo '<td>' . esc_html( $activity->tier ) . '</td>';
 				echo '<td>' . esc_html( $activity->status ) . '</td>';
-				echo '<td>' . ( $activity->date_time ? esc_html( $activity->date_time ) : '—' ) . '</td>';
+				echo '<td>' . ( $activity->date_time ? esc_html( self::format_datetime( $activity->date_time, 'M j, Y g:i A' ) ) : '—' ) . '</td>';
 				echo '<td>' . esc_html( $response_count ) . '</td>';
 				echo '</tr>';
 			}
@@ -306,6 +414,7 @@ class Orbit_Shortcodes {
 
 		ob_start();
 
+		echo self::app_nav( 'new-activity' );
 		echo '<div class="orbit-new-activity">';
 		echo '<h2>' . esc_html__( 'New Activity', 'orbit' ) . '</h2>';
 		echo '<form method="post" class="orbit-form" data-orbit-api="activities" data-profile-id="' . esc_attr( $profile->id ) . '">';
@@ -372,7 +481,7 @@ class Orbit_Shortcodes {
 			return self::login_prompt( __( 'Please log in to edit activities.', 'orbit' ) );
 		}
 
-		$activity_id = isset( $_GET['id'] ) ? absint( $_GET['id'] ) : 0;
+		$activity_id = isset( $_GET['id'] ) ? absint( wp_unslash( $_GET['id'] ) ) : 0;
 
 		if ( ! $activity_id ) {
 			return '<p>' . esc_html__( 'No activity specified.', 'orbit' ) . '</p>';
@@ -392,6 +501,7 @@ class Orbit_Shortcodes {
 
 		ob_start();
 
+		echo self::app_nav( 'manage' );
 		echo '<div class="orbit-edit-activity">';
 		echo '<h2>' . esc_html__( 'Edit Activity', 'orbit' ) . '</h2>';
 		echo '<form method="post" class="orbit-form" data-orbit-api="activities/' . esc_attr( $activity_id ) . '" data-method="PATCH">';
@@ -475,6 +585,7 @@ class Orbit_Shortcodes {
 
 		ob_start();
 
+		echo self::app_nav( 'subscribers' );
 		echo '<div class="orbit-subscribers">';
 		echo '<h2>' . esc_html__( 'Subscribers', 'orbit' ) . '</h2>';
 
@@ -506,7 +617,7 @@ class Orbit_Shortcodes {
 				echo '<td>' . esc_html( $name ) . '</td>';
 				echo '<td>' . esc_html( $sub->status ) . '</td>';
 				echo '<td>' . esc_html( $sub->connection_note ? $sub->connection_note : '—' ) . '</td>';
-				echo '<td>' . esc_html( $sub->created_at ) . '</td>';
+				echo '<td>' . esc_html( self::format_datetime( $sub->created_at, 'M j, Y' ) ) . '</td>';
 				echo '<td>';
 
 				if ( 'pending' === $sub->status ) {
@@ -535,18 +646,19 @@ class Orbit_Shortcodes {
 	 * @return string HTML output.
 	 */
 	public static function edit_profile( $atts ) {
-		if ( ! is_user_logged_in() || ! current_user_can( 'orbit_manage_profile' ) ) {
-			return self::login_prompt( __( 'Please log in to edit your profile.', 'orbit' ) );
+		if ( ! is_user_logged_in() ) {
+			return self::login_prompt( __( 'Please log in to manage your profile.', 'orbit' ) );
 		}
 
 		$profile = Orbit_Profile::get_by_user_id( get_current_user_id() );
 
 		if ( ! $profile ) {
-			return '<p>' . esc_html__( 'You don\'t have a profile yet.', 'orbit' ) . '</p>';
+			return self::create_profile_form();
 		}
 
 		ob_start();
 
+		echo self::app_nav( 'edit-profile' );
 		echo '<div class="orbit-edit-profile">';
 		echo '<h2>' . esc_html__( 'Edit Profile', 'orbit' ) . '</h2>';
 		echo '<form method="post" class="orbit-form" data-orbit-api="profiles/' . esc_attr( $profile->id ) . '" data-method="PATCH">';
@@ -586,6 +698,50 @@ class Orbit_Shortcodes {
 	}
 
 	/**
+	 * Profile creation form for users who don't have a profile yet.
+	 *
+	 * @return string HTML output.
+	 */
+	private static function create_profile_form() {
+		$user = wp_get_current_user();
+
+		ob_start();
+
+		echo self::app_nav( 'edit-profile' );
+		echo '<div class="orbit-edit-profile">';
+		echo '<h2>' . esc_html__( 'Create Your Profile', 'orbit' ) . '</h2>';
+		echo '<p>' . esc_html__( 'Set up a profile to start sharing activities with your people.', 'orbit' ) . '</p>';
+		echo '<form method="post" class="orbit-form" data-orbit-api="profiles/me">';
+
+		echo '<div class="orbit-form-group">';
+		echo '<label for="orbit-display-name">' . esc_html__( 'Display Name', 'orbit' ) . '</label>';
+		echo '<input type="text" id="orbit-display-name" name="display_name" value="' . esc_attr( $user->display_name ) . '" required>';
+		echo '</div>';
+
+		echo '<div class="orbit-form-group">';
+		echo '<label for="orbit-slug">' . esc_html__( 'URL Slug', 'orbit' ) . '</label>';
+		echo '<input type="text" id="orbit-slug" name="slug" value="' . esc_attr( sanitize_title( $user->display_name ) ) . '" required>';
+		echo '<p class="orbit-help">' . esc_html( home_url( '/@' ) ) . '<span id="orbit-slug-preview">' . esc_html( sanitize_title( $user->display_name ) ) . '</span></p>';
+		echo '</div>';
+
+		echo '<div class="orbit-form-group">';
+		echo '<label for="orbit-bio">' . esc_html__( 'Bio', 'orbit' ) . '</label>';
+		echo '<textarea id="orbit-bio" name="bio" rows="3" placeholder="' . esc_attr__( 'A short description of what you like to do', 'orbit' ) . '"></textarea>';
+		echo '</div>';
+
+		echo '<div class="orbit-form-group">';
+		echo '<label><input type="checkbox" name="require_approval" value="1" checked> ';
+		echo esc_html__( 'Require approval for new subscribers', 'orbit' ) . '</label>';
+		echo '</div>';
+
+		echo '<button type="submit" class="orbit-btn">' . esc_html__( 'Create Profile', 'orbit' ) . '</button>';
+		echo '</form>';
+		echo '</div>';
+
+		return ob_get_clean();
+	}
+
+	/**
 	 * Public profile page.
 	 *
 	 * @param array $atts Shortcode attributes.
@@ -606,14 +762,35 @@ class Orbit_Shortcodes {
 
 		ob_start();
 
+		$viewer_id    = is_user_logged_in() ? get_current_user_id() : null;
+		$subscription = $viewer_id ? Orbit_Subscription::get_by_user_and_profile( $viewer_id, $profile->id ) : null;
+		$is_approved  = $subscription && 'approved' === $subscription->status;
+		$is_pending   = $subscription && 'pending' === $subscription->status;
+		$is_owner     = $viewer_id && (int) $profile->user_id === $viewer_id;
+
 		echo '<div class="orbit-profile">';
-		echo '<h1>' . esc_html( $profile->display_name ) . '</h1>';
 
 		if ( $profile->bio ) {
 			echo '<p class="orbit-bio">' . esc_html( $profile->bio ) . '</p>';
 		}
 
-		// Show active activities (limited info for non-subscribers).
+		// Subscribe CTA (not shown to owner or existing subscribers).
+		if ( ! $is_owner && ! $is_approved && ! $is_pending ) {
+			$subscribe_url = home_url( '/@' . $profile->slug . '/subscribe?token=' . $profile->share_token );
+			echo '<p><a href="' . esc_url( $subscribe_url ) . '" class="orbit-btn">';
+			echo esc_html__( 'Subscribe', 'orbit' );
+			echo '</a></p>';
+		} elseif ( $is_pending ) {
+			echo '<p class="orbit-notice">' . esc_html__( 'Your subscription is awaiting approval.', 'orbit' ) . '</p>';
+		} elseif ( $is_approved ) {
+			echo '<p class="orbit-subscription-status">';
+			echo '<span class="orbit-subscribed-badge">' . esc_html__( 'Subscribed', 'orbit' ) . '</span> ';
+			echo '<button class="orbit-btn orbit-btn-sm orbit-btn-danger" data-orbit-unsubscribe="' . esc_attr( $subscription->id ) . '">';
+			echo esc_html__( 'Unsubscribe', 'orbit' );
+			echo '</button></p>';
+		}
+
+		// Show active activities.
 		$activities = Orbit_Activity::list(
 			array(
 				'profile_id' => $profile->id,
@@ -626,15 +803,6 @@ class Orbit_Shortcodes {
 		if ( ! empty( $activities ) ) {
 			echo '<h2>' . esc_html__( 'Recent Activities', 'orbit' ) . '</h2>';
 
-			$viewer_id    = is_user_logged_in() ? get_current_user_id() : null;
-			$subscription = $viewer_id ? Orbit_Subscription::get_by_user_and_profile( $viewer_id, $profile->id ) : null;
-			$is_approved  = $subscription && 'approved' === $subscription->status;
-			$is_pending   = $subscription && 'pending' === $subscription->status;
-
-			if ( $is_pending ) {
-				echo '<p class="orbit-notice">' . esc_html__( 'Your subscription is awaiting approval.', 'orbit' ) . '</p>';
-			}
-
 			$tier_labels = Orbit_Activity::get_tier_labels();
 
 			foreach ( $activities as $activity ) {
@@ -642,10 +810,12 @@ class Orbit_Shortcodes {
 
 				echo '<div class="orbit-activity-card">';
 				echo '<span class="orbit-tier-badge orbit-tier-' . esc_attr( $activity->tier ) . '">' . esc_html( $tier_label ) . '</span>';
-				echo '<h3>' . esc_html( $activity->title ) . '</h3>';
+				echo '<h3><a href="' . esc_url( home_url( '/activity/' . $activity->id ) ) . '">';
+				echo esc_html( $activity->title );
+				echo '</a></h3>';
 
 				if ( $activity->date_time ) {
-					echo '<p class="orbit-activity-date">' . esc_html( $activity->date_time ) . '</p>';
+					echo '<p class="orbit-activity-date">' . esc_html( self::format_datetime( $activity->date_time ) ) . '</p>';
 				}
 
 				if ( $activity->location_name ) {
@@ -679,7 +849,7 @@ class Orbit_Shortcodes {
 		);
 
 		$profile = null;
-		$token   = isset( $_GET['token'] ) ? sanitize_text_field( $_GET['token'] ) : '';
+		$token   = isset( $_GET['token'] ) ? sanitize_text_field( wp_unslash( $_GET['token'] ) ) : '';
 
 		if ( $atts['profile_id'] ) {
 			$profile = Orbit_Profile::get( absint( $atts['profile_id'] ) );
@@ -711,11 +881,6 @@ class Orbit_Shortcodes {
 		ob_start();
 
 		echo '<div class="orbit-subscribe-form">';
-		echo '<h2>' . esc_html( sprintf(
-			/* translators: %s: poster display name */
-			__( 'Subscribe to %s', 'orbit' ),
-			$profile->display_name
-		) ) . '</h2>';
 
 		echo '<form method="post" class="orbit-form" data-orbit-api="subscribe">';
 		echo '<input type="hidden" name="share_token" value="' . esc_attr( $profile->share_token ) . '">';
@@ -759,13 +924,6 @@ class Orbit_Shortcodes {
 		$activity = get_query_var( 'orbit_current_activity' );
 
 		if ( ! $activity ) {
-			$activity_id = isset( $_GET['id'] ) ? absint( $_GET['id'] ) : 0;
-			if ( $activity_id ) {
-				$activity = Orbit_Activity::get( $activity_id );
-			}
-		}
-
-		if ( ! $activity ) {
 			return '<p>' . esc_html__( 'Activity not found.', 'orbit' ) . '</p>';
 		}
 
@@ -773,7 +931,7 @@ class Orbit_Shortcodes {
 		$viewer_id = is_user_logged_in() ? get_current_user_id() : null;
 
 		// Check for action token in URL.
-		$act_token    = isset( $_GET['act'] ) ? sanitize_text_field( $_GET['act'] ) : '';
+		$act_token    = isset( $_GET['act'] ) ? sanitize_text_field( wp_unslash( $_GET['act'] ) ) : '';
 		$subscription = null;
 
 		if ( $act_token ) {
@@ -813,7 +971,6 @@ class Orbit_Shortcodes {
 		}
 
 		echo '<span class="orbit-tier-badge orbit-tier-' . esc_attr( $activity->tier ) . '">' . esc_html( $tier_label ) . '</span>';
-		echo '<h1>' . esc_html( $activity->title ) . '</h1>';
 
 		if ( $activity->description ) {
 			echo '<div class="orbit-activity-description">' . wp_kses_post( wpautop( $activity->description ) ) . '</div>';
@@ -821,7 +978,7 @@ class Orbit_Shortcodes {
 
 		if ( $activity->date_time ) {
 			echo '<p class="orbit-activity-date"><strong>' . esc_html__( 'When:', 'orbit' ) . '</strong> ';
-			echo esc_html( $activity->date_time );
+			echo esc_html( self::format_datetime( $activity->date_time ) );
 			if ( $activity->date_flexible ) {
 				echo ' <em>(' . esc_html__( 'approximate', 'orbit' ) . ')</em>';
 			}
@@ -862,6 +1019,15 @@ class Orbit_Shortcodes {
 			echo '</ul>';
 		}
 
+		// Subscribe CTA for non-subscribers.
+		if ( ! $subscription && $profile ) {
+			$subscribe_url = home_url( '/@' . $profile->slug . '/subscribe?token=' . $profile->share_token );
+			echo '<p class="orbit-cta">';
+			echo esc_html( sprintf( __( 'Subscribe to %s to get notified about activities like this.', 'orbit' ), $profile->display_name ) ) . ' ';
+			echo '<a href="' . esc_url( $subscribe_url ) . '">' . esc_html__( 'Subscribe', 'orbit' ) . '</a>';
+			echo '</p>';
+		}
+
 		// Response buttons (only for approved subscribers, active/past activities).
 		if ( $subscription && 'cancelled' !== $activity->status ) {
 			$my_response = Orbit_Response::get_by_activity_and_subscription( $activity->id, $subscription->id );
@@ -892,6 +1058,105 @@ class Orbit_Shortcodes {
 		echo '</div>';
 
 		return ob_get_clean();
+	}
+
+	/**
+	 * Render in-app navigation for Orbit pages.
+	 *
+	 * @param string $current Current page identifier for active state.
+	 * @return string HTML nav markup.
+	 */
+	private static function app_nav( $current = '' ) {
+		if ( ! is_user_logged_in() ) {
+			return '';
+		}
+
+		$is_poster = current_user_can( 'orbit_create_activity' );
+
+		$links = array(
+			'dashboard'        => array(
+				'url'   => home_url( '/orbit-dashboard/' ),
+				'label' => __( 'Dashboard', 'orbit' ),
+			),
+			'my-subscriptions' => array(
+				'url'   => home_url( '/orbit-my-subscriptions/' ),
+				'label' => __( 'Subscriptions', 'orbit' ),
+			),
+			'settings'         => array(
+				'url'   => home_url( '/orbit-settings/' ),
+				'label' => __( 'Settings', 'orbit' ),
+			),
+		);
+
+		if ( $is_poster ) {
+			$links['manage']       = array(
+				'url'   => home_url( '/orbit-manage/' ),
+				'label' => __( 'Manage', 'orbit' ),
+			);
+			$links['new-activity'] = array(
+				'url'   => home_url( '/orbit-new-activity/' ),
+				'label' => __( 'New Activity', 'orbit' ),
+			);
+			$links['subscribers']  = array(
+				'url'   => home_url( '/orbit-subscribers/' ),
+				'label' => __( 'Subscribers', 'orbit' ),
+			);
+			$links['edit-profile'] = array(
+				'url'   => home_url( '/orbit-edit-profile/' ),
+				'label' => __( 'Profile', 'orbit' ),
+			);
+		}
+
+		$html = '<nav class="orbit-app-nav"><ul>';
+
+		foreach ( $links as $key => $link ) {
+			$active = ( $key === $current ) ? ' orbit-app-nav-active' : '';
+			$html  .= '<li class="' . esc_attr( $active ) . '">';
+			$html  .= '<a href="' . esc_url( $link['url'] ) . '">' . esc_html( $link['label'] ) . '</a>';
+			$html  .= '</li>';
+		}
+
+		$html .= '</ul></nav>';
+
+		return $html;
+	}
+
+	/**
+	 * Format a UTC datetime string for display in the viewer's timezone.
+	 *
+	 * @param string $utc_datetime UTC datetime string (Y-m-d H:i:s).
+	 * @param string $format       PHP date format. Default: full readable.
+	 * @return string Formatted date string.
+	 */
+	private static function format_datetime( $utc_datetime, $format = '' ) {
+		if ( empty( $utc_datetime ) ) {
+			return '';
+		}
+
+		if ( ! $format ) {
+			$format = 'l, F j \a\t g:i A';
+		}
+
+		$timezone_string = '';
+
+		if ( is_user_logged_in() ) {
+			$timezone_string = get_user_meta( get_current_user_id(), 'orbit_timezone', true );
+		}
+
+		if ( ! $timezone_string ) {
+			$timezone_string = wp_timezone_string();
+		}
+
+		try {
+			$utc      = new DateTimeZone( 'UTC' );
+			$local_tz = new DateTimeZone( $timezone_string );
+			$dt       = new DateTime( $utc_datetime, $utc );
+			$dt->setTimezone( $local_tz );
+
+			return $dt->format( $format );
+		} catch ( Exception $e ) {
+			return $utc_datetime;
+		}
 	}
 
 	/**

@@ -73,17 +73,24 @@ class Orbit_Routes {
 
 	/**
 	 * Handle custom routes on template_redirect.
+	 *
+	 * For routes that map to custom query vars (profile, activity),
+	 * we create a virtual page with the appropriate shortcode so
+	 * WordPress renders it through the normal page template.
 	 */
 	public static function handle_routes() {
+		global $wp_query;
+
 		$profile_slug = get_query_var( 'orbit_profile_slug' );
 		$activity_id  = get_query_var( 'orbit_activity_id' );
+		$unsubscribe  = get_query_var( 'orbit_unsubscribe' );
 
 		if ( $profile_slug ) {
 			self::handle_profile_route( $profile_slug );
-		}
-
-		if ( $activity_id ) {
+		} elseif ( $activity_id ) {
 			self::handle_activity_route( absint( $activity_id ) );
+		} elseif ( $unsubscribe ) {
+			self::handle_unsubscribe_route();
 		}
 	}
 
@@ -104,6 +111,13 @@ class Orbit_Routes {
 
 		// Store profile data for shortcode consumption.
 		set_query_var( 'orbit_current_profile', $profile );
+
+		$is_subscribe = get_query_var( 'orbit_subscribe' );
+		$title        = $is_subscribe
+			? sprintf( __( 'Subscribe to %s', 'orbit' ), $profile->display_name )
+			: $profile->display_name;
+
+		self::render_virtual_page( $title, '[orbit_profile]' );
 	}
 
 	/**
@@ -123,21 +137,172 @@ class Orbit_Routes {
 
 		// Store activity data for shortcode consumption.
 		set_query_var( 'orbit_current_activity', $activity );
+
+		self::render_virtual_page( $activity->title, '[orbit_activity]' );
+	}
+
+	/**
+	 * Handle unsubscribe route.
+	 *
+	 * GET  — validate the token and render a confirmation form.
+	 * POST — verify the nonce, then process the unsubscribe.
+	 */
+	private static function handle_unsubscribe_route() {
+		$is_post = isset( $_SERVER['REQUEST_METHOD'] ) && 'POST' === $_SERVER['REQUEST_METHOD'];
+
+		if ( $is_post ) {
+			self::handle_unsubscribe_post();
+			return;
+		}
+
+		self::handle_unsubscribe_get();
+	}
+
+	/**
+	 * Render the unsubscribe confirmation form (GET step).
+	 */
+	private static function handle_unsubscribe_get() {
+		$token = isset( $_GET['token'] )
+			? sanitize_text_field( wp_unslash( $_GET['token'] ) )
+			: '';
+
+		if ( ! $token ) {
+			self::render_virtual_page(
+				__( 'Unsubscribe', 'orbit' ),
+				'<p>' . esc_html__( 'Invalid unsubscribe link.', 'orbit' ) . '</p>'
+			);
+			return;
+		}
+
+		$subscription = Orbit_Subscription::get_by_secret( $token );
+
+		if ( ! $subscription ) {
+			self::render_virtual_page(
+				__( 'Unsubscribe', 'orbit' ),
+				'<p>' . esc_html__( 'Invalid or expired unsubscribe link.', 'orbit' ) . '</p>'
+			);
+			return;
+		}
+
+		$profile = Orbit_Profile::get( $subscription->profile_id );
+		$name    = $profile ? esc_html( $profile->display_name ) : esc_html__( 'this poster', 'orbit' );
+
+		ob_start();
+		?>
+		<p><?php echo esc_html( sprintf( __( 'Are you sure you want to unsubscribe from %s?', 'orbit' ), $profile ? $profile->display_name : __( 'this poster', 'orbit' ) ) ); ?></p>
+		<form method="post" action="<?php echo esc_url( home_url( '/unsubscribe/' ) ); ?>">
+			<input type="hidden" name="token" value="<?php echo esc_attr( $token ); ?>" />
+			<?php wp_nonce_field( 'orbit_unsubscribe', 'orbit_unsubscribe_nonce' ); ?>
+			<button type="submit"><?php esc_html_e( 'Confirm Unsubscribe', 'orbit' ); ?></button>
+		</form>
+		<?php
+		$content = ob_get_clean();
+
+		self::render_virtual_page( __( 'Unsubscribe', 'orbit' ), $content );
+	}
+
+	/**
+	 * Process the unsubscribe action (POST step).
+	 */
+	private static function handle_unsubscribe_post() {
+		$token = isset( $_POST['token'] )
+			? sanitize_text_field( wp_unslash( $_POST['token'] ) )
+			: '';
+
+		$nonce = isset( $_POST['orbit_unsubscribe_nonce'] )
+			? sanitize_text_field( wp_unslash( $_POST['orbit_unsubscribe_nonce'] ) )
+			: '';
+
+		if ( ! wp_verify_nonce( $nonce, 'orbit_unsubscribe' ) ) {
+			self::render_virtual_page(
+				__( 'Unsubscribe', 'orbit' ),
+				'<p>' . esc_html__( 'Security check failed. Please try again using the link in your email.', 'orbit' ) . '</p>'
+			);
+			return;
+		}
+
+		if ( ! $token ) {
+			self::render_virtual_page(
+				__( 'Unsubscribe', 'orbit' ),
+				'<p>' . esc_html__( 'Invalid unsubscribe link.', 'orbit' ) . '</p>'
+			);
+			return;
+		}
+
+		$subscription = Orbit_Subscription::get_by_secret( $token );
+
+		if ( ! $subscription ) {
+			self::render_virtual_page(
+				__( 'Unsubscribe', 'orbit' ),
+				'<p>' . esc_html__( 'Invalid or expired unsubscribe link.', 'orbit' ) . '</p>'
+			);
+			return;
+		}
+
+		$result = Orbit_Subscription::unsubscribe( $subscription->id );
+
+		if ( is_wp_error( $result ) ) {
+			self::render_virtual_page(
+				__( 'Unsubscribe', 'orbit' ),
+				'<p>' . esc_html( $result->get_error_message() ) . '</p>'
+			);
+			return;
+		}
+
+		$profile = Orbit_Profile::get( $subscription->profile_id );
+		$name    = $profile ? $profile->display_name : __( 'this poster', 'orbit' );
+
+		self::render_virtual_page(
+			__( 'Unsubscribed', 'orbit' ),
+			'<p>' . esc_html( sprintf( __( 'You have been unsubscribed from %s.', 'orbit' ), $name ) ) . '</p>'
+		);
+	}
+
+	/**
+	 * Render a virtual page with the given title and content.
+	 *
+	 * Replaces the main query with a synthetic page post so WordPress
+	 * renders it using the page template (including FSE block themes).
+	 *
+	 * @param string $title   Page title.
+	 * @param string $content Page content (may contain shortcodes).
+	 */
+	private static function render_virtual_page( $title, $content ) {
+		global $wp_query;
+
+		$post                    = new stdClass();
+		$post->ID                = 0;
+		$post->post_title        = $title;
+		$post->post_content      = $content;
+		$post->post_status       = 'publish';
+		$post->post_type         = 'page';
+		$post->post_name         = '';
+		$post->post_author       = 0;
+		$post->post_date         = current_time( 'mysql' );
+		$post->post_date_gmt     = current_time( 'mysql', true );
+		$post->post_modified     = current_time( 'mysql' );
+		$post->post_modified_gmt = current_time( 'mysql', true );
+		$post->comment_status    = 'closed';
+		$post->ping_status       = 'closed';
+		$post->filter            = 'raw';
+
+		$wp_query->posts         = array( new WP_Post( $post ) );
+		$wp_query->post          = $wp_query->posts[0];
+		$wp_query->post_count    = 1;
+		$wp_query->found_posts   = 1;
+		$wp_query->is_page       = true;
+		$wp_query->is_singular   = true;
+		$wp_query->is_home       = false;
+		$wp_query->is_archive    = false;
+		$wp_query->is_404        = false;
+		$wp_query->max_num_pages = 1;
 	}
 
 	/**
 	 * Add noindex meta tag on authenticated and activity pages.
 	 */
 	public static function add_noindex_meta() {
-		$noindex_pages = array(
-			'orbit-dashboard',
-			'orbit-settings',
-			'orbit-manage',
-			'orbit-new-activity',
-			'orbit-edit-activity',
-			'orbit-subscribers',
-			'orbit-edit-profile',
-		);
+		$noindex_pages = orbit_get_internal_page_slugs();
 
 		if ( is_page( $noindex_pages ) ) {
 			echo '<meta name="robots" content="noindex, nofollow">' . "\n";

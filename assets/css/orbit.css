@@ -1,0 +1,460 @@
+/**
+ * Orbit plugin styles.
+ *
+ * Minimal, theme-friendly defaults. Uses CSS custom properties so themes
+ * can override colors, spacing, and typography by redefining the variables.
+ *
+ * @package Orbit
+ */
+
+/* ---- Variables ---- */
+
+:root {
+	--orbit-color-primary: #2563eb;
+	--orbit-color-primary-hover: #1d4ed8;
+	--orbit-color-danger: #dc2626;
+	--orbit-color-danger-hover: #b91c1c;
+	--orbit-color-success: #16a34a;
+	--orbit-color-warning: #d97706;
+	--orbit-color-muted: #6b7280;
+	--orbit-color-border: #e5e7eb;
+	--orbit-color-bg-light: #f9fafb;
+	--orbit-color-bg-notice: #fefce8;
+	--orbit-radius: 6px;
+	--orbit-spacing: 1rem;
+	--orbit-spacing-sm: 0.5rem;
+	--orbit-spacing-lg: 1.5rem;
+	--orbit-font-size-sm: 0.875rem;
+}
+
+/* ---- App Nav ---- */
+
+.orbit-app-nav {
+	margin-bottom: var(--orbit-spacing-lg);
+	border-bottom: 1px solid var(--orbit-color-border);
+}
+
+.orbit-app-nav ul {
+	display: flex;
+	flex-wrap: wrap;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.orbit-app-nav li a {
+	display: block;
+	padding: 0.5em 0.7em;
+	font-size: 0.8125rem;
+	font-weight: 500;
+	white-space: nowrap;
+	color: var(--orbit-color-muted);
+	text-decoration: none;
+	border-bottom: 2px solid transparent;
+	transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.orbit-app-nav li a:hover {
+	color: var(--orbit-color-primary);
+}
+
+.orbit-app-nav li.orbit-app-nav-active a {
+	color: var(--orbit-color-primary);
+	border-bottom-color: var(--orbit-color-primary);
+}
+
+/* ---- CTA ---- */
+
+.orbit-cta {
+	margin-top: var(--orbit-spacing);
+	font-size: var(--orbit-font-size-sm);
+	color: var(--orbit-color-muted);
+}
+
+.orbit-cta a {
+	font-weight: 500;
+	color: var(--orbit-color-primary);
+}
+
+/* ---- Buttons ---- */
+
+.orbit-btn {
+	display: inline-block;
+	padding: 0.5em 1.25em;
+	font-size: 1rem;
+	font-weight: 500;
+	line-height: 1.5;
+	color: #fff;
+	background-color: var(--orbit-color-primary);
+	border: 1px solid transparent;
+	border-radius: var(--orbit-radius);
+	cursor: pointer;
+	text-decoration: none;
+	transition: background-color 0.15s ease;
+}
+
+.orbit-btn:hover,
+.orbit-btn:focus {
+	background-color: var(--orbit-color-primary-hover);
+	color: #fff;
+	text-decoration: none;
+}
+
+.orbit-btn:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.orbit-btn-sm {
+	padding: 0.3em 0.75em;
+	font-size: var(--orbit-font-size-sm);
+}
+
+.orbit-btn-danger {
+	background-color: var(--orbit-color-danger);
+}
+
+.orbit-btn-danger:hover,
+.orbit-btn-danger:focus {
+	background-color: var(--orbit-color-danger-hover);
+}
+
+.orbit-btn-active {
+	box-shadow: inset 0 0 0 2px currentColor;
+}
+
+.orbit-btn-going.orbit-btn-active {
+	background-color: var(--orbit-color-success);
+}
+
+.orbit-btn-maybe.orbit-btn-active {
+	background-color: var(--orbit-color-warning);
+}
+
+/* ---- Forms ---- */
+
+.orbit-form {
+	max-width: 40rem;
+}
+
+.orbit-form-group {
+	margin-bottom: var(--orbit-spacing);
+}
+
+.orbit-form-group label {
+	display: block;
+	margin-bottom: 0.25em;
+	font-weight: 500;
+}
+
+.orbit-form-group input[type="text"],
+.orbit-form-group input[type="email"],
+.orbit-form-group input[type="number"],
+.orbit-form-group input[type="time"],
+.orbit-form-group input[type="datetime-local"],
+.orbit-form-group textarea,
+.orbit-form-group select {
+	display: block;
+	width: 100%;
+	padding: 0.5em 0.75em;
+	font-size: 1rem;
+	line-height: 1.5;
+	border: 1px solid var(--orbit-color-border);
+	border-radius: var(--orbit-radius);
+	background-color: #fff;
+	box-sizing: border-box;
+}
+
+.orbit-form-group input:focus,
+.orbit-form-group textarea:focus,
+.orbit-form-group select:focus {
+	outline: none;
+	border-color: var(--orbit-color-primary);
+	box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.orbit-form-group input[type="checkbox"] {
+	display: inline;
+	width: auto;
+	margin-right: 0.35em;
+}
+
+.orbit-help {
+	margin-top: 0.25em;
+	font-size: var(--orbit-font-size-sm);
+	color: var(--orbit-color-muted);
+}
+
+/* ---- Subscription Status ---- */
+
+.orbit-subscription-status {
+	display: flex;
+	align-items: center;
+	gap: var(--orbit-spacing-sm);
+}
+
+.orbit-subscribed-badge {
+	display: inline-block;
+	padding: 0.2em 0.6em;
+	font-size: var(--orbit-font-size-sm);
+	font-weight: 500;
+	color: var(--orbit-color-success);
+	border: 1px solid var(--orbit-color-success);
+	border-radius: var(--orbit-radius);
+}
+
+/* ---- Messages ---- */
+
+.orbit-message {
+	padding: 0.75em 1em;
+	margin-top: var(--orbit-spacing-sm);
+	border-radius: var(--orbit-radius);
+	font-size: var(--orbit-font-size-sm);
+}
+
+.orbit-message-success {
+	background-color: #f0fdf4;
+	color: #166534;
+	border: 1px solid #bbf7d0;
+}
+
+.orbit-message-error {
+	background-color: #fef2f2;
+	color: #991b1b;
+	border: 1px solid #fecaca;
+}
+
+/* ---- Notices ---- */
+
+.orbit-notice {
+	padding: 0.75em 1em;
+	margin-bottom: var(--orbit-spacing);
+	background-color: var(--orbit-color-bg-notice);
+	border: 1px solid #fde68a;
+	border-radius: var(--orbit-radius);
+	font-size: var(--orbit-font-size-sm);
+}
+
+.orbit-notice a {
+	font-weight: 500;
+}
+
+.orbit-notice-warning {
+	background-color: #fef2f2;
+	border-color: #fecaca;
+	color: #991b1b;
+}
+
+.orbit-login-prompt {
+	padding: 1.5em;
+	text-align: center;
+	color: var(--orbit-color-muted);
+}
+
+/* ---- Activity Cards ---- */
+
+.orbit-dashboard .orbit-activity-card,
+.orbit-profile .orbit-activity-card {
+	padding: var(--orbit-spacing);
+	margin-bottom: var(--orbit-spacing);
+	background-color: var(--orbit-color-bg-light);
+	border: 1px solid var(--orbit-color-border);
+	border-radius: var(--orbit-radius);
+}
+
+.orbit-activity-meta {
+	display: flex;
+	align-items: center;
+	gap: var(--orbit-spacing-sm);
+	margin-bottom: 0.25em;
+	font-size: var(--orbit-font-size-sm);
+	color: var(--orbit-color-muted);
+}
+
+.orbit-activity-title {
+	margin: 0.25em 0;
+	font-size: 1.125rem;
+}
+
+.orbit-activity-title a {
+	color: inherit;
+	text-decoration: none;
+}
+
+.orbit-activity-title a:hover {
+	text-decoration: underline;
+}
+
+.orbit-activity-date,
+.orbit-activity-location {
+	margin: 0.25em 0;
+	font-size: var(--orbit-font-size-sm);
+	color: var(--orbit-color-muted);
+}
+
+.orbit-response-counts {
+	margin: 0.5em 0 0;
+	font-size: var(--orbit-font-size-sm);
+	font-weight: 500;
+}
+
+/* ---- Tier Badges ---- */
+
+.orbit-tier-badge {
+	display: inline-block;
+	padding: 0.15em 0.6em;
+	font-size: 0.75rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	border-radius: 999px;
+	color: #fff;
+}
+
+.orbit-tier-1 {
+	background-color: #94a3b8;
+}
+
+.orbit-tier-2 {
+	background-color: #f59e0b;
+}
+
+.orbit-tier-3 {
+	background-color: var(--orbit-color-primary);
+}
+
+/* ---- Activity Detail ---- */
+
+.orbit-activity-detail {
+	max-width: 40rem;
+}
+
+.orbit-activity-detail h1 {
+	margin-top: 0.25em;
+}
+
+.orbit-activity-description {
+	margin: var(--orbit-spacing) 0;
+	line-height: 1.7;
+}
+
+.orbit-poster-link {
+	margin-bottom: 0.25em;
+	font-size: var(--orbit-font-size-sm);
+}
+
+.orbit-location-address {
+	color: var(--orbit-color-muted);
+	font-size: var(--orbit-font-size-sm);
+}
+
+.orbit-responses-summary {
+	display: flex;
+	gap: var(--orbit-spacing);
+	margin: var(--orbit-spacing) 0;
+	font-weight: 500;
+}
+
+.orbit-attendee-list {
+	list-style: none;
+	padding: 0;
+	margin: var(--orbit-spacing-sm) 0 var(--orbit-spacing);
+}
+
+.orbit-attendee-list li {
+	padding: 0.35em 0;
+	border-bottom: 1px solid var(--orbit-color-border);
+	font-size: var(--orbit-font-size-sm);
+}
+
+.orbit-response-buttons {
+	display: flex;
+	gap: var(--orbit-spacing-sm);
+	margin: var(--orbit-spacing-lg) 0;
+}
+
+.orbit-past-notice {
+	margin: var(--orbit-spacing) 0;
+	color: var(--orbit-color-muted);
+	font-style: italic;
+}
+
+/* ---- Tables ---- */
+
+.orbit-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: var(--orbit-font-size-sm);
+}
+
+.orbit-table th,
+.orbit-table td {
+	padding: 0.6em 0.75em;
+	text-align: left;
+	border-bottom: 1px solid var(--orbit-color-border);
+}
+
+.orbit-table th {
+	font-weight: 600;
+	background-color: var(--orbit-color-bg-light);
+}
+
+.orbit-table tr:hover td {
+	background-color: var(--orbit-color-bg-light);
+}
+
+/* ---- Profile ---- */
+
+.orbit-profile .orbit-bio {
+	color: var(--orbit-color-muted);
+	font-size: 1.05rem;
+	line-height: 1.6;
+}
+
+/* ---- Subscribe Form ---- */
+
+.orbit-subscribe-form {
+	max-width: 30rem;
+}
+
+.orbit-share-link code {
+	display: inline-block;
+	padding: 0.3em 0.6em;
+	background-color: var(--orbit-color-bg-light);
+	border: 1px solid var(--orbit-color-border);
+	border-radius: var(--orbit-radius);
+	font-size: var(--orbit-font-size-sm);
+	word-break: break-all;
+}
+
+/* ---- Settings ---- */
+
+.orbit-settings {
+	max-width: 30rem;
+}
+
+.orbit-setting-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--orbit-spacing);
+	padding: 0.75em 0;
+	border-bottom: 1px solid var(--orbit-color-border);
+}
+
+.orbit-setting-row label {
+	font-weight: 500;
+	white-space: nowrap;
+}
+
+.orbit-setting-row select,
+.orbit-setting-row input {
+	padding: 0.4em 0.6em;
+	border: 1px solid var(--orbit-color-border);
+	border-radius: var(--orbit-radius);
+	font-size: var(--orbit-font-size-sm);
+}
+
+.orbit-settings-form .orbit-btn {
+	margin-top: var(--orbit-spacing);
+}

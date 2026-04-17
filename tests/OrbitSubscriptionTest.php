@@ -32,8 +32,13 @@ class OrbitSubscriptionTest extends WP_UnitTestCase {
 	 * Set up test fixtures.
 	 */
 	public static function wpSetUpBeforeClass( $factory ) {
+		global $wpdb;
+
 		self::$poster_id     = $factory->user->create( array( 'role' => 'administrator' ) );
 		self::$subscriber_id = $factory->user->create( array( 'role' => 'subscriber' ) );
+
+		// Clean up any stale data from prior runs.
+		$wpdb->query( "DELETE FROM {$wpdb->prefix}" . ORBIT_TABLE_PROFILES . " WHERE slug = 'test-poster'" );
 
 		self::$profile_id = Orbit_Profile::create(
 			array(
@@ -42,6 +47,18 @@ class OrbitSubscriptionTest extends WP_UnitTestCase {
 				'display_name' => 'Test Poster',
 			)
 		);
+	}
+
+	/**
+	 * Clean up class-level fixtures.
+	 */
+	public static function wpTearDownAfterClass() {
+		global $wpdb;
+
+		if ( is_int( self::$profile_id ) ) {
+			$wpdb->query( "DELETE FROM {$wpdb->prefix}" . ORBIT_TABLE_SUBSCRIPTIONS . " WHERE profile_id = " . self::$profile_id );
+			$wpdb->query( "DELETE FROM {$wpdb->prefix}" . ORBIT_TABLE_PROFILES . " WHERE id = " . self::$profile_id );
+		}
 	}
 
 	/**

@@ -35,11 +35,29 @@ class Orbit_REST_Profile {
 					'permission_callback' => array( 'Orbit_REST_API', 'is_admin' ),
 					'args'                => array(
 						'user_id'          => array( 'required' => true, 'sanitize_callback' => 'absint' ),
-						'slug'             => array( 'required' => true, 'sanitize_callback' => 'sanitize_text_field' ),
+						'slug'             => array( 'required' => true, 'sanitize_callback' => 'sanitize_title' ),
 						'display_name'     => array( 'required' => true, 'sanitize_callback' => 'sanitize_text_field' ),
 						'bio'              => array( 'required' => false, 'sanitize_callback' => 'sanitize_textarea_field' ),
 						'require_approval' => array( 'required' => false, 'default' => true ),
 					),
+				),
+			)
+		);
+
+		register_rest_route(
+			$ns,
+			'/profiles/me',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( __CLASS__, 'create_own_profile' ),
+				'permission_callback' => function() {
+					return current_user_can( 'orbit_subscribe' );
+				},
+				'args'                => array(
+					'slug'             => array( 'required' => true, 'sanitize_callback' => 'sanitize_title' ),
+					'display_name'     => array( 'required' => true, 'sanitize_callback' => 'sanitize_text_field' ),
+					'bio'              => array( 'required' => false, 'sanitize_callback' => 'sanitize_textarea_field' ),
+					'require_approval' => array( 'required' => false, 'default' => true ),
 				),
 			)
 		);
@@ -52,6 +70,12 @@ class Orbit_REST_Profile {
 					'methods'             => 'PATCH',
 					'callback'            => array( __CLASS__, 'update_profile' ),
 					'permission_callback' => array( __CLASS__, 'can_manage_profile_or_admin' ),
+					'args'                => array(
+						'display_name'     => array( 'required' => false, 'sanitize_callback' => 'sanitize_text_field' ),
+						'slug'             => array( 'required' => false, 'sanitize_callback' => 'sanitize_title' ),
+						'bio'              => array( 'required' => false, 'sanitize_callback' => 'sanitize_textarea_field' ),
+						'require_approval' => array( 'required' => false ),
+					),
 				),
 				array(
 					'methods'             => 'DELETE',
@@ -118,14 +142,48 @@ class Orbit_REST_Profile {
 	}
 
 	/**
+	 * Create a profile for the current logged-in user (self-service).
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return WP_REST_Response|WP_Error Response.
+	 */
+	public static function create_own_profile( $request ) {
+		$user_id = get_current_user_id();
+
+		$existing = Orbit_Profile::get_by_user_id( $user_id );
+		if ( $existing ) {
+			return new WP_Error( 'profile_exists', __( 'You already have a profile.', 'orbit' ), array( 'status' => 400 ) );
+		}
+
+		$profile_id = Orbit_Profile::create(
+			array(
+				'user_id'          => $user_id,
+				'slug'             => $request->get_param( 'slug' ),
+				'display_name'     => $request->get_param( 'display_name' ),
+				'bio'              => $request->get_param( 'bio' ),
+				'require_approval' => $request->get_param( 'require_approval' ),
+			)
+		);
+
+		if ( is_wp_error( $profile_id ) ) {
+			return new WP_Error( $profile_id->get_error_code(), $profile_id->get_error_message(), array( 'status' => 400 ) );
+		}
+
+		Orbit_Roles::upgrade_to_poster( $user_id );
+
+		return new WP_REST_Response( Orbit_Profile::get( $profile_id ), 201 );
+	}
+
+	/**
 	 * Update a profile.
 	 *
 	 * @param WP_REST_Request $request Request object.
 	 * @return WP_REST_Response|WP_Error Response.
 	 */
 	public static function update_profile( $request ) {
-		$id   = $request->get_param( 'id' );
-		$args = $request->get_params();
+		$id      = $request->get_param( 'id' );
+		$allowed = array( 'display_name', 'slug', 'bio', 'require_approval' );
+		$args    = array_intersect_key( $request->get_params(), array_flip( $allowed ) );
 		unset( $args['id'] );
 
 		$result = Orbit_Profile::update( $id, $args );

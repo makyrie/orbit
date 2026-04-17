@@ -177,6 +177,10 @@ class Orbit_Activator {
 				'title'   => 'Settings',
 				'content' => '[orbit_settings]',
 			),
+			'orbit-my-subscriptions' => array(
+				'title'   => 'My Subscriptions',
+				'content' => '[orbit_my_subscriptions]',
+			),
 			'orbit-manage'        => array(
 				'title'   => 'Manage',
 				'content' => '[orbit_manage]',
