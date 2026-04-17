@@ -97,8 +97,8 @@ class Orbit_Shortcodes {
 				echo '<p class="orbit-notice">';
 				echo esc_html( sprintf(
 					_n(
-						'You have %d subscription awaiting approval. Activities will appear here once approved.',
-						'You have %d subscriptions awaiting approval. Activities will appear here once approved.',
+						'You\'ve subscribed to %d person who hasn\'t approved you yet. Their activities will appear here once they do.',
+						'You\'ve subscribed to %d people who haven\'t approved you yet. Their activities will appear here once they do.',
 						$pending_count,
 						'orbit'
 					),
