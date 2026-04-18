@@ -298,6 +298,25 @@
 	font-weight: 500;
 }
 
+.orbit-my-response {
+	margin: 0.25em 0 0;
+	font-size: var(--orbit-font-size-sm);
+	font-weight: 500;
+	color: var(--orbit-color-success);
+}
+
+.orbit-btn-retract {
+	background-color: transparent;
+	color: var(--orbit-color-muted);
+	border: 1px solid var(--orbit-color-border);
+}
+
+.orbit-btn-retract:hover,
+.orbit-btn-retract:focus {
+	background-color: var(--orbit-color-bg-light);
+	color: var(--orbit-color-muted);
+}
+
 /* ---- Tier Badges ---- */
 
 .orbit-tier-badge {
