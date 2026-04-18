@@ -1061,7 +1061,7 @@ class Orbit_Shortcodes {
 
 				if ( $my_response ) {
 					echo ' <button class="orbit-btn orbit-btn-sm orbit-btn-retract" data-response="retract">';
-					echo esc_html__( 'Cancel', 'orbit' ) . '</button>';
+					echo esc_html__( 'Cancel RSVP', 'orbit' ) . '</button>';
 				}
 
 				if ( $act_token ) {

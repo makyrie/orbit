@@ -188,7 +188,7 @@ function orbit_enqueue_scripts() {
 				'responseSaved' => __( 'Response saved.', 'orbit' ),
 				'confirmCancel'       => __( 'Are you sure you want to cancel this activity?', 'orbit' ),
 				'confirmUnsubscribe' => __( 'Are you sure you want to unsubscribe?', 'orbit' ),
-				'retract'            => __( 'Cancel', 'orbit' ),
+				'retract'            => __( 'Cancel RSVP', 'orbit' ),
 			),
 		)
 	);
