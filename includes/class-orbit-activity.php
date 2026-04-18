@@ -58,6 +58,7 @@ class Orbit_Activity {
 				'description'      => null,
 				'location_name'    => null,
 				'location_address' => null,
+				'url'              => null,
 				'date_time'        => null,
 				'date_flexible'    => false,
 				'show_attendees'   => 'count',
@@ -100,6 +101,7 @@ class Orbit_Activity {
 				'description'      => $args['description'] ? sanitize_textarea_field( $args['description'] ) : null,
 				'location_name'    => $location_name,
 				'location_address' => $args['location_address'] ? sanitize_textarea_field( $args['location_address'] ) : null,
+				'url'              => $args['url'] ? esc_url_raw( $args['url'] ) : null,
 				'date_time'        => $args['date_time'] ? sanitize_text_field( $args['date_time'] ) : null,
 				'date_flexible'    => $args['date_flexible'] ? 1 : 0,
 				'show_attendees'   => $show_attendees,
@@ -107,7 +109,7 @@ class Orbit_Activity {
 				'created_at'       => $now,
 				'updated_at'       => $now,
 			),
-			array( '%d', '%d', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s' )
+			array( '%d', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s' )
 		);
 
 		if ( false === $result ) {
@@ -182,6 +184,11 @@ class Orbit_Activity {
 		if ( array_key_exists( 'location_address', $args ) ) {
 			$data['location_address'] = $args['location_address'] ? sanitize_textarea_field( $args['location_address'] ) : null;
 			$formats[]                = '%s';
+		}
+
+		if ( array_key_exists( 'url', $args ) ) {
+			$data['url'] = $args['url'] ? esc_url_raw( $args['url'] ) : null;
+			$formats[]   = '%s';
 		}
 
 		if ( array_key_exists( 'date_time', $args ) ) {
