@@ -22,6 +22,13 @@ Thumbs.db
 # Test config (contains local DB credentials)
 tests/wp-tests-config.php
 
+# PHPUnit cache
+.phpunit.result.cache
+
+# Local tooling state
+.lattice/
+.local
+
 # IDE
 .idea/
 .vscode/
