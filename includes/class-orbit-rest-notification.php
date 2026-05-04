@@ -175,9 +175,9 @@ class Orbit_REST_Notification {
 
 		$user_id = absint( $user_id );
 
-		$twilio_configured = defined( 'ORBIT_TWILIO_SID' )
+		$twilio_configured = defined( 'ORBIT_TWILIO_ACCOUNT_SID' )
 			&& defined( 'ORBIT_TWILIO_AUTH_TOKEN' )
-			&& defined( 'ORBIT_TWILIO_FROM' );
+			&& defined( 'ORBIT_TWILIO_FROM_NUMBER' );
 
 		$phone    = get_user_meta( $user_id, 'orbit_phone', true );
 		$verified = (bool) get_user_meta( $user_id, 'orbit_phone_verified', true );

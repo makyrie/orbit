@@ -3,7 +3,7 @@
  * Twilio API wrapper.
  *
  * Uses wp_remote_post() — no SDK dependency.
- * Expects ORBIT_TWILIO_SID, ORBIT_TWILIO_AUTH_TOKEN, and ORBIT_TWILIO_FROM
+ * Expects ORBIT_TWILIO_ACCOUNT_SID, ORBIT_TWILIO_AUTH_TOKEN, and ORBIT_TWILIO_FROM_NUMBER
  * to be defined in wp-config.php.
  *
  * @package Orbit
@@ -24,24 +24,24 @@ class Orbit_Twilio {
 	 * @return true|WP_Error True on success.
 	 */
 	public static function send_sms( $to, $body ) {
-		if ( ! defined( 'ORBIT_TWILIO_SID' ) || ! defined( 'ORBIT_TWILIO_AUTH_TOKEN' ) || ! defined( 'ORBIT_TWILIO_FROM' ) ) {
+		if ( ! defined( 'ORBIT_TWILIO_ACCOUNT_SID' ) || ! defined( 'ORBIT_TWILIO_AUTH_TOKEN' ) || ! defined( 'ORBIT_TWILIO_FROM_NUMBER' ) ) {
 			return new WP_Error( 'twilio_not_configured', __( 'Twilio credentials are not configured.', 'orbit' ) );
 		}
 
 		$url = sprintf(
 			'https://api.twilio.com/2010-04-01/Accounts/%s/Messages.json',
-			ORBIT_TWILIO_SID
+			ORBIT_TWILIO_ACCOUNT_SID
 		);
 
 		$response = wp_remote_post(
 			$url,
 			array(
 				'headers' => array(
-					'Authorization' => 'Basic ' . base64_encode( ORBIT_TWILIO_SID . ':' . ORBIT_TWILIO_AUTH_TOKEN ),
+					'Authorization' => 'Basic ' . base64_encode( ORBIT_TWILIO_ACCOUNT_SID . ':' . ORBIT_TWILIO_AUTH_TOKEN ),
 				),
 				'body'    => array(
 					'To'   => $to,
-					'From' => ORBIT_TWILIO_FROM,
+					'From' => ORBIT_TWILIO_FROM_NUMBER,
 					'Body' => $body,
 				),
 				'timeout' => 30,
