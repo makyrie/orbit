@@ -189,6 +189,7 @@ function orbit_enqueue_scripts() {
 				'confirmCancel'       => __( 'Are you sure you want to cancel this activity?', 'orbit' ),
 				'confirmUnsubscribe' => __( 'Are you sure you want to unsubscribe?', 'orbit' ),
 				'retract'            => __( 'Cancel RSVP', 'orbit' ),
+				'timeout'            => __( 'The request timed out. Please try again.', 'orbit' ),
 			),
 		)
 	);

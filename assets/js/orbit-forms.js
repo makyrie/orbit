@@ -14,21 +14,33 @@
 	var nonce   = orbitForms.nonce;
 
 	/**
+	 * Default request timeout in milliseconds. Long enough to cover slow
+	 * third-party round trips (Twilio), short enough that a hung request
+	 * doesn't lock the UI for the user.
+	 */
+	var DEFAULT_TIMEOUT_MS = 30000;
+
+	/**
 	 * Send a request to the Orbit REST API.
 	 *
-	 * @param {string} endpoint - Relative to orbit/v1/.
-	 * @param {string} method   - HTTP method.
-	 * @param {Object} data     - Request body (sent as JSON).
+	 * @param {string} endpoint  - Relative to orbit/v1/.
+	 * @param {string} method    - HTTP method.
+	 * @param {Object} data      - Request body (sent as JSON).
+	 * @param {number} timeoutMs - Optional override for the request timeout.
 	 * @return {Promise}
 	 */
-	function apiRequest( endpoint, method, data ) {
+	function apiRequest( endpoint, method, data, timeoutMs ) {
+		var controller = new AbortController();
+		var timer = setTimeout( function () { controller.abort(); }, timeoutMs || DEFAULT_TIMEOUT_MS );
+
 		var options = {
 			method: method,
 			headers: {
 				'Content-Type': 'application/json',
 				'X-WP-Nonce': nonce
 			},
-			credentials: 'same-origin'
+			credentials: 'same-origin',
+			signal: controller.signal
 		};
 
 		if ( data && method !== 'GET' ) {
@@ -43,6 +55,14 @@
 				}
 				return body;
 			} );
+		} ).catch( function ( err ) {
+			// Translate AbortError into a clearer timeout message.
+			if ( err && err.name === 'AbortError' ) {
+				throw new Error( orbitForms.strings.timeout );
+			}
+			throw err;
+		} ).finally( function () {
+			clearTimeout( timer );
 		} );
 	}
 
@@ -122,6 +142,16 @@
 
 		e.preventDefault();
 
+		// Per-form in-flight guard. Set synchronously so a second submit
+		// event in the same task queue (rapid Enter-key autorepeat or fast
+		// double-click) sees the flag before its handler proceeds, even
+		// before submitBtn.disabled takes effect. Critical for verify-phone
+		// where each request triggers a billed Twilio SMS.
+		if ( form.dataset.orbitInFlight === '1' ) {
+			return;
+		}
+		form.dataset.orbitInFlight = '1';
+
 		var endpoint  = form.getAttribute( 'data-orbit-api' );
 		var method    = form.getAttribute( 'data-method' ) || 'POST';
 		var data      = collectFormData( form );
@@ -190,6 +220,7 @@
 				showMessage( form, err.message, 'error' );
 			} )
 			.finally( function () {
+				delete form.dataset.orbitInFlight;
 				if ( submitBtn ) {
 					submitBtn.disabled = false;
 				}
