@@ -264,10 +264,19 @@ class Orbit_Shortcodes {
 	/**
 	 * Render the phone verification block for the settings page.
 	 *
-	 * Three states:
-	 *   - verified: phone is verified — show number + "Change" link
-	 *   - pending:  phone set but unverified — show "code sent to X" + code form
-	 *   - initial:  no phone yet — show phone entry form
+	 * Two page-load states:
+	 *   - verified:     phone is verified — show number + "Change" link
+	 *   - not-verified: show phone entry form (code form is hidden, revealed by JS)
+	 *
+	 * The transient "code-pending" state (after submitting the phone form) is
+	 * entered client-side by JS within a single page session. Once the backend
+	 * stops overwriting `orbit_phone` until verification, the absence of a
+	 * verified phone is sufficient to drive the initial UI here.
+	 *
+	 * TODO: Migrate to the new `GET /verify-phone` primitive (see #030) once
+	 * that endpoint lands so we can surface a server-known pending state on
+	 * page load (e.g. user closes the tab between step 1 and step 2 and
+	 * returns within the code TTL).
 	 *
 	 * @param int $user_id User ID.
 	 * @return string HTML markup.
@@ -275,6 +284,7 @@ class Orbit_Shortcodes {
 	private static function render_phone_verification( $user_id ) {
 		$phone             = (string) get_user_meta( $user_id, 'orbit_phone', true );
 		$verified          = (bool) get_user_meta( $user_id, 'orbit_phone_verified', true );
+		$has_verified      = $verified && '' !== $phone;
 		$twilio_configured = defined( 'ORBIT_TWILIO_SID' ) && defined( 'ORBIT_TWILIO_AUTH_TOKEN' ) && defined( 'ORBIT_TWILIO_FROM' );
 
 		ob_start();
@@ -292,8 +302,8 @@ class Orbit_Shortcodes {
 		}
 
 		// State: verified.
-		if ( $verified && $phone ) {
-			echo '<div class="orbit-phone-verified" data-orbit-phone-state="verified">';
+		if ( $has_verified ) {
+			echo '<div class="orbit-phone-verified">';
 			echo '<p class="orbit-phone-current">';
 			echo '<span class="orbit-verified-badge">&check; ' . esc_html__( 'Verified', 'orbit' ) . '</span> ';
 			echo '<strong>' . esc_html( $phone ) . '</strong>';
@@ -304,9 +314,8 @@ class Orbit_Shortcodes {
 			echo '</div>';
 		}
 
-		// Phone entry form — visible by default if not verified, hidden if verified (revealed by Change button).
-		$phone_form_hidden = ( $verified && $phone ) || ( $phone && ! $verified );
-		echo '<form method="post" class="orbit-phone-form" data-orbit-api="verify-phone" data-orbit-step="phone"' . ( $phone_form_hidden ? ' hidden' : '' ) . '>';
+		// Phone entry form — hidden when already verified (revealed by Change button).
+		echo '<form method="post" class="orbit-phone-form" data-orbit-api="verify-phone" data-orbit-step="phone"' . ( $has_verified ? ' hidden' : '' ) . '>';
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-phone-input">' . esc_html__( 'Phone number', 'orbit' ) . '</label>';
 		echo '<input type="tel" id="orbit-phone-input" name="phone" placeholder="+15551234567" required>';
@@ -315,14 +324,16 @@ class Orbit_Shortcodes {
 		echo '<button type="submit" class="orbit-btn">' . esc_html__( 'Send verification code', 'orbit' ) . '</button>';
 		echo '</form>';
 
-		// Code entry form — visible if a phone is set but not yet verified.
-		$code_form_hidden = ! ( $phone && ! $verified );
-		echo '<form method="post" class="orbit-code-form" data-orbit-api="verify-phone" data-orbit-step="code"' . ( $code_form_hidden ? ' hidden' : '' ) . '>';
-		echo '<p class="orbit-code-sent-msg">';
+		// Code entry form — always hidden on page load; JS reveals it after the phone form succeeds.
+		echo '<form method="post" class="orbit-code-form" data-orbit-api="verify-phone" data-orbit-step="code" hidden>';
+		echo '<p class="orbit-code-sent-msg" aria-live="polite">';
 		printf(
 			/* translators: %s: phone number the code was sent to */
-			esc_html__( 'A 6-digit code was sent to %s. Enter it below to verify.', 'orbit' ),
-			'<strong class="orbit-code-target">' . esc_html( $phone ) . '</strong>'
+			wp_kses(
+				__( 'A 6-digit code was sent to %s. Enter it below to verify.', 'orbit' ),
+				array( 'strong' => array( 'class' => array() ) )
+			),
+			'<strong class="orbit-code-target"></strong>'
 		);
 		echo '</p>';
 		echo '<div class="orbit-form-group">';
@@ -332,6 +343,9 @@ class Orbit_Shortcodes {
 		echo '<button type="submit" class="orbit-btn">' . esc_html__( 'Verify', 'orbit' ) . '</button> ';
 		echo '<button type="button" class="orbit-btn orbit-btn-link orbit-btn-sm" data-orbit-phone-change>';
 		echo esc_html__( 'Use a different number', 'orbit' );
+		echo '</button> ';
+		echo '<button type="button" class="orbit-btn orbit-btn-link orbit-btn-sm" data-orbit-phone-resend>';
+		echo esc_html__( "Didn't get the code? Resend", 'orbit' );
 		echo '</button>';
 		echo '</form>';
 

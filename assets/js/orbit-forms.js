@@ -14,6 +14,13 @@
 	var nonce   = orbitForms.nonce;
 
 	/**
+	 * Last phone number successfully submitted in step 1 of the verify-phone
+	 * flow. Cached so the "Resend code" button can re-POST without requiring
+	 * the user to re-type the number.
+	 */
+	var lastSentPhone = '';
+
+	/**
 	 * Default request timeout in milliseconds. Long enough to cover slow
 	 * third-party round trips (Twilio), short enough that a hung request
 	 * doesn't lock the UI for the user.
@@ -179,6 +186,10 @@
 						var codeForm = section ? section.querySelector( '[data-orbit-step="code"]' ) : null;
 						var target   = section ? section.querySelector( '.orbit-code-target' ) : null;
 
+						if ( data.phone ) {
+							lastSentPhone = data.phone;
+						}
+
 						if ( target && data.phone ) {
 							target.textContent = data.phone;
 						}
@@ -189,7 +200,6 @@
 							codeForm.hidden = false;
 							var codeInput = codeForm.querySelector( 'input[name="code"]' );
 							if ( codeInput ) {
-								codeInput.value = '';
 								codeInput.focus();
 							}
 						}
@@ -386,7 +396,28 @@
 
 		var phoneForm = section.querySelector( '[data-orbit-step="phone"]' );
 		var codeForm  = section.querySelector( '[data-orbit-step="code"]' );
-		var verified  = section.querySelector( '[data-orbit-phone-state="verified"]' );
+		var verified  = section.querySelector( '.orbit-phone-verified' );
+
+		// Defensively re-enable submit buttons on both forms so a previously
+		// disabled state (e.g. left over from an aborted submission) doesn't
+		// strand the revealed form.
+		[ phoneForm, codeForm ].forEach( function ( f ) {
+			if ( ! f ) {
+				return;
+			}
+			var btn = f.querySelector( '[type="submit"]' );
+			if ( btn ) {
+				btn.disabled = false;
+			}
+		} );
+
+		// Clear any stale code input when toggling back to phone entry.
+		if ( codeForm ) {
+			var codeIn = codeForm.querySelector( 'input[name="code"]' );
+			if ( codeIn ) {
+				codeIn.value = '';
+			}
+		}
 
 		if ( verified ) {
 			verified.hidden = true;
@@ -401,6 +432,53 @@
 				input.focus();
 			}
 		}
+	} );
+
+	/**
+	 * Handle "Resend code" button in the code form — re-POSTs to verify-phone
+	 * with the previously-entered phone (cached when step 1 succeeded), so the
+	 * user doesn't have to leave the code-form view to retry.
+	 *
+	 * Reuses the in-flight guard on the phone form, so a rapid double-click
+	 * (or simultaneous Verify submit) cannot trigger a duplicate billed SMS.
+	 */
+	document.addEventListener( 'click', function ( e ) {
+		var button = e.target.closest( '[data-orbit-phone-resend]' );
+
+		if ( ! button ) {
+			return;
+		}
+
+		var section = button.closest( '.orbit-phone-verification' );
+		if ( ! section ) {
+			return;
+		}
+
+		var phoneForm = section.querySelector( '[data-orbit-step="phone"]' );
+		if ( ! phoneForm || ! lastSentPhone ) {
+			return;
+		}
+
+		// Reuse the phone form's in-flight guard so resend can't overlap with
+		// an in-flight phone submit (or another resend click).
+		if ( phoneForm.dataset.orbitInFlight === '1' ) {
+			return;
+		}
+		phoneForm.dataset.orbitInFlight = '1';
+
+		button.disabled = true;
+
+		apiRequest( 'verify-phone', 'POST', { phone: lastSentPhone } )
+			.then( function () {
+				showMessage( button, orbitForms.strings.success, 'success' );
+			} )
+			.catch( function ( err ) {
+				showMessage( button, err.message, 'error' );
+			} )
+			.finally( function () {
+				delete phoneForm.dataset.orbitInFlight;
+				button.disabled = false;
+			} );
 	} );
 
 	/**
