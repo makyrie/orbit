@@ -15,11 +15,12 @@ class Orbit_Notifier {
 	/**
 	 * ActionScheduler hook names.
 	 */
-	const HOOK_IMMEDIATE  = 'orbit_send_immediate_notification';
-	const HOOK_DIGEST     = 'orbit_send_daily_digest';
-	const HOOK_MARK_PAST  = 'orbit_mark_past_activities';
-	const HOOK_CLEANUP    = 'orbit_cleanup_notification_log';
-	const HOOK_DISPATCH   = 'orbit_dispatch_activity_notifications';
+	const HOOK_IMMEDIATE      = 'orbit_send_immediate_notification';
+	const HOOK_DIGEST         = 'orbit_send_daily_digest';
+	const HOOK_MARK_PAST      = 'orbit_mark_past_activities';
+	const HOOK_CLEANUP        = 'orbit_cleanup_notification_log';
+	const HOOK_CLEANUP_VERIFY = 'orbit_cleanup_phone_verification';
+	const HOOK_DISPATCH       = 'orbit_dispatch_activity_notifications';
 
 	/**
 	 * Register ActionScheduler hooks.
@@ -29,6 +30,7 @@ class Orbit_Notifier {
 		add_action( self::HOOK_DIGEST, array( __CLASS__, 'send_digest' ), 10, 1 );
 		add_action( self::HOOK_MARK_PAST, array( __CLASS__, 'process_mark_past' ) );
 		add_action( self::HOOK_CLEANUP, array( __CLASS__, 'process_cleanup' ) );
+		add_action( self::HOOK_CLEANUP_VERIFY, array( __CLASS__, 'process_cleanup_verify' ) );
 		add_action( self::HOOK_DISPATCH, array( __CLASS__, 'process_dispatch' ), 10, 1 );
 	}
 
@@ -48,6 +50,13 @@ class Orbit_Notifier {
 		// Cleanup old notification log entries — weekly.
 		if ( ! as_has_scheduled_action( self::HOOK_CLEANUP ) ) {
 			as_schedule_recurring_action( strtotime( 'next monday midnight' ), WEEK_IN_SECONDS, self::HOOK_CLEANUP, array(), 'orbit' );
+		}
+
+		// Cleanup expired phone verification rows — daily. Plaintext phone
+		// numbers from failed/abandoned attempts otherwise accumulate
+		// indefinitely (verify_code() only deletes on success).
+		if ( ! as_has_scheduled_action( self::HOOK_CLEANUP_VERIFY ) ) {
+			as_schedule_recurring_action( strtotime( 'tomorrow midnight' ), DAY_IN_SECONDS, self::HOOK_CLEANUP_VERIFY, array(), 'orbit' );
 		}
 	}
 
@@ -438,6 +447,17 @@ class Orbit_Notifier {
 				$cutoff
 			)
 		);
+	}
+
+	/**
+	 * Process phone verification cleanup (ActionScheduler callback).
+	 *
+	 * Delegates to Orbit_Phone_Verify::cleanup_expired() which removes rows
+	 * whose `expires_at` is older than 7 days, preventing plaintext phone
+	 * numbers from failed/abandoned verification attempts from accumulating.
+	 */
+	public static function process_cleanup_verify() {
+		Orbit_Phone_Verify::cleanup_expired();
 	}
 
 	/**

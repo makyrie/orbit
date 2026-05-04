@@ -185,6 +185,47 @@
 	color: var(--orbit-color-muted);
 }
 
+/* ---- Phone Verification ---- */
+
+.orbit-phone-verification {
+	margin-bottom: calc(var(--orbit-spacing) * 1.5);
+	padding-bottom: var(--orbit-spacing);
+	border-bottom: 1px solid var(--orbit-color-border);
+}
+
+.orbit-phone-verified {
+	padding: 0.75em 1em;
+	margin: var(--orbit-spacing-sm) 0;
+	background-color: var(--orbit-color-bg-light);
+	border-radius: var(--orbit-radius);
+}
+
+.orbit-phone-current {
+	margin: 0 0 0.5em;
+}
+
+.orbit-verified-badge {
+	display: inline-block;
+	padding: 0.15em 0.55em;
+	margin-right: 0.4em;
+	font-size: var(--orbit-font-size-sm);
+	font-weight: 600;
+	color: var(--orbit-color-success);
+	border: 1px solid var(--orbit-color-success);
+	border-radius: var(--orbit-radius);
+}
+
+.orbit-code-sent-msg {
+	margin: 0 0 var(--orbit-spacing-sm);
+}
+
+.orbit-code-form input[name="code"] {
+	max-width: 10em;
+	letter-spacing: 0.3em;
+	font-size: 1.2em;
+	text-align: center;
+}
+
 /* ---- Subscription Status ---- */
 
 .orbit-subscription-status {

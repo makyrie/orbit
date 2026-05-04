@@ -34,18 +34,25 @@ class Orbit_REST_Notification {
 			$ns,
 			'/verify-phone',
 			array(
-				'methods'             => 'POST',
-				'callback'            => array( __CLASS__, 'handle_verify_phone' ),
-				'permission_callback' => 'is_user_logged_in',
-				'args'                => array(
-					'phone' => array(
-						'required'          => false,
-						'sanitize_callback' => 'sanitize_text_field',
+				array(
+					'methods'             => 'POST',
+					'callback'            => array( __CLASS__, 'handle_verify_phone' ),
+					'permission_callback' => 'is_user_logged_in',
+					'args'                => array(
+						'phone' => array(
+							'required'          => false,
+							'sanitize_callback' => 'sanitize_text_field',
+						),
+						'code'  => array(
+							'required'          => false,
+							'sanitize_callback' => 'sanitize_text_field',
+						),
 					),
-					'code'  => array(
-						'required'          => false,
-						'sanitize_callback' => 'sanitize_text_field',
-					),
+				),
+				array(
+					'methods'             => 'GET',
+					'callback'            => array( __CLASS__, 'get_phone_status' ),
+					'permission_callback' => 'is_user_logged_in',
 				),
 			)
 		);
@@ -126,6 +133,98 @@ class Orbit_REST_Notification {
 		}
 
 		return new WP_Error( 'missing_params', __( 'Provide either phone or code.', 'orbit' ), array( 'status' => 400 ) );
+	}
+
+	/**
+	 * Get the current phone verification state for the logged-in user.
+	 *
+	 * Inspection primitive: agents and the UI can call this instead of
+	 * re-deriving state from raw user_meta and `defined()` checks.
+	 *
+	 * @return WP_REST_Response Response.
+	 */
+	public static function get_phone_status() {
+		$user_id = get_current_user_id();
+		$payload = self::build_phone_status( $user_id );
+
+		return new WP_REST_Response( $payload, 200 );
+	}
+
+	/**
+	 * Build the phone verification state payload for a user.
+	 *
+	 * Returned shape:
+	 * - phone (string|null): currently-verified phone, or null.
+	 * - verified (bool): whether the user's phone is verified.
+	 * - state (string): one of `no_phone`, `pending`, `verified`, `unavailable`.
+	 * - twilio_configured (bool): whether all Twilio constants are defined.
+	 * - pending_phone (string|null): candidate phone in the latest non-expired row, or null.
+	 * - pending_code_expires_at (string|null): ISO 8601 expiry of the latest non-expired row, or null.
+	 *
+	 * State derivation:
+	 * - `unavailable` if Twilio is not configured (other fields filled best-effort).
+	 * - `verified` if `orbit_phone_verified` is truthy AND `orbit_phone` is non-empty.
+	 * - `pending` if there is a non-expired row in the verification table for this user.
+	 * - `no_phone` otherwise.
+	 *
+	 * @param int $user_id User ID.
+	 * @return array Phone status payload.
+	 */
+	public static function build_phone_status( $user_id ) {
+		global $wpdb;
+
+		$user_id = absint( $user_id );
+
+		$twilio_configured = defined( 'ORBIT_TWILIO_SID' )
+			&& defined( 'ORBIT_TWILIO_AUTH_TOKEN' )
+			&& defined( 'ORBIT_TWILIO_FROM' );
+
+		$phone    = get_user_meta( $user_id, 'orbit_phone', true );
+		$verified = (bool) get_user_meta( $user_id, 'orbit_phone_verified', true );
+
+		// Look up the latest non-expired pending verification row, if any.
+		$pending_phone           = null;
+		$pending_code_expires_at = null;
+
+		if ( $user_id > 0 ) {
+			$table = $wpdb->prefix . ORBIT_TABLE_PHONE_VERIFICATION;
+			$now   = current_time( 'mysql', true );
+
+			$row = $wpdb->get_row(
+				$wpdb->prepare(
+					"SELECT phone, expires_at FROM {$table} WHERE user_id = %d AND expires_at > %s ORDER BY created_at DESC LIMIT 1",
+					$user_id,
+					$now
+				)
+			);
+
+			if ( $row ) {
+				$pending_phone           = $row->phone ? (string) $row->phone : null;
+				$pending_code_expires_at = $row->expires_at
+					? mysql_to_rfc3339( $row->expires_at )
+					: null;
+			}
+		}
+
+		// Derive state.
+		if ( ! $twilio_configured ) {
+			$state = 'unavailable';
+		} elseif ( $verified && ! empty( $phone ) ) {
+			$state = 'verified';
+		} elseif ( null !== $pending_phone || null !== $pending_code_expires_at ) {
+			$state = 'pending';
+		} else {
+			$state = 'no_phone';
+		}
+
+		return array(
+			'phone'                   => ! empty( $phone ) ? (string) $phone : null,
+			'verified'                => $verified,
+			'state'                   => $state,
+			'twilio_configured'       => $twilio_configured,
+			'pending_phone'           => $pending_phone,
+			'pending_code_expires_at' => $pending_code_expires_at,
+		);
 	}
 
 	/**
