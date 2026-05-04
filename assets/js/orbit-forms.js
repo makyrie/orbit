@@ -172,22 +172,14 @@
 			return;
 		}
 
-		var response  = button.getAttribute( 'data-response' );
-		var container = button.closest( '.orbit-response-buttons' );
-		var activityId = container.getAttribute( 'data-activity-id' );
-		var tokenInput = container.querySelector( '.orbit-act-token' );
+		var response       = button.getAttribute( 'data-response' );
+		var container      = button.closest( '.orbit-response-buttons' );
+		var activityId     = container.getAttribute( 'data-activity-id' );
+		var subscriptionId = container.getAttribute( 'data-subscription-id' );
+		var tokenInput     = container.querySelector( '.orbit-act-token' );
 
 		if ( ! response || ! activityId ) {
 			return;
-		}
-
-		var data = {
-			activity_id: activityId,
-			response: response
-		};
-
-		if ( tokenInput ) {
-			data.action_token = tokenInput.value;
 		}
 
 		// Disable all response buttons.
@@ -196,14 +188,48 @@
 			btn.disabled = true;
 		} );
 
-		apiRequest( 'respond', 'POST', data )
+		// Retract = DELETE, otherwise POST.
+		var request;
+
+		if ( response === 'retract' ) {
+			request = apiRequest( 'respond', 'DELETE', {
+				activity_id: activityId,
+				subscription_id: subscriptionId
+			} );
+		} else {
+			var data = {
+				activity_id: activityId,
+				response: response
+			};
+			if ( tokenInput ) {
+				data.action_token = tokenInput.value;
+			}
+			request = apiRequest( 'respond', 'POST', data );
+		}
+
+		request
 			.then( function () {
-				// Update active state.
-				buttons.forEach( function ( btn ) {
-					btn.classList.remove( 'orbit-btn-active' );
-				} );
-				button.classList.add( 'orbit-btn-active' );
-				showMessage( container, orbitForms.strings.responseSaved, 'success' );
+				if ( response === 'retract' ) {
+					// Reload to remove retract button and reset state.
+					window.location.reload();
+				} else {
+					// Update active state.
+					buttons.forEach( function ( btn ) {
+						btn.classList.remove( 'orbit-btn-active' );
+					} );
+					button.classList.add( 'orbit-btn-active' );
+
+					// Show retract button if not already present.
+					if ( ! container.querySelector( '.orbit-btn-retract' ) ) {
+						var retractBtn = document.createElement( 'button' );
+						retractBtn.className = 'orbit-btn orbit-btn-sm orbit-btn-retract';
+						retractBtn.setAttribute( 'data-response', 'retract' );
+						retractBtn.textContent = orbitForms.strings.retract;
+						container.appendChild( retractBtn );
+					}
+
+					showMessage( container, orbitForms.strings.responseSaved, 'success' );
+				}
 			} )
 			.catch( function ( err ) {
 				showMessage( container, err.message, 'error' );

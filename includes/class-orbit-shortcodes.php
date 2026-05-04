@@ -133,6 +133,13 @@ class Orbit_Shortcodes {
 		$activity_ids    = array_map( function ( $a ) { return (int) $a->id; }, $activities );
 		$response_counts = Orbit_Response::count_by_activity_ids( $activity_ids );
 
+		// Load current user's responses to show "You: Going/Maybe" on cards.
+		$my_responses_map = array();
+		$user_responses   = Orbit_Response::list_by_user( $user_id );
+		foreach ( $user_responses as $resp ) {
+			$my_responses_map[ (int) $resp->activity_id ] = $resp->response;
+		}
+
 		foreach ( $activities as $activity ) {
 			$profile    = isset( $profiles_map[ (int) $activity->profile_id ] ) ? $profiles_map[ (int) $activity->profile_id ] : null;
 			$tier_label = isset( $tier_labels[ $activity->tier ] ) ? $tier_labels[ $activity->tier ] : '';
@@ -177,6 +184,13 @@ class Orbit_Shortcodes {
 					echo esc_html( sprintf( _n( '%d maybe', '%d maybe', $maybe_count, 'orbit' ), $maybe_count ) );
 				}
 				echo '</p>';
+			}
+
+			// Show user's own response status.
+			$my_response = isset( $my_responses_map[ (int) $activity->id ] ) ? $my_responses_map[ (int) $activity->id ] : null;
+			if ( $my_response ) {
+				$response_label = 'going' === $my_response ? __( "You're going", 'orbit' ) : __( 'You said maybe', 'orbit' );
+				echo '<p class="orbit-my-response">' . esc_html( $response_label ) . '</p>';
 			}
 
 			echo '</div>';
@@ -1034,7 +1048,7 @@ class Orbit_Shortcodes {
 			$is_past     = 'past' === $activity->status;
 
 			if ( ! $is_past ) {
-				echo '<div class="orbit-response-buttons" data-activity-id="' . esc_attr( $activity->id ) . '">';
+				echo '<div class="orbit-response-buttons" data-activity-id="' . esc_attr( $activity->id ) . '" data-subscription-id="' . esc_attr( $subscription->id ) . '">';
 
 				$going_class = $my_response && 'going' === $my_response->response ? ' orbit-btn-active' : '';
 				$maybe_class = $my_response && 'maybe' === $my_response->response ? ' orbit-btn-active' : '';
@@ -1044,6 +1058,11 @@ class Orbit_Shortcodes {
 
 				echo '<button class="orbit-btn orbit-btn-maybe' . esc_attr( $maybe_class ) . '" data-response="maybe">';
 				echo esc_html__( 'Maybe', 'orbit' ) . '</button>';
+
+				if ( $my_response ) {
+					echo ' <button class="orbit-btn orbit-btn-sm orbit-btn-retract" data-response="retract">';
+					echo esc_html__( 'Cancel RSVP', 'orbit' ) . '</button>';
+				}
 
 				if ( $act_token ) {
 					echo '<input type="hidden" class="orbit-act-token" value="' . esc_attr( $act_token ) . '">';
