@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Orbit
  * Description: Person-centric social activity tool. Subscribe to people, get notified about their activities, respond with lightweight going/maybe actions.
- * Version:     1.0.0
+ * Version:     1.0.1
  * Author:      Orbit
  * License:     GPL-2.0-or-later
  * Text Domain: orbit
@@ -17,7 +17,7 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Plugin constants.
  */
-define( 'ORBIT_VERSION', '1.0.0' );
+define( 'ORBIT_VERSION', '1.0.1' );
 define( 'ORBIT_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ORBIT_PLUGIN_FILE', __FILE__ );
 

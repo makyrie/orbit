@@ -76,6 +76,7 @@ class Orbit_Activator {
 			tier tinyint(1) unsigned NOT NULL,
 			title varchar(300) NOT NULL,
 			description text DEFAULT NULL,
+			audience text DEFAULT NULL,
 			location_name varchar(300) DEFAULT NULL,
 			location_address text DEFAULT NULL,
 			date_time datetime DEFAULT NULL,

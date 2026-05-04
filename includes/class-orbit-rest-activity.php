@@ -98,6 +98,10 @@ class Orbit_REST_Activity {
 							'required'          => false,
 							'sanitize_callback' => 'sanitize_textarea_field',
 						),
+						'audience'         => array(
+							'required'          => false,
+							'sanitize_callback' => 'sanitize_textarea_field',
+						),
 						'location_name'    => array(
 							'required'          => false,
 							'sanitize_callback' => 'sanitize_text_field',
@@ -140,6 +144,7 @@ class Orbit_REST_Activity {
 					'args'                => array(
 						'title'            => array( 'sanitize_callback' => 'sanitize_text_field' ),
 						'description'      => array( 'sanitize_callback' => 'sanitize_textarea_field' ),
+						'audience'         => array( 'sanitize_callback' => 'sanitize_textarea_field' ),
 						'location_name'    => array( 'sanitize_callback' => 'sanitize_text_field' ),
 						'location_address' => array( 'sanitize_callback' => 'sanitize_textarea_field' ),
 						'url'              => array( 'sanitize_callback' => 'esc_url_raw' ),
@@ -344,6 +349,7 @@ class Orbit_REST_Activity {
 				'tier'             => $request->get_param( 'tier' ),
 				'title'            => $request->get_param( 'title' ),
 				'description'      => $request->get_param( 'description' ),
+				'audience'         => $request->get_param( 'audience' ),
 				'location_name'    => $request->get_param( 'location_name' ),
 				'location_address' => $request->get_param( 'location_address' ),
 				'url'              => $request->get_param( 'url' ),
