@@ -453,6 +453,12 @@ class Orbit_Shortcodes {
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
+		echo '<label for="orbit-audience">' . esc_html__( "Who's this for?", 'orbit' ) . '</label>';
+		echo '<textarea id="orbit-audience" name="audience" rows="2" placeholder="' . esc_attr__( 'e.g. Beginners welcome, or anyone who likes long walks', 'orbit' ) . '"></textarea>';
+		echo '<p class="orbit-help">' . esc_html__( 'Help people decide if this is right for them.', 'orbit' ) . '</p>';
+		echo '</div>';
+
+		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-url">' . esc_html__( 'Link', 'orbit' ) . '</label>';
 		echo '<input type="url" id="orbit-url" name="url" placeholder="' . esc_attr__( 'https://example.com/event-page', 'orbit' ) . '">';
 		echo '<p class="orbit-help">' . esc_html__( 'Link to an external event page with more details', 'orbit' ) . '</p>';
@@ -534,6 +540,11 @@ class Orbit_Shortcodes {
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-description">' . esc_html__( 'Description', 'orbit' ) . '</label>';
 		echo '<textarea id="orbit-description" name="description" rows="3">' . esc_textarea( $activity->description ) . '</textarea>';
+		echo '</div>';
+
+		echo '<div class="orbit-form-group">';
+		echo '<label for="orbit-audience">' . esc_html__( "Who's this for?", 'orbit' ) . '</label>';
+		echo '<textarea id="orbit-audience" name="audience" rows="2" placeholder="' . esc_attr__( 'e.g. Beginners welcome, or anyone who likes long walks', 'orbit' ) . '">' . esc_textarea( $activity->audience ) . '</textarea>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
@@ -999,6 +1010,13 @@ class Orbit_Shortcodes {
 
 		if ( $activity->description ) {
 			echo '<div class="orbit-activity-description">' . wp_kses_post( wpautop( $activity->description ) ) . '</div>';
+		}
+
+		if ( $activity->audience ) {
+			echo '<div class="orbit-activity-audience">';
+			echo '<p class="orbit-activity-audience-label">' . esc_html__( "Who's this for", 'orbit' ) . '</p>';
+			echo wp_kses_post( wpautop( $activity->audience ) );
+			echo '</div>';
 		}
 
 		if ( $activity->date_time ) {

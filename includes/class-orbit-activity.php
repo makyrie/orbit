@@ -41,8 +41,10 @@ class Orbit_Activity {
 	 *     @type int    $tier             Required. 1, 2, or 3.
 	 *     @type string $title            Required. Max 300 chars.
 	 *     @type string $description      Optional.
+	 *     @type string $audience         Optional. Free-text "who's this for" hint.
 	 *     @type string $location_name    Optional. Max 300 chars.
 	 *     @type string $location_address Optional.
+	 *     @type string $url              Optional. External URL.
 	 *     @type string $date_time        Optional. UTC datetime string.
 	 *     @type bool   $date_flexible    Optional. Default false.
 	 *     @type string $show_attendees   Optional. Default 'count'.
@@ -56,6 +58,7 @@ class Orbit_Activity {
 			$args,
 			array(
 				'description'      => null,
+				'audience'         => null,
 				'location_name'    => null,
 				'location_address' => null,
 				'url'              => null,
@@ -99,6 +102,7 @@ class Orbit_Activity {
 				'tier'             => $tier,
 				'title'            => $title,
 				'description'      => $args['description'] ? sanitize_textarea_field( $args['description'] ) : null,
+				'audience'         => $args['audience'] ? sanitize_textarea_field( $args['audience'] ) : null,
 				'location_name'    => $location_name,
 				'location_address' => $args['location_address'] ? sanitize_textarea_field( $args['location_address'] ) : null,
 				'url'              => $args['url'] ? esc_url_raw( $args['url'] ) : null,
@@ -109,7 +113,7 @@ class Orbit_Activity {
 				'created_at'       => $now,
 				'updated_at'       => $now,
 			),
-			array( '%d', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s' )
+			array( '%d', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s' )
 		);
 
 		if ( false === $result ) {
@@ -170,6 +174,11 @@ class Orbit_Activity {
 		if ( array_key_exists( 'description', $args ) ) {
 			$data['description'] = $args['description'] ? sanitize_textarea_field( $args['description'] ) : null;
 			$formats[]           = '%s';
+		}
+
+		if ( array_key_exists( 'audience', $args ) ) {
+			$data['audience'] = $args['audience'] ? sanitize_textarea_field( $args['audience'] ) : null;
+			$formats[]        = '%s';
 		}
 
 		if ( array_key_exists( 'location_name', $args ) ) {

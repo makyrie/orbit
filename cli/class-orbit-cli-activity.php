@@ -35,6 +35,9 @@ class Orbit_CLI_Activity extends Orbit_CLI {
 	 * [--description=<desc>]
 	 * : Optional description.
 	 *
+	 * [--audience=<text>]
+	 * : Free-text "who's this for" hint to help people self-select.
+	 *
 	 * [--location_name=<name>]
 	 * : Location name.
 	 *
@@ -69,6 +72,7 @@ class Orbit_CLI_Activity extends Orbit_CLI {
 				'tier'             => $assoc_args['tier'],
 				'title'            => $assoc_args['title'],
 				'description'      => isset( $assoc_args['description'] ) ? $assoc_args['description'] : null,
+				'audience'         => isset( $assoc_args['audience'] ) ? $assoc_args['audience'] : null,
 				'location_name'    => isset( $assoc_args['location_name'] ) ? $assoc_args['location_name'] : null,
 				'location_address' => isset( $assoc_args['location_address'] ) ? $assoc_args['location_address'] : null,
 				'url'              => isset( $assoc_args['url'] ) ? $assoc_args['url'] : null,
@@ -127,6 +131,7 @@ class Orbit_CLI_Activity extends Orbit_CLI {
 	 *
 	 * [--title=<title>]
 	 * [--description=<desc>]
+	 * [--audience=<text>]
 	 * [--tier=<tier>]
 	 * [--location_name=<name>]
 	 * [--location_address=<addr>]
