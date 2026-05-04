@@ -139,6 +139,40 @@
 
 		apiRequest( endpoint, method, data )
 			.then( function ( result ) {
+				// Phone verification two-step flow.
+				if ( endpoint === 'verify-phone' ) {
+					var step = form.getAttribute( 'data-orbit-step' );
+
+					if ( step === 'phone' ) {
+						// Step 1 succeeded — code was sent. Reveal the code form.
+						var section  = form.closest( '.orbit-phone-verification' );
+						var codeForm = section ? section.querySelector( '[data-orbit-step="code"]' ) : null;
+						var target   = section ? section.querySelector( '.orbit-code-target' ) : null;
+
+						if ( target && data.phone ) {
+							target.textContent = data.phone;
+						}
+
+						form.hidden = true;
+
+						if ( codeForm ) {
+							codeForm.hidden = false;
+							var codeInput = codeForm.querySelector( 'input[name="code"]' );
+							if ( codeInput ) {
+								codeInput.value = '';
+								codeInput.focus();
+							}
+						}
+						return;
+					}
+
+					if ( step === 'code' ) {
+						// Step 2 succeeded — phone is verified. Reload to show verified state.
+						window.location.reload();
+						return;
+					}
+				}
+
 				showMessage( form, orbitForms.strings.success, 'success' );
 
 				// Redirect on certain actions.
@@ -302,6 +336,42 @@
 				button.disabled = false;
 			} );
 	} );
+	/**
+	 * Handle "Change phone number" / "Use a different number" buttons in
+	 * the phone verification block — reveal the phone entry form, hide
+	 * the verified display and the code form.
+	 */
+	document.addEventListener( 'click', function ( e ) {
+		var button = e.target.closest( '[data-orbit-phone-change]' );
+
+		if ( ! button ) {
+			return;
+		}
+
+		var section = button.closest( '.orbit-phone-verification' );
+		if ( ! section ) {
+			return;
+		}
+
+		var phoneForm = section.querySelector( '[data-orbit-step="phone"]' );
+		var codeForm  = section.querySelector( '[data-orbit-step="code"]' );
+		var verified  = section.querySelector( '[data-orbit-phone-state="verified"]' );
+
+		if ( verified ) {
+			verified.hidden = true;
+		}
+		if ( codeForm ) {
+			codeForm.hidden = true;
+		}
+		if ( phoneForm ) {
+			phoneForm.hidden = false;
+			var input = phoneForm.querySelector( 'input[name="phone"]' );
+			if ( input ) {
+				input.focus();
+			}
+		}
+	} );
+
 	/**
 	 * Handle unsubscribe button on profile pages.
 	 */
