@@ -149,4 +149,119 @@ class Orbit_CLI_Notification extends Orbit_CLI {
 
 		self::output_items( $logs, $assoc_args, array( 'id', 'user_id', 'activity_id', 'method', 'status', 'sent_at', 'created_at' ) );
 	}
+
+	/**
+	 * Inspect phone verification state for a user.
+	 *
+	 * Returns the same payload as `GET /wp-json/orbit/v1/verify-phone`:
+	 * phone, verified, state (`no_phone` | `pending` | `verified` | `unavailable`),
+	 * twilio_configured, pending_phone, pending_code_expires_at.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <user_id>
+	 * : WordPress user ID.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 * ---
+	 * default: json
+	 * options:
+	 *   - json
+	 *   - table
+	 *   - csv
+	 * ---
+	 *
+	 * @subcommand phone-status
+	 *
+	 * @param array $args       Positional args.
+	 * @param array $assoc_args Associative args.
+	 */
+	public function phone_status( $args, $assoc_args ) {
+		$user_id = absint( $args[0] );
+
+		if ( ! get_userdata( $user_id ) ) {
+			WP_CLI::error( sprintf( 'User %d not found.', $user_id ) );
+		}
+
+		$payload = Orbit_REST_Notification::build_phone_status( $user_id );
+
+		self::output_item( (object) $payload, $assoc_args );
+	}
+
+	/**
+	 * Send or verify a phone verification code for a user.
+	 *
+	 * Pass `--phone=<e164>` to send a code, or `--code=<6-digit>` to verify
+	 * a previously-sent code. The two flags are mutually exclusive.
+	 *
+	 * Note: sending a code for a new phone overwrites any previously-stored
+	 * candidate (the latest non-expired row wins). The user's verified phone
+	 * (`orbit_phone` user_meta) is only updated on successful verification.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <user_id>
+	 * : WordPress user ID.
+	 *
+	 * [--phone=<e164>]
+	 * : Phone number in E.164 format (e.g., +15551234567). Sends a code.
+	 *
+	 * [--code=<code>]
+	 * : 6-digit verification code to verify.
+	 *
+	 * [--format=<format>]
+	 * : Output format for the resulting phone-status payload.
+	 * ---
+	 * default: json
+	 * options:
+	 *   - json
+	 *   - table
+	 *   - csv
+	 * ---
+	 *
+	 * @subcommand verify-phone
+	 *
+	 * @param array $args       Positional args.
+	 * @param array $assoc_args Associative args.
+	 */
+	public function verify_phone( $args, $assoc_args ) {
+		$user_id = absint( $args[0] );
+
+		if ( ! get_userdata( $user_id ) ) {
+			WP_CLI::error( sprintf( 'User %d not found.', $user_id ) );
+		}
+
+		$phone = isset( $assoc_args['phone'] ) ? $assoc_args['phone'] : null;
+		$code  = isset( $assoc_args['code'] ) ? $assoc_args['code'] : null;
+
+		if ( null === $phone && null === $code ) {
+			WP_CLI::error( 'Provide either --phone=<e164> or --code=<6-digit>.' );
+		}
+
+		if ( null !== $phone && null !== $code ) {
+			WP_CLI::error( '--phone and --code are mutually exclusive.' );
+		}
+
+		if ( null !== $phone ) {
+			$result = Orbit_Phone_Verify::send_code( $user_id, $phone );
+
+			if ( is_wp_error( $result ) ) {
+				WP_CLI::error( $result->get_error_message() );
+			}
+
+			WP_CLI::success( sprintf( 'Verification code sent to %s for user %d.', $phone, $user_id ) );
+		} else {
+			$result = Orbit_Phone_Verify::verify_code( $user_id, $code );
+
+			if ( is_wp_error( $result ) ) {
+				WP_CLI::error( $result->get_error_message() );
+			}
+
+			WP_CLI::success( sprintf( 'Phone number verified for user %d.', $user_id ) );
+		}
+
+		$payload = Orbit_REST_Notification::build_phone_status( $user_id );
+		self::output_item( (object) $payload, $assoc_args );
+	}
 }
