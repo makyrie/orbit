@@ -663,6 +663,7 @@ class Orbit_Shortcodes {
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-date-time">' . esc_html__( 'Date & Time', 'orbit' ) . '</label>';
 		echo '<input type="datetime-local" id="orbit-date-time" name="date_time" value="' . esc_attr( $date_value ) . '">';
+		echo '<label><input type="checkbox" name="date_flexible" value="1" ' . checked( $activity->date_flexible, 1, false ) . '> ' . esc_html__( 'Date is approximate', 'orbit' ) . '</label>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
