@@ -357,6 +357,22 @@
 	line-height: 1.7;
 }
 
+.orbit-activity-url {
+	margin: var(--orbit-spacing) 0;
+}
+
+.orbit-btn-link {
+	background-color: transparent;
+	color: var(--orbit-color-primary);
+	border: 2px solid var(--orbit-color-primary);
+}
+
+.orbit-btn-link:hover,
+.orbit-btn-link:focus {
+	background-color: var(--orbit-color-primary);
+	color: #fff;
+}
+
 .orbit-poster-link {
 	margin-bottom: 0.25em;
 	font-size: var(--orbit-font-size-sm);

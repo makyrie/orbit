@@ -80,6 +80,7 @@ class Orbit_Activator {
 			location_address text DEFAULT NULL,
 			date_time datetime DEFAULT NULL,
 			date_flexible tinyint(1) NOT NULL DEFAULT 0,
+			url text DEFAULT NULL,
 			show_attendees enum('none','count','names') NOT NULL DEFAULT 'count',
 			status enum('active','cancelled','past') NOT NULL DEFAULT 'active',
 			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,

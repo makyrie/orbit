@@ -106,6 +106,10 @@ class Orbit_REST_Activity {
 							'required'          => false,
 							'sanitize_callback' => 'sanitize_textarea_field',
 						),
+						'url'              => array(
+							'required'          => false,
+							'sanitize_callback' => 'esc_url_raw',
+						),
 						'date_time'        => array(
 							'required'          => false,
 							'sanitize_callback' => 'sanitize_text_field',
@@ -138,6 +142,7 @@ class Orbit_REST_Activity {
 						'description'      => array( 'sanitize_callback' => 'sanitize_textarea_field' ),
 						'location_name'    => array( 'sanitize_callback' => 'sanitize_text_field' ),
 						'location_address' => array( 'sanitize_callback' => 'sanitize_textarea_field' ),
+						'url'              => array( 'sanitize_callback' => 'esc_url_raw' ),
 						'date_time'        => array( 'sanitize_callback' => 'sanitize_text_field' ),
 						'date_flexible'    => array( 'sanitize_callback' => 'rest_sanitize_boolean' ),
 						'show_attendees'   => array( 'sanitize_callback' => 'sanitize_text_field' ),
@@ -341,6 +346,7 @@ class Orbit_REST_Activity {
 				'description'      => $request->get_param( 'description' ),
 				'location_name'    => $request->get_param( 'location_name' ),
 				'location_address' => $request->get_param( 'location_address' ),
+				'url'              => $request->get_param( 'url' ),
 				'date_time'        => $request->get_param( 'date_time' ),
 				'date_flexible'    => $request->get_param( 'date_flexible' ),
 				'show_attendees'   => $request->get_param( 'show_attendees' ),

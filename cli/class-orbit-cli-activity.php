@@ -41,6 +41,9 @@ class Orbit_CLI_Activity extends Orbit_CLI {
 	 * [--location_address=<addr>]
 	 * : Location address.
 	 *
+	 * [--url=<url>]
+	 * : External URL for the activity.
+	 *
 	 * [--date_time=<datetime>]
 	 * : UTC datetime (Y-m-d H:i:s).
 	 *
@@ -68,6 +71,7 @@ class Orbit_CLI_Activity extends Orbit_CLI {
 				'description'      => isset( $assoc_args['description'] ) ? $assoc_args['description'] : null,
 				'location_name'    => isset( $assoc_args['location_name'] ) ? $assoc_args['location_name'] : null,
 				'location_address' => isset( $assoc_args['location_address'] ) ? $assoc_args['location_address'] : null,
+				'url'              => isset( $assoc_args['url'] ) ? $assoc_args['url'] : null,
 				'date_time'        => isset( $assoc_args['date_time'] ) ? $assoc_args['date_time'] : null,
 				'date_flexible'    => isset( $assoc_args['date_flexible'] ),
 				'show_attendees'   => isset( $assoc_args['show_attendees'] ) ? $assoc_args['show_attendees'] : 'count',
@@ -126,6 +130,7 @@ class Orbit_CLI_Activity extends Orbit_CLI {
 	 * [--tier=<tier>]
 	 * [--location_name=<name>]
 	 * [--location_address=<addr>]
+	 * [--url=<url>]
 	 * [--date_time=<datetime>]
 	 * [--date_flexible=<bool>]
 	 * [--show_attendees=<mode>]

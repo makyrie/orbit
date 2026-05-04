@@ -453,6 +453,12 @@ class Orbit_Shortcodes {
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
+		echo '<label for="orbit-url">' . esc_html__( 'Link', 'orbit' ) . '</label>';
+		echo '<input type="url" id="orbit-url" name="url" placeholder="' . esc_attr__( 'https://example.com/event-page', 'orbit' ) . '">';
+		echo '<p class="orbit-help">' . esc_html__( 'Link to an external event page with more details', 'orbit' ) . '</p>';
+		echo '</div>';
+
+		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-location-name">' . esc_html__( 'Location Name', 'orbit' ) . '</label>';
 		echo '<input type="text" id="orbit-location-name" name="location_name" maxlength="300">';
 		echo '</div>';
@@ -528,6 +534,11 @@ class Orbit_Shortcodes {
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-description">' . esc_html__( 'Description', 'orbit' ) . '</label>';
 		echo '<textarea id="orbit-description" name="description" rows="3">' . esc_textarea( $activity->description ) . '</textarea>';
+		echo '</div>';
+
+		echo '<div class="orbit-form-group">';
+		echo '<label for="orbit-url">' . esc_html__( 'Link', 'orbit' ) . '</label>';
+		echo '<input type="url" id="orbit-url" name="url" value="' . esc_attr( $activity->url ) . '" placeholder="' . esc_attr__( 'https://example.com/event-page', 'orbit' ) . '">';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
@@ -1009,6 +1020,13 @@ class Orbit_Shortcodes {
 			echo '<p class="orbit-location-address">' . esc_html( $activity->location_address ) . '</p>';
 		}
 
+		// External link.
+		if ( ! empty( $activity->url ) ) {
+			echo '<p class="orbit-activity-url"><a href="' . esc_url( $activity->url ) . '" class="orbit-btn orbit-btn-link" target="_blank" rel="noopener noreferrer">';
+			echo esc_html__( 'View event details', 'orbit' ) . ' &rarr;';
+			echo '</a></p>';
+		}
+
 		// Response section.
 		$responses        = Orbit_Response::list_by_activity( $activity->id );
 		$privacy_resolved = Orbit_Privacy::resolve_responses( $activity, $responses, $viewer_id );
@@ -1033,8 +1051,9 @@ class Orbit_Shortcodes {
 			echo '</ul>';
 		}
 
-		// Subscribe CTA for non-subscribers.
-		if ( ! $subscription && $profile ) {
+		// Subscribe CTA for non-subscribers (not shown to the poster).
+		$is_own_activity = $viewer_id && $profile && (int) $profile->user_id === $viewer_id;
+		if ( ! $subscription && $profile && ! $is_own_activity ) {
 			$subscribe_url = home_url( '/@' . $profile->slug . '/subscribe?token=' . $profile->share_token );
 			echo '<p class="orbit-cta">';
 			echo esc_html( sprintf( __( 'Subscribe to %s to get notified about activities like this.', 'orbit' ), $profile->display_name ) ) . ' ';
