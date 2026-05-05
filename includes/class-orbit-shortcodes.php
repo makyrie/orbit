@@ -110,13 +110,13 @@ class Orbit_Shortcodes {
 			}
 
 			if ( current_user_can( 'orbit_create_activity' ) ) {
-				echo '<p><a href="' . esc_url( home_url( '/orbit-manage/' ) ) . '" class="orbit-btn">';
+				echo '<p><a href="' . esc_url( home_url( '/manage/' ) ) . '" class="orbit-btn">';
 				echo esc_html__( 'Manage Your Activities', 'orbit' );
 				echo '</a></p>';
 			} else {
 				echo '<p class="orbit-cta">';
 				echo esc_html__( 'Want to share your own activities?', 'orbit' ) . ' ';
-				echo '<a href="' . esc_url( home_url( '/orbit-edit-profile/' ) ) . '">';
+				echo '<a href="' . esc_url( home_url( '/edit-profile/' ) ) . '">';
 				echo esc_html__( 'Create a profile', 'orbit' );
 				echo '</a></p>';
 			}
@@ -387,7 +387,7 @@ class Orbit_Shortcodes {
 
 		ob_start();
 
-		echo self::app_nav( 'my-subscriptions' );
+		echo self::app_nav( 'subscriptions' );
 		echo '<div class="orbit-my-subscriptions">';
 		echo '<h2>' . esc_html__( 'My Subscriptions', 'orbit' ) . '</h2>';
 
@@ -467,7 +467,7 @@ class Orbit_Shortcodes {
 		echo '<div class="orbit-manage">';
 		echo '<h2>' . esc_html__( 'Manage Activities', 'orbit' ) . '</h2>';
 
-		echo '<p><a href="' . esc_url( home_url( '/orbit-new-activity/' ) ) . '" class="orbit-btn">';
+		echo '<p><a href="' . esc_url( home_url( '/new-activity/' ) ) . '" class="orbit-btn">';
 		echo esc_html__( 'New Activity', 'orbit' );
 		echo '</a></p>';
 
@@ -1227,35 +1227,35 @@ class Orbit_Shortcodes {
 		$is_poster = current_user_can( 'orbit_create_activity' );
 
 		$links = array(
-			'dashboard'        => array(
-				'url'   => home_url( '/orbit-dashboard/' ),
+			'dashboard'     => array(
+				'url'   => home_url( '/dashboard/' ),
 				'label' => __( 'Dashboard', 'orbit' ),
 			),
-			'my-subscriptions' => array(
-				'url'   => home_url( '/orbit-my-subscriptions/' ),
+			'subscriptions' => array(
+				'url'   => home_url( '/subscriptions/' ),
 				'label' => __( 'Subscriptions', 'orbit' ),
 			),
-			'settings'         => array(
-				'url'   => home_url( '/orbit-settings/' ),
+			'settings'      => array(
+				'url'   => home_url( '/settings/' ),
 				'label' => __( 'Settings', 'orbit' ),
 			),
 		);
 
 		if ( $is_poster ) {
 			$links['manage']       = array(
-				'url'   => home_url( '/orbit-manage/' ),
+				'url'   => home_url( '/manage/' ),
 				'label' => __( 'Manage', 'orbit' ),
 			);
 			$links['new-activity'] = array(
-				'url'   => home_url( '/orbit-new-activity/' ),
+				'url'   => home_url( '/new-activity/' ),
 				'label' => __( 'New Activity', 'orbit' ),
 			);
 			$links['subscribers']  = array(
-				'url'   => home_url( '/orbit-subscribers/' ),
+				'url'   => home_url( '/subscribers/' ),
 				'label' => __( 'Subscribers', 'orbit' ),
 			);
 			$links['edit-profile'] = array(
-				'url'   => home_url( '/orbit-edit-profile/' ),
+				'url'   => home_url( '/edit-profile/' ),
 				'label' => __( 'Profile', 'orbit' ),
 			);
 		}
