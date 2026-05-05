@@ -8,7 +8,7 @@ its own role-based skill to produce that phase's deliverable.
 
 - **Brand:** Perihelion
 - **Started:** 2026-05-05
-- **Current Phase:** 6 — QA Review (next)
+- **Current Phase:** 7 — Marketing (next)
 - **Plugin:** This site is powered by the Orbit / Perihelion plugin in this repo.
 - **Theme:** Built in a separate repo at [bookchiq/perihelion-theme](https://github.com/bookchiq/perihelion-theme); installed at `wp-content/themes/perihelion/`.
 - **Domain:** orbit.local (development); production domain TBD
@@ -84,9 +84,11 @@ its own role-based skill to produce that phase's deliverable.
 ### 6. QA Review
 
 - **Skill:** `theme-qa-reviewer`
-- **Status:** Not started
-- **Output:**
-- **Open Questions:**
+- **Status:** Complete (2026-05-05)
+- **Output:** [`docs/theme-qa-punch-list.md`](./theme-qa-punch-list.md)
+- **Findings:** 1 Critical (login wordmark duplicate), 3 Major (active-nav highlight, footer Sign out, role-aware nav), 4 Minor, 4 Observations.
+- **Recommended:** bundle all 5 high-priority items into one Phase-6-fixes PR on the theme repo. ~1–2 hours of focused work.
+- **Open Questions:** (none — all open items from upstream phases either resolved or noted in punch list)
 
 ### 7. Marketing
 
