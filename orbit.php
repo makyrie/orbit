@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Orbit
  * Description: Person-centric social activity tool. Subscribe to people, get notified about their activities, respond with lightweight going/maybe actions.
- * Version:     1.0.2
+ * Version:     1.1.0
  * Author:      Orbit
  * License:     GPL-2.0-or-later
  * Text Domain: orbit
@@ -17,7 +17,7 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Plugin constants.
  */
-define( 'ORBIT_VERSION', '1.0.2' );
+define( 'ORBIT_VERSION', '1.1.0' );
 define( 'ORBIT_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ORBIT_PLUGIN_FILE', __FILE__ );
 
@@ -123,7 +123,47 @@ function orbit_maybe_upgrade() {
 	if ( $installed_version !== ORBIT_VERSION ) {
 		Orbit_Activator::create_tables();
 		Orbit_Roles::register();
+		orbit_migrate_page_slugs();
 		update_option( 'orbit_db_version', ORBIT_VERSION );
+	}
+}
+
+/**
+ * One-time migration to rename internal pages from `orbit-*` slugs to
+ * the simplified versions. Idempotent — pages already at the new slug
+ * are skipped, and we never overwrite a page that happens to live at
+ * the new slug already (defensive in case a site predefined one).
+ */
+function orbit_migrate_page_slugs() {
+	$renames = array(
+		'orbit-dashboard'        => 'dashboard',
+		'orbit-settings'         => 'settings',
+		'orbit-my-subscriptions' => 'subscriptions',
+		'orbit-manage'           => 'manage',
+		'orbit-new-activity'     => 'new-activity',
+		'orbit-edit-activity'    => 'edit-activity',
+		'orbit-subscribers'      => 'subscribers',
+		'orbit-edit-profile'     => 'edit-profile',
+	);
+
+	foreach ( $renames as $old => $new ) {
+		$page = get_page_by_path( $old );
+		if ( ! $page ) {
+			continue;
+		}
+
+		// Don't clobber a different page that already occupies the new slug.
+		$existing_at_new = get_page_by_path( $new );
+		if ( $existing_at_new && (int) $existing_at_new->ID !== (int) $page->ID ) {
+			continue;
+		}
+
+		wp_update_post(
+			array(
+				'ID'        => $page->ID,
+				'post_name' => $new,
+			)
+		);
 	}
 }
 add_action( 'plugins_loaded', 'orbit_maybe_upgrade' );
