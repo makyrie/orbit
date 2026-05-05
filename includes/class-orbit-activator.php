@@ -220,6 +220,9 @@ class Orbit_Activator {
 					'post_status'  => 'publish',
 					'post_type'    => 'page',
 					'post_author'  => 1,
+					'meta_input'   => array(
+						'_wp_page_template' => 'page-app',
+					),
 				)
 			);
 		}

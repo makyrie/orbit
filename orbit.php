@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Perihelion
  * Description: Person-centric social activity tool. Subscribe to people, get notified about their activities, respond with lightweight going/maybe actions.
- * Version:     1.1.0
+ * Version:     1.2.0
  * Author:      Perihelion
  * License:     GPL-2.0-or-later
  * Text Domain: orbit
@@ -17,7 +17,7 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Plugin constants.
  */
-define( 'ORBIT_VERSION', '1.1.0' );
+define( 'ORBIT_VERSION', '1.2.0' );
 define( 'ORBIT_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ORBIT_PLUGIN_FILE', __FILE__ );
 
@@ -124,6 +124,7 @@ function orbit_maybe_upgrade() {
 		Orbit_Activator::create_tables();
 		Orbit_Roles::register();
 		orbit_migrate_page_slugs();
+		orbit_migrate_app_page_templates();
 		update_option( 'orbit_db_version', ORBIT_VERSION );
 	}
 }
@@ -164,6 +165,46 @@ function orbit_migrate_page_slugs() {
 				'post_name' => $new,
 			)
 		);
+	}
+}
+
+/**
+ * One-time migration to assign the `page-app` template to the plugin's
+ * 8 internal app pages so the active theme (when it provides one) can
+ * render them with a wider layout. Idempotent — pages already on the
+ * `page-app` template are skipped, and pages that don't exist on this
+ * install are silently ignored.
+ *
+ * The Perihelion theme provides the `page-app.html` template; other
+ * themes can ignore the meta or provide their own template of the
+ * same name. The post-meta value is harmless when the active theme
+ * doesn't define a matching template — WordPress falls back to the
+ * default page template.
+ */
+function orbit_migrate_app_page_templates() {
+	$app_slugs = array(
+		'dashboard',
+		'settings',
+		'subscriptions',
+		'manage',
+		'new-activity',
+		'edit-activity',
+		'subscribers',
+		'edit-profile',
+	);
+
+	foreach ( $app_slugs as $slug ) {
+		$page = get_page_by_path( $slug );
+		if ( ! $page ) {
+			continue;
+		}
+
+		$current = get_post_meta( $page->ID, '_wp_page_template', true );
+		if ( 'page-app' === $current ) {
+			continue;
+		}
+
+		update_post_meta( $page->ID, '_wp_page_template', 'page-app' );
 	}
 }
 add_action( 'plugins_loaded', 'orbit_maybe_upgrade' );
