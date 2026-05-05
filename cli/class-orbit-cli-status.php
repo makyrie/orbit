@@ -62,7 +62,7 @@ class Orbit_CLI_Status extends Orbit_CLI {
 			"SELECT COUNT(*) FROM {$wpdb->prefix}" . ORBIT_TABLE_RESPONSES
 		);
 
-		$twilio_configured = defined( 'ORBIT_TWILIO_SID' ) && defined( 'ORBIT_TWILIO_AUTH_TOKEN' ) && defined( 'ORBIT_TWILIO_FROM' );
+		$twilio_configured = defined( 'ORBIT_TWILIO_ACCOUNT_SID' ) && defined( 'ORBIT_TWILIO_AUTH_TOKEN' ) && defined( 'ORBIT_TWILIO_FROM_NUMBER' );
 		$action_scheduler  = function_exists( 'as_has_scheduled_action' );
 
 		// Recent notification stats.

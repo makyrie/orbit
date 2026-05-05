@@ -285,7 +285,7 @@ class Orbit_Shortcodes {
 		$phone             = (string) get_user_meta( $user_id, 'orbit_phone', true );
 		$verified          = (bool) get_user_meta( $user_id, 'orbit_phone_verified', true );
 		$has_verified      = $verified && '' !== $phone;
-		$twilio_configured = defined( 'ORBIT_TWILIO_SID' ) && defined( 'ORBIT_TWILIO_AUTH_TOKEN' ) && defined( 'ORBIT_TWILIO_FROM' );
+		$twilio_configured = defined( 'ORBIT_TWILIO_ACCOUNT_SID' ) && defined( 'ORBIT_TWILIO_AUTH_TOKEN' ) && defined( 'ORBIT_TWILIO_FROM_NUMBER' );
 
 		ob_start();
 

@@ -253,7 +253,7 @@ class Orbit_REST_Profile {
 
 		$pending_subscriptions = Orbit_Subscription::count( array( 'status' => 'pending' ) );
 
-		$twilio_configured = defined( 'ORBIT_TWILIO_SID' ) && defined( 'ORBIT_TWILIO_AUTH_TOKEN' ) && defined( 'ORBIT_TWILIO_FROM' );
+		$twilio_configured = defined( 'ORBIT_TWILIO_ACCOUNT_SID' ) && defined( 'ORBIT_TWILIO_AUTH_TOKEN' ) && defined( 'ORBIT_TWILIO_FROM_NUMBER' );
 
 		return new WP_REST_Response(
 			array(
