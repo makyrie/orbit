@@ -8,7 +8,7 @@ its own role-based skill to produce that phase's deliverable.
 
 - **Brand:** Perihelion
 - **Started:** 2026-05-05
-- **Current Phase:** 2 — Creative Direction (next)
+- **Current Phase:** 3 — Content Architecture (next)
 - **Plugin:** This site is powered by the Orbit / Perihelion plugin in this repo.
 - **Domain:** orbit.local (development); production domain TBD
 
@@ -30,9 +30,14 @@ its own role-based skill to produce that phase's deliverable.
 ### 2. Creative Direction
 
 - **Skill:** `creative-director`
-- **Status:** Not started
+- **Status:** Complete (2026-05-05)
 - **Output:**
+  - [`docs/creative-direction.md`](./creative-direction.md) — written direction
+  - [`docs/style-tile.html`](./style-tile.html) — rendered style tile (open at 1200px wide)
 - **Open Questions:**
+  - Noise/texture overlay yes-or-no (defer to Theme Builder cost-vs-payoff call)
+  - Honey accent usage rules — formalize in Design System Generator
+  - Tagline lockup — visual treatment locked in (Fraunces italic, display size); the words *"More time with the friends you already have. Without the friction."* are a working candidate, not a commitment
 
 ### 3. Content Architecture
 
@@ -87,6 +92,10 @@ its own role-based skill to produce that phase's deliverable.
 - **2026-05-05** — Plugin-internal namespace stays as Orbit (engineering inertia, not strategic). Brand reads should not lean on the rename as a story.
 - **2026-05-05** — Sarah is the maker, not the long-term face. Brand should stand on its own, plausibly handoff-able to a non-commercial steward.
 - **2026-05-05** — Soul references: **REI** (gets you outside, not absorbed in them) and **Taproot Magazine** (slow, intentional, low-ad).
+- **2026-05-05** — Visual direction: editorial calm + earthy warmth. Cream-paper foundation (`#F7F3ED`) + Sienna primary (`#B85D3D`) + Ink/Sage/Slate/Honey supporting palette.
+- **2026-05-05** — Type pairing: **Fraunces** (headings, variable serif with personality) + **Inter** (body/UI, calm and legible). Both Google Fonts.
+- **2026-05-05** — Five design principles: quiet by design, warm not bright, editorial pacing, tactile not flat, built to be left.
+- **2026-05-05** — Five design don'ts: no dark mode default, no fluorescent CTAs, no urgency cues / notification dots, no SaaS-startup tropes, no icons-as-mystery-meat.
 
 ## Parking Lot
 
