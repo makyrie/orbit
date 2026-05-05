@@ -8,7 +8,7 @@ its own role-based skill to produce that phase's deliverable.
 
 - **Brand:** Perihelion
 - **Started:** 2026-05-05
-- **Current Phase:** 4 — Visual Design (next)
+- **Current Phase:** 5 — Theme Development (next)
 - **Plugin:** This site is powered by the Orbit / Perihelion plugin in this repo.
 - **Domain:** orbit.local (development); production domain TBD
 
@@ -54,9 +54,14 @@ its own role-based skill to produce that phase's deliverable.
 ### 4. Visual Design
 
 - **Skill:** `design-system-generator`
-- **Status:** Not started
-- **Output:**
+- **Status:** Complete (2026-05-05)
+- **Output:** [`docs/design-system.md`](./design-system.md)
 - **Open Questions:**
+  - **Sienna canonical value** — spec promotes `#9C4B30` (was style-tile hover) to canonical Sienna for WCAG AA compliance. Visually near-identical, accessibility-significant. Awaiting Sarah's confirmation before Theme Builder applies.
+  - Noise-overlay default = ON (resolved here, can be feature-flagged in Theme Builder if needed)
+  - Mobile breakpoint = 768px recommended; final call deferred to Theme Builder
+  - Logo / favicon / social-share image — placeholder for now, real assets later
+  - Tier-badge copy source-of-truth coordination (plugin owns labels; theme reads or sync)
 
 ### 5. Theme Development
 
@@ -106,6 +111,11 @@ its own role-based skill to produce that phase's deliverable.
 - **2026-05-05** — **Persona naming in copy:** address the audience as **"you"** in most copy; use behavioral description **"the friend who plans things"** when naming the persona to itself. No single-noun handle ("the host" / "the planner" / "the gatherer") — all overclaim or undershoot.
 - **2026-05-05** — **Marketing site = same WP install as the app.** Two-template approach: `page.html` (narrow editorial, marketing pages) and `page-app.html` (wider, app pages). Plugin will need to assign `_wp_page_template` to its created pages — small plugin patch coordinated with Theme Builder phase.
 - **2026-05-05** — **Five marketing surfaces in MVP scope:** Home, Why this exists, Privacy, Contact, 404. Auth handled by WP core (`wp-login.php` styled via `login_enqueue_scripts`, no template replacement). No blog, no FAQ, no pricing.
+- **2026-05-05** — **Sienna engineering adjustment:** canonical value moves from `#B85D3D` (creative direction) to `#9C4B30` (was the hover state) for WCAG AA compliance on Paper. Visually nearly identical; accessibility-significant. Awaiting Sarah's explicit confirm/revert before Theme Builder applies.
+- **2026-05-05** — **Honey usage formalized:** Honey appears in exactly 2 places — actionable workflow indicator badges (with Ink text inside) and "I'm going" tier badge fills. Never as text on Paper, never on CTA buttons. (Resolves Phase 2 Open Question.)
+- **2026-05-05** — **Body links:** Ink text + 2px sienna underline. Never sienna text in body. Body inline links pass WCAG AA via underline+contrast.
+- **2026-05-05** — **Spacing scale:** 7 steps (`20`/`30`/`40`/`50`/`60`/`70`/`80` slugs) maps to `0.25rem`/`0.5rem`/`1rem`/`1.5rem`/`2.5rem`/`4rem`/`6rem`. Section padding compresses one step below 768px.
+- **2026-05-05** — **No animations** beyond hover transitions and the 8-second success-message fadeout. No page-level motion, no entrance animations, no pulsing indicators.
 
 ## Parking Lot
 
