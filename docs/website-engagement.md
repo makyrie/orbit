@@ -8,8 +8,9 @@ its own role-based skill to produce that phase's deliverable.
 
 - **Brand:** Perihelion
 - **Started:** 2026-05-05
-- **Current Phase:** 5 — Theme Development (next)
+- **Current Phase:** 6 — QA Review (next)
 - **Plugin:** This site is powered by the Orbit / Perihelion plugin in this repo.
+- **Theme:** Built in a separate repo at [bookchiq/perihelion-theme](https://github.com/bookchiq/perihelion-theme); installed at `wp-content/themes/perihelion/`.
 - **Domain:** orbit.local (development); production domain TBD
 
 ## Phase Status
@@ -66,9 +67,19 @@ its own role-based skill to produce that phase's deliverable.
 ### 5. Theme Development
 
 - **Skill:** `theme-builder`
-- **Status:** Not started
+- **Status:** Complete (2026-05-05)
 - **Output:**
+  - Repo: [bookchiq/perihelion-theme](https://github.com/bookchiq/perihelion-theme)
+  - Initial scaffold PR: [#1](https://github.com/bookchiq/perihelion-theme/pull/1)
+  - Deviations from spec: [`DEVIATIONS.md`](https://github.com/bookchiq/perihelion-theme/blob/feat/initial-theme-scaffold/DEVIATIONS.md) — 10 explicit calls
+  - Activation guide: [`ACTIVATION.md`](https://github.com/bookchiq/perihelion-theme/blob/feat/initial-theme-scaffold/ACTIVATION.md)
+- **Plugin coordination still needed:**
+  - Patch `Orbit_Activator::create_pages()` and `orbit_migrate_page_slugs()` to set `_wp_page_template = 'page-app'` on the 8 internal app pages. Until this lands, manual template assignment per the activation guide.
+  - (Future) actionable workflow indicator (pending-subscriber count badge) needs a hook the theme can consume — out of scope for the initial scaffold, defer to a follow-up.
 - **Open Questions:**
+  - Mobile breakpoint applied at 768px per the spec
+  - Cream-paper noise overlay applied (default ON per spec; can be commented out in `custom.css`)
+  - Theme deviations from spec are documented in DEVIATIONS.md for the QA Reviewer to reference
 
 ### 6. QA Review
 
@@ -116,6 +127,9 @@ its own role-based skill to produce that phase's deliverable.
 - **2026-05-05** — **Body links:** Ink text + 2px sienna underline. Never sienna text in body. Body inline links pass WCAG AA via underline+contrast.
 - **2026-05-05** — **Spacing scale:** 7 steps (`20`/`30`/`40`/`50`/`60`/`70`/`80` slugs) maps to `0.25rem`/`0.5rem`/`1rem`/`1.5rem`/`2.5rem`/`4rem`/`6rem`. Section padding compresses one step below 768px.
 - **2026-05-05** — **No animations** beyond hover transitions and the 8-second success-message fadeout. No page-level motion, no entrance animations, no pulsing indicators.
+- **2026-05-05** — **Theme lives in a separate repo** at [bookchiq/perihelion-theme](https://github.com/bookchiq/perihelion-theme). Plugin remains at `makyrie/orbit`. Two-repo split = WP-conventional separation (plugin = code, theme = presentation). Engagement docs continue to live in the plugin repo because they reference plugin work too.
+- **2026-05-05** — **WordPress login is theme-styled, never theme-replaced.** Custom CSS via `login_enqueue_scripts` action; the wordmark is a Fraunces text replacement of the WP logo. Login flows (sign in / register / lost password) all served by WP core.
+- **2026-05-05** — **Plugin-side patch needed for theme integration:** the 8 app pages need `_wp_page_template = 'page-app'` post-meta. Will land as a small follow-up plugin PR.
 
 ## Parking Lot
 
