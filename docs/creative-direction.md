@@ -18,7 +18,9 @@ The brand serves people who want to spend MORE time offline with friends, so the
 
 **4. Tactile, not flat.** Subtle materiality: cream-paper background, gentle shadows, ink-rendered type. The design signals "made by someone" rather than "served by infrastructure." Never skeuomorphic.
 
-**5. Built to be left.** CTAs are clear but not loud. No notification badges, no urgency cues, no *"3 friends are going!!"* alerts. The visual language enforces the brand promise: this is something you use, then close.
+**5. Built to be left.** CTAs are clear but not loud. No urgency cues, no *"3 friends are going!!"* alerts, no engagement-trap notifications designed to pull you back. The visual language enforces the brand promise: this is something you use, then close.
+
+*One carve-out:* indicators that signal **the user has something blocking the system from working** (e.g., pending subscribers awaiting the organizer's approval) are allowed and necessary — without them, the product fails its core function. These are different in spirit from engagement-loop notifications: they exist to serve the user's own intent, not to manufacture a reason to come back. They should still be visually quiet — small, paired with the affected element, never animated or pulsing — but they earn their pixels.
 
 ## Color
 
@@ -74,7 +76,7 @@ Asymmetric layouts where useful (hero with text on left, simple list on right), 
 
 1. **No dark mode as default.** The cream-paper foundation IS the brand. Dark mode allowed as opt-in, but the canonical experience is light, warm, on-paper.
 2. **No fluorescent or saturated CTAs.** The only "loud" color is Honey, used sparingly. Buttons feel like ink, not LED.
-3. **No notification dots, urgency cues, or "Limited time!" framing.** Anti-extractive means no engagement-trap visuals.
+3. **No urgency cues, no "Limited time!" framing, no engagement-trap notifications.** Anti-extractive means no manufactured reasons to come back. The exception is the *actionable workflow indicator* — a quiet badge or count next to an item the user must act on for the system to function (e.g., pending subscribers awaiting approval). These serve the user's intent, not the app's engagement metrics, and should still be visually restrained: small, paired with the affected element, never pulsing or animated, in Honey not red.
 4. **No SaaS-startup tropes.** No isometric illustrations. No animated gradient heroes. No glassmorphic cards. No "Get started in 60 seconds" landing-page tropes.
 5. **No icons-as-mystery-meat.** Use words. Icons appear *with* labels, never as silent navigation. Iconography is sparse and purposeful.
 

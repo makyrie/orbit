@@ -95,7 +95,8 @@ its own role-based skill to produce that phase's deliverable.
 - **2026-05-05** — Visual direction: editorial calm + earthy warmth. Cream-paper foundation (`#F7F3ED`) + Sienna primary (`#B85D3D`) + Ink/Sage/Slate/Honey supporting palette.
 - **2026-05-05** — Type pairing: **Fraunces** (headings, variable serif with personality) + **Inter** (body/UI, calm and legible). Both Google Fonts.
 - **2026-05-05** — Five design principles: quiet by design, warm not bright, editorial pacing, tactile not flat, built to be left.
-- **2026-05-05** — Five design don'ts: no dark mode default, no fluorescent CTAs, no urgency cues / notification dots, no SaaS-startup tropes, no icons-as-mystery-meat.
+- **2026-05-05** — Five design don'ts: no dark mode default, no fluorescent CTAs, no urgency cues / engagement-trap notifications, no SaaS-startup tropes, no icons-as-mystery-meat.
+- **2026-05-05** — Notification carve-out: **actionable workflow indicators** (e.g., pending subscribers awaiting approval) are allowed and necessary — they serve the user's intent, not engagement metrics. Visually restrained (small, paired with affected element, no pulsing/animation, Honey not red). Engagement-trap notifications remain forbidden.
 
 ## Parking Lot
 
