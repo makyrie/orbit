@@ -10,57 +10,42 @@
 /* ---- Variables ---- */
 
 :root {
-	--orbit-color-primary: #2563eb;
-	--orbit-color-primary-hover: #1d4ed8;
-	--orbit-color-danger: #dc2626;
-	--orbit-color-danger-hover: #b91c1c;
-	--orbit-color-success: #16a34a;
-	--orbit-color-warning: #d97706;
-	--orbit-color-muted: #6b7280;
-	--orbit-color-border: #e5e7eb;
-	--orbit-color-bg-light: #f9fafb;
-	--orbit-color-bg-notice: #fefce8;
-	--orbit-radius: 6px;
-	--orbit-spacing: 1rem;
+	/*
+	 * Each variable references the active theme's preset CSS custom properties
+	 * with a fallback to the design-system value used by the Perihelion theme.
+	 * On a Perihelion-themed install, the theme's tokens flow through. On
+	 * other themes, the fallbacks render a brand-aligned default.
+	 */
+	--orbit-color-primary:       var(--wp--preset--color--sienna,       #9C4B30);
+	--orbit-color-primary-hover: var(--wp--preset--color--sienna-hover, #803D26);
+	--orbit-color-muted:         var(--wp--preset--color--slate,        #5A5A55);
+	--orbit-color-border:        var(--wp--preset--color--rule,         rgba(156, 75, 48, 0.15));
+	--orbit-color-bg-light:      var(--wp--preset--color--paper-warm,   #F1ECE2);
+	--orbit-color-text:          var(--wp--preset--color--ink,          #2A2A28);
+
+	/*
+	 * Notice / status colors map onto the design system's tinted-surface
+	 * approach (no red, no signal-yellow). Body text on tinted bgs uses Ink
+	 * for AA contrast.
+	 */
+	--orbit-color-success:       #5C6845;                                  /* darker sage */
+	--orbit-color-warning:       #8B6420;                                  /* darker honey */
+	--orbit-color-danger:        var(--wp--preset--color--sienna,       #9C4B30);
+	--orbit-color-danger-hover:  var(--wp--preset--color--sienna-hover, #803D26);
+	--orbit-color-bg-success:    rgba(157, 166, 126, 0.18);                /* sage tint */
+	--orbit-color-bg-notice:     rgba(214, 154, 60, 0.15);                 /* honey tint */
+	--orbit-color-bg-error:      rgba(156, 75, 48, 0.12);                  /* sienna tint */
+
+	--orbit-radius:    8px;
+	--orbit-radius-sm: 4px;
+	--orbit-radius-lg: 12px;
+	--orbit-spacing:    1rem;
 	--orbit-spacing-sm: 0.5rem;
 	--orbit-spacing-lg: 1.5rem;
 	--orbit-font-size-sm: 0.875rem;
-}
 
-/* ---- App Nav ---- */
-
-.orbit-app-nav {
-	margin-bottom: var(--orbit-spacing-lg);
-	border-bottom: 1px solid var(--orbit-color-border);
-}
-
-.orbit-app-nav ul {
-	display: flex;
-	flex-wrap: wrap;
-	list-style: none;
-	margin: 0;
-	padding: 0;
-}
-
-.orbit-app-nav li a {
-	display: block;
-	padding: 0.5em 0.7em;
-	font-size: 0.8125rem;
-	font-weight: 500;
-	white-space: nowrap;
-	color: var(--orbit-color-muted);
-	text-decoration: none;
-	border-bottom: 2px solid transparent;
-	transition: color 0.15s ease, border-color 0.15s ease;
-}
-
-.orbit-app-nav li a:hover {
-	color: var(--orbit-color-primary);
-}
-
-.orbit-app-nav li.orbit-app-nav-active a {
-	color: var(--orbit-color-primary);
-	border-bottom-color: var(--orbit-color-primary);
+	--orbit-shadow-soft: 0 1px 3px rgba(42, 42, 40, 0.04), 0 2px 8px rgba(42, 42, 40, 0.04);
+	--orbit-shadow-lift: 0 2px 6px rgba(42, 42, 40, 0.06), 0 8px 20px rgba(42, 42, 40, 0.06);
 }
 
 /* ---- CTA ---- */
@@ -254,15 +239,16 @@
 }
 
 .orbit-message-success {
-	background-color: #f0fdf4;
-	color: #166534;
-	border: 1px solid #bbf7d0;
+	background-color: var(--orbit-color-bg-success);
+	color: var(--orbit-color-text);
+	border: 1px solid transparent;
 }
 
 .orbit-message-error {
-	background-color: #fef2f2;
-	color: #991b1b;
-	border: 1px solid #fecaca;
+	background-color: var(--orbit-color-bg-error);
+	color: var(--orbit-color-text);
+	border-left: 3px solid var(--orbit-color-primary);
+	border-radius: 0 var(--orbit-radius) var(--orbit-radius) 0;
 }
 
 /* ---- Notices ---- */
@@ -271,9 +257,10 @@
 	padding: 0.75em 1em;
 	margin-bottom: var(--orbit-spacing);
 	background-color: var(--orbit-color-bg-notice);
-	border: 1px solid #fde68a;
-	border-radius: var(--orbit-radius);
+	border-left: 3px solid var(--orbit-color-warning);
+	border-radius: 0 var(--orbit-radius) var(--orbit-radius) 0;
 	font-size: var(--orbit-font-size-sm);
+	color: var(--orbit-color-text);
 }
 
 .orbit-notice a {
@@ -281,9 +268,9 @@
 }
 
 .orbit-notice-warning {
-	background-color: #fef2f2;
-	border-color: #fecaca;
-	color: #991b1b;
+	background-color: var(--orbit-color-bg-notice);
+	border-color: var(--orbit-color-warning);
+	color: var(--orbit-color-text);
 }
 
 .orbit-login-prompt {
@@ -296,11 +283,19 @@
 
 .orbit-dashboard .orbit-activity-card,
 .orbit-profile .orbit-activity-card {
-	padding: var(--orbit-spacing);
+	padding: var(--orbit-spacing-lg);
 	margin-bottom: var(--orbit-spacing);
 	background-color: var(--orbit-color-bg-light);
 	border: 1px solid var(--orbit-color-border);
-	border-radius: var(--orbit-radius);
+	border-radius: var(--orbit-radius-lg);
+	box-shadow: var(--orbit-shadow-soft);
+	transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.orbit-dashboard .orbit-activity-card:hover,
+.orbit-profile .orbit-activity-card:hover {
+	transform: translateY(-2px);
+	box-shadow: var(--orbit-shadow-lift);
 }
 
 .orbit-activity-meta {
@@ -362,25 +357,30 @@
 
 .orbit-tier-badge {
 	display: inline-block;
-	padding: 0.15em 0.6em;
+	padding: 0.25em 0.75em;
 	font-size: 0.75rem;
 	font-weight: 600;
 	text-transform: uppercase;
 	letter-spacing: 0.03em;
-	border-radius: 999px;
-	color: #fff;
+	border-radius: var(--orbit-radius-sm);
 }
 
+/* Tier 1 — "Just an idea": sage-tinted surface */
 .orbit-tier-1 {
-	background-color: #94a3b8;
+	background-color: var(--orbit-color-bg-success);
+	color: var(--orbit-color-success);
 }
 
+/* Tier 2 — "I'll go if you will": sienna-tinted surface */
 .orbit-tier-2 {
-	background-color: #f59e0b;
+	background-color: var(--orbit-color-bg-error);
+	color: var(--orbit-color-primary);
 }
 
+/* Tier 3 — "I'm going — join me": honey-tinted surface */
 .orbit-tier-3 {
-	background-color: var(--orbit-color-primary);
+	background-color: var(--orbit-color-bg-notice);
+	color: var(--orbit-color-warning);
 }
 
 /* ---- Activity Detail ---- */
