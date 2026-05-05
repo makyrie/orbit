@@ -79,7 +79,6 @@ class Orbit_Shortcodes {
 
 		ob_start();
 
-		echo self::app_nav( 'dashboard' );
 		echo '<div class="orbit-dashboard">';
 
 		if ( empty( $activities ) ) {
@@ -219,7 +218,6 @@ class Orbit_Shortcodes {
 
 		ob_start();
 
-		echo self::app_nav( 'settings' );
 		echo '<div class="orbit-settings">';
 
 		echo self::render_phone_verification( $user_id );
@@ -387,7 +385,6 @@ class Orbit_Shortcodes {
 
 		ob_start();
 
-		echo self::app_nav( 'subscriptions' );
 		echo '<div class="orbit-my-subscriptions">';
 		echo '<h2>' . esc_html__( 'My Subscriptions', 'orbit' ) . '</h2>';
 
@@ -463,7 +460,6 @@ class Orbit_Shortcodes {
 
 		ob_start();
 
-		echo self::app_nav( 'manage' );
 		echo '<div class="orbit-manage">';
 		echo '<h2>' . esc_html__( 'Manage Activities', 'orbit' ) . '</h2>';
 
@@ -524,7 +520,6 @@ class Orbit_Shortcodes {
 
 		ob_start();
 
-		echo self::app_nav( 'new-activity' );
 		echo '<div class="orbit-new-activity">';
 		echo '<h2>' . esc_html__( 'New Activity', 'orbit' ) . '</h2>';
 		echo '<form method="post" class="orbit-form" data-orbit-api="activities" data-profile-id="' . esc_attr( $profile->id ) . '">';
@@ -623,7 +618,6 @@ class Orbit_Shortcodes {
 
 		ob_start();
 
-		echo self::app_nav( 'manage' );
 		echo '<div class="orbit-edit-activity">';
 		echo '<h2>' . esc_html__( 'Edit Activity', 'orbit' ) . '</h2>';
 		echo '<form method="post" class="orbit-form" data-orbit-api="activities/' . esc_attr( $activity_id ) . '" data-method="PATCH">';
@@ -718,7 +712,6 @@ class Orbit_Shortcodes {
 
 		ob_start();
 
-		echo self::app_nav( 'subscribers' );
 		echo '<div class="orbit-subscribers">';
 		echo '<h2>' . esc_html__( 'Subscribers', 'orbit' ) . '</h2>';
 
@@ -791,7 +784,6 @@ class Orbit_Shortcodes {
 
 		ob_start();
 
-		echo self::app_nav( 'edit-profile' );
 		echo '<div class="orbit-edit-profile">';
 		echo '<h2>' . esc_html__( 'Edit Profile', 'orbit' ) . '</h2>';
 		echo '<form method="post" class="orbit-form" data-orbit-api="profiles/' . esc_attr( $profile->id ) . '" data-method="PATCH">';
@@ -840,7 +832,6 @@ class Orbit_Shortcodes {
 
 		ob_start();
 
-		echo self::app_nav( 'edit-profile' );
 		echo '<div class="orbit-edit-profile">';
 		echo '<h2>' . esc_html__( 'Create Your Profile', 'orbit' ) . '</h2>';
 		echo '<p>' . esc_html__( 'Set up a profile to start sharing activities with your people.', 'orbit' ) . '</p>';
@@ -1211,67 +1202,6 @@ class Orbit_Shortcodes {
 		echo '</div>';
 
 		return ob_get_clean();
-	}
-
-	/**
-	 * Render in-app navigation for Orbit pages.
-	 *
-	 * @param string $current Current page identifier for active state.
-	 * @return string HTML nav markup.
-	 */
-	private static function app_nav( $current = '' ) {
-		if ( ! is_user_logged_in() ) {
-			return '';
-		}
-
-		$is_poster = current_user_can( 'orbit_create_activity' );
-
-		$links = array(
-			'dashboard'     => array(
-				'url'   => home_url( '/dashboard/' ),
-				'label' => __( 'Dashboard', 'orbit' ),
-			),
-			'subscriptions' => array(
-				'url'   => home_url( '/subscriptions/' ),
-				'label' => __( 'Subscriptions', 'orbit' ),
-			),
-			'settings'      => array(
-				'url'   => home_url( '/settings/' ),
-				'label' => __( 'Settings', 'orbit' ),
-			),
-		);
-
-		if ( $is_poster ) {
-			$links['manage']       = array(
-				'url'   => home_url( '/manage/' ),
-				'label' => __( 'Manage', 'orbit' ),
-			);
-			$links['new-activity'] = array(
-				'url'   => home_url( '/new-activity/' ),
-				'label' => __( 'New Activity', 'orbit' ),
-			);
-			$links['subscribers']  = array(
-				'url'   => home_url( '/subscribers/' ),
-				'label' => __( 'Subscribers', 'orbit' ),
-			);
-			$links['edit-profile'] = array(
-				'url'   => home_url( '/edit-profile/' ),
-				'label' => __( 'Profile', 'orbit' ),
-			);
-		}
-
-		$html = '<nav class="orbit-app-nav"><ul>';
-
-		foreach ( $links as $key => $link ) {
-			$active = ( $key === $current ) ? ' orbit-app-nav-active' : '';
-			$html  .= '<li class="' . esc_attr( $active ) . '">';
-			$html  .= '<a href="' . esc_url( $link['url'] ) . '">' . esc_html( $link['label'] ) . '</a>';
-			$html  .= '</li>';
-		}
-
-		$html .= '</ul></nav>';
-
-		return $html;
 	}
 
 	/**
