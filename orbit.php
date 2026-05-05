@@ -1,9 +1,9 @@
 <?php
 /**
- * Plugin Name: Orbit
+ * Plugin Name: Perihelion
  * Description: Person-centric social activity tool. Subscribe to people, get notified about their activities, respond with lightweight going/maybe actions.
  * Version:     1.1.0
- * Author:      Orbit
+ * Author:      Perihelion
  * License:     GPL-2.0-or-later
  * Text Domain: orbit
  * Requires at least: 6.4
