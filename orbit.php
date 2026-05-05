@@ -182,7 +182,7 @@ function orbit_enqueue_scripts() {
 			'restUrl'   => esc_url_raw( rest_url( 'orbit/v1/' ) ),
 			'nonce'     => wp_create_nonce( 'wp_rest' ),
 			'homeUrl'   => esc_url_raw( home_url() ),
-			'manageUrl' => esc_url_raw( home_url( '/orbit-manage/' ) ),
+			'manageUrl' => esc_url_raw( home_url( '/manage/' ) ),
 			'strings'   => array(
 				'success'       => __( 'Saved successfully.', 'orbit' ),
 				'responseSaved' => __( 'Response saved.', 'orbit' ),
@@ -204,14 +204,14 @@ add_action( 'wp_enqueue_scripts', 'orbit_enqueue_scripts' );
  */
 function orbit_get_internal_page_slugs() {
 	return array(
-		'orbit-dashboard',
-		'orbit-settings',
-		'orbit-my-subscriptions',
-		'orbit-manage',
-		'orbit-new-activity',
-		'orbit-edit-activity',
-		'orbit-subscribers',
-		'orbit-edit-profile',
+		'dashboard',
+		'settings',
+		'subscriptions',
+		'manage',
+		'new-activity',
+		'edit-activity',
+		'subscribers',
+		'edit-profile',
 	);
 }
 

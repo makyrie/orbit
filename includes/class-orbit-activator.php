@@ -171,35 +171,35 @@ class Orbit_Activator {
 	 */
 	public static function create_pages() {
 		$pages = array(
-			'orbit-dashboard'     => array(
+			'dashboard'     => array(
 				'title'   => 'Dashboard',
 				'content' => '[orbit_dashboard]',
 			),
-			'orbit-settings'      => array(
+			'settings'      => array(
 				'title'   => 'Settings',
 				'content' => '[orbit_settings]',
 			),
-			'orbit-my-subscriptions' => array(
-				'title'   => 'My Subscriptions',
+			'subscriptions' => array(
+				'title'   => 'Subscriptions',
 				'content' => '[orbit_my_subscriptions]',
 			),
-			'orbit-manage'        => array(
+			'manage'        => array(
 				'title'   => 'Manage',
 				'content' => '[orbit_manage]',
 			),
-			'orbit-new-activity'  => array(
+			'new-activity'  => array(
 				'title'   => 'New Activity',
 				'content' => '[orbit_new_activity]',
 			),
-			'orbit-edit-activity' => array(
+			'edit-activity' => array(
 				'title'   => 'Edit Activity',
 				'content' => '[orbit_edit_activity]',
 			),
-			'orbit-subscribers'   => array(
+			'subscribers'   => array(
 				'title'   => 'Subscribers',
 				'content' => '[orbit_subscribers]',
 			),
-			'orbit-edit-profile'  => array(
+			'edit-profile'  => array(
 				'title'   => 'Edit Profile',
 				'content' => '[orbit_edit_profile]',
 			),
