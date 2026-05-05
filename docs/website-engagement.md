@@ -8,7 +8,7 @@ its own role-based skill to produce that phase's deliverable.
 
 - **Brand:** Perihelion
 - **Started:** 2026-05-05
-- **Current Phase:** 2 — Creative Direction (next)
+- **Current Phase:** 5 — Theme Development (next)
 - **Plugin:** This site is powered by the Orbit / Perihelion plugin in this repo.
 - **Domain:** orbit.local (development); production domain TBD
 
@@ -30,23 +30,38 @@ its own role-based skill to produce that phase's deliverable.
 ### 2. Creative Direction
 
 - **Skill:** `creative-director`
-- **Status:** Not started
+- **Status:** Complete (2026-05-05)
 - **Output:**
+  - [`docs/creative-direction.md`](./creative-direction.md) — written direction
+  - [`docs/style-tile.html`](./style-tile.html) — rendered style tile (open at 1200px wide)
 - **Open Questions:**
+  - Noise/texture overlay yes-or-no (defer to Theme Builder cost-vs-payoff call)
+  - Honey accent usage rules — formalize in Design System Generator
+  - Tagline lockup — visual treatment locked in (Fraunces italic, display size); the words *"More time with the friends you already have. Without the friction."* are a working candidate, not a commitment
 
 ### 3. Content Architecture
 
 - **Skill:** `content-architect`
-- **Status:** Not started
-- **Output:**
+- **Status:** Complete (2026-05-05)
+- **Output:** [`docs/content-architecture.md`](./content-architecture.md)
 - **Open Questions:**
+  - Final tagline wording (defer to Theme Builder when copy lands in templates; working: *"More time with the friends you already have."* + *"Bring your own friends."* as complementary phrases)
+  - Final voice for AI moderation copy in Privacy page (defer to Theme Builder)
+  - Manifesto-page slug — recommended `/why`, alternatives possible (defer to Theme Builder)
+  - Contact email address (personal vs branded) — defer to production-domain setup
+  - **Plugin coordination needed:** `_wp_page_template` post-meta assignment for app pages — small plugin patch alongside Phase 5
 
 ### 4. Visual Design
 
 - **Skill:** `design-system-generator`
-- **Status:** Not started
-- **Output:**
+- **Status:** Complete (2026-05-05)
+- **Output:** [`docs/design-system.md`](./design-system.md)
 - **Open Questions:**
+  - **Sienna canonical value** — spec promotes `#9C4B30` (was style-tile hover) to canonical Sienna for WCAG AA compliance. Visually near-identical, accessibility-significant. Awaiting Sarah's confirmation before Theme Builder applies.
+  - Noise-overlay default = ON (resolved here, can be feature-flagged in Theme Builder if needed)
+  - Mobile breakpoint = 768px recommended; final call deferred to Theme Builder
+  - Logo / favicon / social-share image — placeholder for now, real assets later
+  - Tier-badge copy source-of-truth coordination (plugin owns labels; theme reads or sync)
 
 ### 5. Theme Development
 
@@ -87,6 +102,20 @@ its own role-based skill to produce that phase's deliverable.
 - **2026-05-05** — Plugin-internal namespace stays as Orbit (engineering inertia, not strategic). Brand reads should not lean on the rename as a story.
 - **2026-05-05** — Sarah is the maker, not the long-term face. Brand should stand on its own, plausibly handoff-able to a non-commercial steward.
 - **2026-05-05** — Soul references: **REI** (gets you outside, not absorbed in them) and **Taproot Magazine** (slow, intentional, low-ad).
+- **2026-05-05** — Visual direction: editorial calm + earthy warmth. Cream-paper foundation (`#F7F3ED`) + Sienna primary (`#B85D3D`) + Ink/Sage/Slate/Honey supporting palette.
+- **2026-05-05** — Type pairing: **Fraunces** (headings, variable serif with personality) + **Inter** (body/UI, calm and legible). Both Google Fonts.
+- **2026-05-05** — Five design principles: quiet by design, warm not bright, editorial pacing, tactile not flat, built to be left.
+- **2026-05-05** — Five design don'ts: no dark mode default, no fluorescent CTAs, no urgency cues / engagement-trap notifications, no SaaS-startup tropes, no icons-as-mystery-meat.
+- **2026-05-05** — Notification carve-out: **actionable workflow indicators** (e.g., pending subscribers awaiting approval) are allowed and necessary — they serve the user's intent, not engagement metrics. Visually restrained (small, paired with affected element, no pulsing/animation, Honey not red). Engagement-trap notifications remain forbidden.
+- **2026-05-05** — **Manifesto page IS happening.** Resolves Phase 1 open question (Sarah was 60/40 yes-but-someday). Single page at `/why`, voice closer to a Taproot essay than to product marketing. Houses the "joy of connecting with near strangers" line.
+- **2026-05-05** — **Persona naming in copy:** address the audience as **"you"** in most copy; use behavioral description **"the friend who plans things"** when naming the persona to itself. No single-noun handle ("the host" / "the planner" / "the gatherer") — all overclaim or undershoot.
+- **2026-05-05** — **Marketing site = same WP install as the app.** Two-template approach: `page.html` (narrow editorial, marketing pages) and `page-app.html` (wider, app pages). Plugin will need to assign `_wp_page_template` to its created pages — small plugin patch coordinated with Theme Builder phase.
+- **2026-05-05** — **Five marketing surfaces in MVP scope:** Home, Why this exists, Privacy, Contact, 404. Auth handled by WP core (`wp-login.php` styled via `login_enqueue_scripts`, no template replacement). No blog, no FAQ, no pricing.
+- **2026-05-05** — **Sienna engineering adjustment:** canonical value moves from `#B85D3D` (creative direction) to `#9C4B30` (was the hover state) for WCAG AA compliance on Paper. Visually nearly identical; accessibility-significant. Awaiting Sarah's explicit confirm/revert before Theme Builder applies.
+- **2026-05-05** — **Honey usage formalized:** Honey appears in exactly 2 places — actionable workflow indicator badges (with Ink text inside) and "I'm going" tier badge fills. Never as text on Paper, never on CTA buttons. (Resolves Phase 2 Open Question.)
+- **2026-05-05** — **Body links:** Ink text + 2px sienna underline. Never sienna text in body. Body inline links pass WCAG AA via underline+contrast.
+- **2026-05-05** — **Spacing scale:** 7 steps (`20`/`30`/`40`/`50`/`60`/`70`/`80` slugs) maps to `0.25rem`/`0.5rem`/`1rem`/`1.5rem`/`2.5rem`/`4rem`/`6rem`. Section padding compresses one step below 768px.
+- **2026-05-05** — **No animations** beyond hover transitions and the 8-second success-message fadeout. No page-level motion, no entrance animations, no pulsing indicators.
 
 ## Parking Lot
 

@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Perihelion — Style Tile</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+	<style>
+		:root {
+			/* ---- Color palette ---- */
+			--color-sienna: #B85D3D;
+			--color-ink:    #2A2A28;
+			--color-sage:   #9DA67E;
+			--color-paper:  #F7F3ED;
+			--color-slate:  #5A5A55;
+			--color-honey:  #D69A3C;
+
+			/* Hover/state derivatives */
+			--color-sienna-hover: #9C4B30;
+			--color-paper-warm:   #F1ECE2;
+			--color-rule:         rgba(184, 93, 61, 0.15);
+
+			/* ---- Typography ---- */
+			--font-heading: 'Fraunces', Georgia, 'Times New Roman', serif;
+			--font-body:    'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+
+			/* Type scale (modular 1.25) */
+			--text-xs:      0.875rem;  /* 14px caption */
+			--text-base:    1rem;      /* 16px body */
+			--text-md:      1.25rem;   /* 20px h3 */
+			--text-lg:      1.75rem;   /* 28px h2 */
+			--text-xl:      2.5rem;    /* 40px h1 */
+			--text-display: 3.75rem;   /* 60px hero */
+
+			/* ---- Spacing ---- */
+			--space-xxs: 0.25rem;
+			--space-xs:  0.5rem;
+			--space-sm:  1rem;
+			--space-md:  1.5rem;
+			--space-lg:  2.5rem;
+			--space-xl:  4rem;
+			--space-2xl: 6rem;
+
+			/* ---- Other ---- */
+			--radius-sm:  4px;
+			--radius-md:  8px;
+			--radius-lg:  12px;
+			--shadow-soft: 0 1px 3px rgba(42, 42, 40, 0.04), 0 2px 8px rgba(42, 42, 40, 0.04);
+			--shadow-lift: 0 2px 6px rgba(42, 42, 40, 0.06), 0 8px 20px rgba(42, 42, 40, 0.06);
+		}
+
+		* {
+			box-sizing: border-box;
+			margin: 0;
+			padding: 0;
+		}
+
+		html, body {
+			background-color: var(--color-paper);
+			color: var(--color-ink);
+			font-family: var(--font-body);
+			font-size: var(--text-base);
+			line-height: 1.65;
+			-webkit-font-smoothing: antialiased;
+			-moz-osx-font-smoothing: grayscale;
+		}
+
+		/* Subtle paper noise overlay — demonstrates the texture option from the direction */
+		body {
+			background-image: url("data:image/svg+xml;utf8,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' seed='5'/%3E%3CfeColorMatrix values='0 0 0 0 0.16 0 0 0 0 0.16 0 0 0 0 0.13 0 0 0 0.045 0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+		}
+
+		.tile {
+			max-width: 1080px;
+			margin: 0 auto;
+			padding: var(--space-2xl) var(--space-lg);
+		}
+
+		/* ---- Section pattern ---- */
+		.section {
+			margin-bottom: var(--space-2xl);
+		}
+
+		.section__label {
+			font-family: var(--font-body);
+			font-size: var(--text-xs);
+			font-weight: 500;
+			color: var(--color-slate);
+			text-transform: uppercase;
+			letter-spacing: 0.12em;
+			margin-bottom: var(--space-xs);
+		}
+
+		.section__heading {
+			font-family: var(--font-heading);
+			font-size: var(--text-lg);
+			font-weight: 500;
+			line-height: 1.2;
+			color: var(--color-ink);
+			margin-bottom: var(--space-lg);
+			padding-bottom: var(--space-sm);
+			border-bottom: 1px solid var(--color-rule);
+		}
+
+		/* ---- Header / wordmark ---- */
+		.tile__header {
+			margin-bottom: var(--space-2xl);
+			padding-bottom: var(--space-lg);
+		}
+
+		.wordmark {
+			font-family: var(--font-heading);
+			font-size: var(--text-display);
+			font-weight: 500;
+			letter-spacing: -0.02em;
+			line-height: 1;
+			color: var(--color-ink);
+			margin-bottom: var(--space-sm);
+		}
+
+		.tile__tagline {
+			font-family: var(--font-heading);
+			font-style: italic;
+			font-weight: 400;
+			font-size: var(--text-md);
+			color: var(--color-slate);
+			line-height: 1.4;
+			max-width: 30em;
+		}
+
+		.tile__caption {
+			font-size: var(--text-xs);
+			color: var(--color-slate);
+			letter-spacing: 0.04em;
+			margin-top: var(--space-md);
+		}
+
+		/* ---- Color swatches ---- */
+		.palette {
+			display: grid;
+			grid-template-columns: repeat(6, 1fr);
+			gap: var(--space-sm);
+		}
+
+		.swatch {
+			border-radius: var(--radius-md);
+			overflow: hidden;
+			background-color: white;
+			box-shadow: var(--shadow-soft);
+			transition: transform 0.18s ease, box-shadow 0.18s ease;
+		}
+
+		.swatch:hover {
+			transform: translateY(-2px);
+			box-shadow: var(--shadow-lift);
+		}
+
+		.swatch__chip {
+			height: 100px;
+			border-bottom: 1px solid var(--color-rule);
+		}
+
+		.swatch__meta {
+			padding: var(--space-sm) var(--space-sm);
+		}
+
+		.swatch__name {
+			font-family: var(--font-heading);
+			font-size: var(--text-md);
+			font-weight: 500;
+			color: var(--color-ink);
+			margin-bottom: var(--space-xxs);
+		}
+
+		.swatch__hex {
+			font-family: 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
+			font-size: var(--text-xs);
+			color: var(--color-slate);
+			letter-spacing: 0.05em;
+		}
+
+		/* ---- Typography section ---- */
+		.type-spec {
+			display: grid;
+			grid-template-columns: 7em 1fr;
+			gap: var(--space-md) var(--space-lg);
+			align-items: baseline;
+		}
+
+		.type-spec__label {
+			font-family: var(--font-body);
+			font-size: var(--text-xs);
+			color: var(--color-slate);
+			text-transform: uppercase;
+			letter-spacing: 0.1em;
+			padding-top: 0.4em;
+		}
+
+		.type-spec__sample h1,
+		.type-spec__sample h2,
+		.type-spec__sample h3 {
+			font-family: var(--font-heading);
+			color: var(--color-ink);
+			font-weight: 500;
+			line-height: 1.2;
+		}
+
+		.type-spec__sample h1 {
+			font-size: var(--text-xl);
+			letter-spacing: -0.015em;
+		}
+
+		.type-spec__sample h2 {
+			font-size: var(--text-lg);
+			letter-spacing: -0.01em;
+		}
+
+		.type-spec__sample h3 {
+			font-size: var(--text-md);
+		}
+
+		.type-spec__sample p {
+			font-size: var(--text-base);
+			line-height: 1.65;
+			color: var(--color-ink);
+			max-width: 32em;
+		}
+
+		.type-spec__sample blockquote {
+			font-family: var(--font-heading);
+			font-style: italic;
+			font-size: var(--text-md);
+			line-height: 1.5;
+			color: var(--color-ink);
+			border-left: 2px solid var(--color-sienna);
+			padding-left: var(--space-md);
+			max-width: 32em;
+		}
+
+		.type-spec__sample .caption {
+			font-size: var(--text-xs);
+			color: var(--color-slate);
+			letter-spacing: 0.02em;
+		}
+
+		/* ---- Sample content block ---- */
+		.passage {
+			max-width: 38em;
+			margin: 0 auto;
+			padding: var(--space-xl) 0;
+		}
+
+		.passage h2 {
+			font-family: var(--font-heading);
+			font-size: var(--text-xl);
+			font-weight: 500;
+			line-height: 1.15;
+			letter-spacing: -0.015em;
+			color: var(--color-ink);
+			margin-bottom: var(--space-md);
+		}
+
+		.passage p {
+			font-size: 1.0625rem;
+			line-height: 1.7;
+			margin-bottom: var(--space-md);
+			color: var(--color-ink);
+		}
+
+		.passage p.lead {
+			font-size: 1.1875rem;
+			line-height: 1.55;
+			color: var(--color-slate);
+		}
+
+		/* ---- Activity card (sample component) ---- */
+		.cards {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: var(--space-md);
+		}
+
+		.card {
+			background-color: white;
+			border-radius: var(--radius-lg);
+			padding: var(--space-md) var(--space-md);
+			box-shadow: var(--shadow-soft);
+			transition: transform 0.18s ease, box-shadow 0.18s ease;
+			border: 1px solid var(--color-rule);
+		}
+
+		.card:hover {
+			transform: translateY(-2px);
+			box-shadow: var(--shadow-lift);
+		}
+
+		.card__poster {
+			font-size: var(--text-xs);
+			color: var(--color-slate);
+			margin-bottom: var(--space-xs);
+			letter-spacing: 0.02em;
+		}
+
+		.card__title {
+			font-family: var(--font-heading);
+			font-size: var(--text-md);
+			font-weight: 500;
+			line-height: 1.3;
+			color: var(--color-ink);
+			margin-bottom: var(--space-sm);
+		}
+
+		.card__tier {
+			display: inline-block;
+			font-size: var(--text-xs);
+			letter-spacing: 0.02em;
+			padding: 0.25em 0.75em;
+			border-radius: var(--radius-sm);
+			margin-bottom: var(--space-md);
+			font-weight: 500;
+		}
+
+		.card__tier--idea {
+			background-color: rgba(157, 166, 126, 0.18);
+			color: #5C6845;
+		}
+
+		.card__tier--maybe {
+			background-color: rgba(184, 93, 61, 0.14);
+			color: var(--color-sienna);
+		}
+
+		.card__tier--going {
+			background-color: rgba(214, 154, 60, 0.18);
+			color: #8B6420;
+		}
+
+		.card__details {
+			display: flex;
+			flex-direction: column;
+			gap: var(--space-xxs);
+			color: var(--color-slate);
+			font-size: var(--text-xs);
+			margin-bottom: var(--space-md);
+		}
+
+		.card__details strong {
+			color: var(--color-ink);
+			font-weight: 500;
+		}
+
+		.card__description {
+			font-size: var(--text-base);
+			line-height: 1.6;
+			color: var(--color-ink);
+			margin-bottom: var(--space-md);
+		}
+
+		.card__footer {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			padding-top: var(--space-sm);
+			border-top: 1px solid var(--color-rule);
+		}
+
+		.card__count {
+			font-size: var(--text-xs);
+			color: var(--color-slate);
+			letter-spacing: 0.02em;
+		}
+
+		/* ---- Buttons ---- */
+		.btn {
+			font-family: var(--font-body);
+			font-size: var(--text-base);
+			font-weight: 500;
+			letter-spacing: 0.01em;
+			padding: 0.55em 1.15em;
+			border-radius: var(--radius-md);
+			border: none;
+			cursor: pointer;
+			text-decoration: none;
+			display: inline-block;
+			transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+		}
+
+		.btn--primary {
+			background-color: var(--color-sienna);
+			color: var(--color-paper);
+		}
+
+		.btn--primary:hover {
+			background-color: var(--color-sienna-hover);
+		}
+
+		.btn--ghost {
+			background-color: transparent;
+			color: var(--color-sienna);
+			border: 1px solid var(--color-sienna);
+		}
+
+		.btn--ghost:hover {
+			background-color: var(--color-sienna);
+			color: var(--color-paper);
+		}
+
+		.btn--small {
+			font-size: var(--text-xs);
+			padding: 0.4em 0.9em;
+		}
+
+		/* ---- Bottom note ---- */
+		.tile__note {
+			margin-top: var(--space-2xl);
+			padding-top: var(--space-lg);
+			border-top: 1px solid var(--color-rule);
+			font-size: var(--text-xs);
+			color: var(--color-slate);
+			max-width: 38em;
+			line-height: 1.6;
+			letter-spacing: 0.01em;
+		}
+	</style>
+</head>
+<body>
+	<main class="tile">
+
+		<header class="tile__header">
+			<div class="wordmark">Perihelion</div>
+			<p class="tile__tagline">More time with the friends you already have. Without the friction.</p>
+			<p class="tile__caption">Style tile · Phase 2 creative direction · 2026-05-05</p>
+		</header>
+
+		<!-- ============== COLOR ============== -->
+		<section class="section">
+			<div class="section__label">01 — Palette</div>
+			<h2 class="section__heading">Color</h2>
+
+			<div class="palette">
+				<div class="swatch">
+					<div class="swatch__chip" style="background-color: var(--color-sienna);"></div>
+					<div class="swatch__meta">
+						<div class="swatch__name">Sienna</div>
+						<div class="swatch__hex">#B85D3D</div>
+					</div>
+				</div>
+				<div class="swatch">
+					<div class="swatch__chip" style="background-color: var(--color-ink);"></div>
+					<div class="swatch__meta">
+						<div class="swatch__name">Ink</div>
+						<div class="swatch__hex">#2A2A28</div>
+					</div>
+				</div>
+				<div class="swatch">
+					<div class="swatch__chip" style="background-color: var(--color-sage);"></div>
+					<div class="swatch__meta">
+						<div class="swatch__name">Sage</div>
+						<div class="swatch__hex">#9DA67E</div>
+					</div>
+				</div>
+				<div class="swatch">
+					<div class="swatch__chip" style="background-color: var(--color-paper); border-bottom: 1px solid var(--color-rule);"></div>
+					<div class="swatch__meta">
+						<div class="swatch__name">Paper</div>
+						<div class="swatch__hex">#F7F3ED</div>
+					</div>
+				</div>
+				<div class="swatch">
+					<div class="swatch__chip" style="background-color: var(--color-slate);"></div>
+					<div class="swatch__meta">
+						<div class="swatch__name">Slate</div>
+						<div class="swatch__hex">#5A5A55</div>
+					</div>
+				</div>
+				<div class="swatch">
+					<div class="swatch__chip" style="background-color: var(--color-honey);"></div>
+					<div class="swatch__meta">
+						<div class="swatch__name">Honey</div>
+						<div class="swatch__hex">#D69A3C</div>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- ============== TYPOGRAPHY ============== -->
+		<section class="section">
+			<div class="section__label">02 — Type</div>
+			<h2 class="section__heading">Typography</h2>
+
+			<div class="type-spec">
+				<div class="type-spec__label">H1 · Fraunces 40</div>
+				<div class="type-spec__sample">
+					<h1>Spend more time with your people</h1>
+				</div>
+
+				<div class="type-spec__label">H2 · Fraunces 28</div>
+				<div class="type-spec__sample">
+					<h2>How Perihelion works</h2>
+				</div>
+
+				<div class="type-spec__label">H3 · Fraunces 20</div>
+				<div class="type-spec__sample">
+					<h3>Three commitment tiers</h3>
+				</div>
+
+				<div class="type-spec__label">Body · Inter 16</div>
+				<div class="type-spec__sample">
+					<p>Subscribe to the people whose plans you want to hear about, and they can post a quick "anyone want to come?" without needing to text everyone individually. The default is no — so saying yes is real, and saying nothing is fine.</p>
+				</div>
+
+				<div class="type-spec__label">Quote · Fraunces italic</div>
+				<div class="type-spec__sample">
+					<blockquote>Part of their job as a company that sells things is to get you out doing stuff, not further absorbed into what they're doing.</blockquote>
+				</div>
+
+				<div class="type-spec__label">Caption · Inter 14</div>
+				<div class="type-spec__sample">
+					<p class="caption">Posted Tuesday · 5 going · 2 maybe</p>
+				</div>
+			</div>
+		</section>
+
+		<!-- ============== SAMPLE PASSAGE ============== -->
+		<section class="section">
+			<div class="section__label">03 — Voice in context</div>
+			<h2 class="section__heading">Sample passage</h2>
+
+			<div class="passage">
+				<h2>The joy of connecting with near strangers</h2>
+
+				<p class="lead">Perihelion is a small tool for the friend group you already have, and the acquaintances you'd like to spend more time with.</p>
+
+				<p>It works like this: someone in your circle posts a thing they're doing — a Saturday hike, a casual dinner, an afternoon at the museum. People who've subscribed to them get a heads-up. Anyone interested says they're going. Anyone not interested doesn't have to say anything.</p>
+
+				<p>That's the whole product. There's no feed to scroll. There are no notifications begging you to come back. When you're done planning a hangout, you close the tab and go have it.</p>
+			</div>
+		</section>
+
+		<!-- ============== ACTIVITY CARD ============== -->
+		<section class="section">
+			<div class="section__label">04 — Component</div>
+			<h2 class="section__heading">Activity cards</h2>
+
+			<div class="cards">
+				<article class="card">
+					<p class="card__poster">Posted by Maya</p>
+					<h3 class="card__title">Saturday morning hike at Cowles Mountain</h3>
+					<span class="card__tier card__tier--going">I'm going — join me</span>
+					<div class="card__details">
+						<div><strong>Saturday, May 9</strong> · 8:00 AM</div>
+						<div>Trailhead, Big Rock Park entrance</div>
+					</div>
+					<p class="card__description">Quick out-and-back, about two hours total. Bring water and shoes you don't mind getting dusty. Coffee at Lestat's after if anyone's up for it.</p>
+					<div class="card__footer">
+						<span class="card__count">3 going · 1 maybe</span>
+						<a class="btn btn--primary btn--small" href="#">I'm in</a>
+					</div>
+				</article>
+
+				<article class="card">
+					<p class="card__poster">Posted by Jordan</p>
+					<h3 class="card__title">Anyone want to check out the new ceramics exhibit?</h3>
+					<span class="card__tier card__tier--idea">Just an idea</span>
+					<div class="card__details">
+						<div><strong>Sometime next weekend</strong></div>
+						<div>SDMA, Balboa Park</div>
+					</div>
+					<p class="card__description">No firm time yet — just floating it. Reply if you'd be interested and we'll figure out what works for the people who are in.</p>
+					<div class="card__footer">
+						<span class="card__count">2 maybe</span>
+						<a class="btn btn--ghost btn--small" href="#">Maybe</a>
+					</div>
+				</article>
+			</div>
+		</section>
+
+		<!-- ============== BUTTONS ============== -->
+		<section class="section">
+			<div class="section__label">05 — UI</div>
+			<h2 class="section__heading">Buttons &amp; states</h2>
+
+			<div style="display: flex; gap: var(--space-md); align-items: center; flex-wrap: wrap;">
+				<a class="btn btn--primary" href="#">Subscribe to Maya</a>
+				<a class="btn btn--ghost" href="#">View profile</a>
+				<a class="btn btn--primary btn--small" href="#">I'm in</a>
+				<a class="btn btn--ghost btn--small" href="#">Maybe</a>
+			</div>
+
+			<p style="margin-top: var(--space-md); color: var(--color-slate); font-size: var(--text-xs); max-width: 32em;">
+				Buttons feel like ink, not like LED. The Sienna primary is the loudest the design ever gets — Honey is reserved for momentary states (unread invitations, single primary CTA on a page).
+			</p>
+		</section>
+
+		<footer class="tile__note">
+			<strong>About this tile.</strong> This is a style tile, not a website mockup. It demonstrates the visual direction in practice — color, type, spacing, materiality, and one core component — using real Perihelion language. The web theme will be built from this direction in Phase 5 by the <code>theme-builder</code> skill, with the design system formalized into <code>theme.json</code> tokens by <code>design-system-generator</code> in Phase 4. Open the page at 1200px wide for the intended composition.
+		</footer>
+
+	</main>
+</body>
+</html>
