@@ -25,6 +25,7 @@ class Orbit_Routes {
 		add_action( 'template_redirect', array( __CLASS__, 'handle_routes' ) );
 		add_action( 'wp_head', array( __CLASS__, 'add_noindex_meta' ) );
 		add_filter( 'robots_txt', array( __CLASS__, 'modify_robots_txt' ), 10, 2 );
+		add_filter( 'login_redirect', array( __CLASS__, 'redirect_after_login' ), 10, 3 );
 
 		// Force the active theme's `page-app` template (when it provides
 		// one) for Orbit virtual pages — activity detail, profile pages,
@@ -51,6 +52,16 @@ class Orbit_Routes {
 			return;
 		}
 
+		// Bail for Orbit virtual pages (profile, activity, unsubscribe).
+		// At template_redirect priority 5 the rewrite has set their query
+		// vars, but `handle_routes()` (priority 10) hasn't yet replaced the
+		// main query — so `is_front_page()` still reports true on these
+		// URLs, which would incorrectly redirect logged-in users away from
+		// every Orbit virtual page.
+		if ( self::is_app_route() ) {
+			return;
+		}
+
 		if ( ! is_front_page() ) {
 			return;
 		}
@@ -58,6 +69,42 @@ class Orbit_Routes {
 		nocache_headers();
 		wp_safe_redirect( home_url( '/dashboard/' ), 303 );
 		exit;
+	}
+
+	/**
+	 * After a successful login, send Orbit users to /dashboard/ instead of
+	 * the WordPress admin. Admin-role users land in /wp-admin/ by default,
+	 * which is wrong for a forward-facing app — they want their dashboard.
+	 *
+	 * Honors any explicit `redirect_to` the login form already passed
+	 * through (e.g. when login was reached from an interstitial page that
+	 * wants the user back where they were).
+	 *
+	 * @param string           $redirect_to           URL the user is about to be redirected to.
+	 * @param string           $requested_redirect_to URL the user requested via redirect_to (often empty).
+	 * @param WP_User|WP_Error $user                  Logged-in user, or error.
+	 * @return string Final redirect URL.
+	 */
+	public static function redirect_after_login( $redirect_to, $requested_redirect_to, $user ) {
+		if ( is_wp_error( $user ) || ! $user instanceof WP_User ) {
+			return $redirect_to;
+		}
+
+		$dashboard_url = home_url( '/dashboard/' );
+
+		// Honor an explicit non-admin `redirect_to`, but validate it locally
+		// rather than relying on the downstream `wp_safe_redirect()` host
+		// check. `wp_validate_redirect()` enforces the `allowed_redirect_hosts`
+		// allowlist and returns the dashboard fallback for anything off-site,
+		// malformed, or empty — defense in depth regardless of where the
+		// redirect ultimately fires. Admin-default `redirect_to` values fall
+		// through to the dashboard; admin-role users wanting wp-admin are an
+		// edge case Orbit doesn't optimize for.
+		if ( $requested_redirect_to && 0 !== strpos( $requested_redirect_to, admin_url() ) ) {
+			return wp_validate_redirect( $requested_redirect_to, $dashboard_url );
+		}
+
+		return $dashboard_url;
 	}
 
 	/**

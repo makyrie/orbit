@@ -28,6 +28,7 @@ tests/wp-tests-config.php
 # Local tooling state
 .lattice/
 .local
+.playwright-mcp/
 
 # IDE
 .idea/
