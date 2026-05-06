@@ -204,7 +204,7 @@ class Orbit_Shortcodes {
 			if ( $is_mine ) {
 				echo '<span class="orbit-poster-name orbit-poster-name--mine">' . esc_html__( 'You', 'orbit' ) . '</span>';
 			} elseif ( $profile ) {
-				echo '<span class="orbit-poster-name">' . esc_html( $profile->display_name ) . '</span>';
+				echo '<a class="orbit-poster-name" href="' . esc_url( home_url( '/@' . $profile->slug ) ) . '">' . esc_html( $profile->display_name ) . '</a>';
 			}
 
 			echo '<span class="orbit-tier-badge orbit-tier-' . esc_attr( $activity->tier ) . '">' . esc_html( $tier_label ) . '</span>';
@@ -217,6 +217,8 @@ class Orbit_Shortcodes {
 
 			if ( $activity->date_time ) {
 				echo '<p class="orbit-activity-date">' . esc_html( self::format_datetime( $activity->date_time ) ) . '</p>';
+			} else {
+				echo '<p class="orbit-activity-date orbit-activity-date--undated">' . esc_html__( 'No date set', 'orbit' ) . '</p>';
 			}
 
 			if ( $activity->location_name ) {
@@ -447,31 +449,57 @@ class Orbit_Shortcodes {
 		echo '<div class="orbit-my-subscriptions">';
 		echo '<h1>' . esc_html__( 'My Subscriptions', 'orbit' ) . '</h1>';
 
+		echo '<p class="orbit-page-intro">' . esc_html__( "People you've subscribed to. They have to approve you before their activities show up on your dashboard.", 'orbit' ) . '</p>';
+
 		if ( empty( $all_subs ) ) {
-			echo '<p>' . esc_html__( 'You are not subscribed to anyone yet.', 'orbit' ) . '</p>';
+			echo '<p>' . esc_html__( "You aren't subscribed to anyone yet. To subscribe to someone, ask them for their share link.", 'orbit' ) . '</p>';
 		} else {
+			$approved_count = count( $subscriptions );
+			$pending_count  = count( $pending_subs );
+
+			echo '<p class="orbit-table-summary">';
+			if ( $approved_count && $pending_count ) {
+				echo esc_html( sprintf(
+					/* translators: 1: approved count, 2: pending count */
+					_x( '%1$d approved · %2$d pending', 'subscription counts', 'orbit' ),
+					$approved_count,
+					$pending_count
+				) );
+			} elseif ( $approved_count ) {
+				echo esc_html( sprintf( _n( '%d approved', '%d approved', $approved_count, 'orbit' ), $approved_count ) );
+			} else {
+				echo esc_html( sprintf( _n( '%d pending', '%d pending', $pending_count, 'orbit' ), $pending_count ) );
+			}
+			echo '</p>';
+
 			// Batch-load profiles.
 			$profile_ids  = array_unique( array_map( function ( $s ) {
 				return (int) $s->profile_id;
 			}, $all_subs ) );
 			$profiles_map = Orbit_Profile::get_by_ids( $profile_ids );
 
+			$status_labels = array(
+				'approved' => __( 'Approved', 'orbit' ),
+				'pending'  => __( 'Pending', 'orbit' ),
+			);
+
 			echo '<table class="orbit-table">';
 			echo '<thead><tr>';
 			echo '<th>' . esc_html__( 'Poster', 'orbit' ) . '</th>';
 			echo '<th>' . esc_html__( 'Status', 'orbit' ) . '</th>';
 			echo '<th>' . esc_html__( 'Since', 'orbit' ) . '</th>';
-			echo '<th></th>';
+			echo '<th><span class="screen-reader-text">' . esc_html__( 'Actions', 'orbit' ) . '</span></th>';
 			echo '</tr></thead><tbody>';
 
 			foreach ( $all_subs as $sub ) {
-				$profile = isset( $profiles_map[ (int) $sub->profile_id ] ) ? $profiles_map[ (int) $sub->profile_id ] : null;
-				$name    = $profile ? $profile->display_name : __( 'Unknown', 'orbit' );
-				$url     = $profile ? home_url( '/@' . $profile->slug ) : '#';
+				$profile      = isset( $profiles_map[ (int) $sub->profile_id ] ) ? $profiles_map[ (int) $sub->profile_id ] : null;
+				$name         = $profile ? $profile->display_name : __( 'Unknown', 'orbit' );
+				$url          = $profile ? home_url( '/@' . $profile->slug ) : '#';
+				$status_label = $status_labels[ $sub->status ] ?? ucfirst( $sub->status );
 
 				echo '<tr>';
 				echo '<td><a href="' . esc_url( $url ) . '">' . esc_html( $name ) . '</a></td>';
-				echo '<td>' . esc_html( $sub->status ) . '</td>';
+				echo '<td><span class="orbit-status-badge orbit-status-' . esc_attr( $sub->status ) . '">' . esc_html( $status_label ) . '</span></td>';
 				echo '<td>' . esc_html( self::format_datetime( $sub->created_at, 'M j, Y' ) ) . '</td>';
 				echo '<td>';
 
@@ -601,22 +629,32 @@ class Orbit_Shortcodes {
 
 		ob_start();
 
+		$tier_labels       = Orbit_Activity::get_tier_labels();
+		$tier_descriptions = Orbit_Activity::get_tier_descriptions();
+		$default_tier      = 3;
+
 		echo '<div class="orbit-new-activity">';
 		echo '<h1>' . esc_html__( 'New Activity', 'orbit' ) . '</h1>';
+		echo '<p class="orbit-form-required-note">' . wp_kses(
+			__( 'Fields marked with <span class="orbit-required-mark">*</span> are required.', 'orbit' ),
+			array( 'span' => array( 'class' => array() ) )
+		) . '</p>';
 		echo '<form method="post" class="orbit-form" data-orbit-api="activities" data-profile-id="' . esc_attr( $profile->id ) . '">';
 
 		echo '<div class="orbit-form-group">';
-		echo '<label for="orbit-title">' . esc_html__( 'Title', 'orbit' ) . '</label>';
+		echo '<label for="orbit-title">' . esc_html__( 'Title', 'orbit' ) . ' <span class="orbit-required-mark" aria-hidden="true">*</span></label>';
 		echo '<input type="text" id="orbit-title" name="title" maxlength="300" required>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
-		echo '<label for="orbit-tier">' . esc_html__( 'Commitment Level', 'orbit' ) . '</label>';
-		echo '<select id="orbit-tier" name="tier" required>';
-		echo '<option value="1">' . esc_html__( 'Just an idea', 'orbit' ) . '</option>';
-		echo '<option value="2">' . esc_html__( "I'll go if you will", 'orbit' ) . '</option>';
-		echo '<option value="3" selected>' . esc_html__( "I'm going — join me", 'orbit' ) . '</option>';
+		echo '<label for="orbit-tier">' . esc_html__( 'Commitment Level', 'orbit' ) . ' <span class="orbit-required-mark" aria-hidden="true">*</span></label>';
+		echo '<select id="orbit-tier" name="tier" required data-orbit-tier-select>';
+		foreach ( $tier_labels as $tier_value => $tier_label ) {
+			$selected = $tier_value === $default_tier ? ' selected' : '';
+			echo '<option value="' . esc_attr( $tier_value ) . '" data-tier-description="' . esc_attr( $tier_descriptions[ $tier_value ] ?? '' ) . '"' . $selected . '>' . esc_html( $tier_label ) . '</option>';
+		}
 		echo '</select>';
+		echo '<p class="orbit-help" data-orbit-tier-description>' . esc_html( $tier_descriptions[ $default_tier ] ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
@@ -633,23 +671,26 @@ class Orbit_Shortcodes {
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-url">' . esc_html__( 'Link', 'orbit' ) . '</label>';
 		echo '<input type="url" id="orbit-url" name="url" placeholder="' . esc_attr__( 'https://example.com/event-page', 'orbit' ) . '">';
-		echo '<p class="orbit-help">' . esc_html__( 'Link to an external event page with more details', 'orbit' ) . '</p>';
+		echo '<p class="orbit-help">' . esc_html__( 'Link to an external event page with more details.', 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-location-name">' . esc_html__( 'Location Name', 'orbit' ) . '</label>';
 		echo '<input type="text" id="orbit-location-name" name="location_name" maxlength="300">';
+		echo '<p class="orbit-help">' . esc_html__( 'A short name everyone will recognize, like "Dolores Park" or "the usual coffee place".', 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-location-address">' . esc_html__( 'Location Address', 'orbit' ) . '</label>';
 		echo '<textarea id="orbit-location-address" name="location_address" rows="2"></textarea>';
+		echo '<p class="orbit-help">' . esc_html__( 'Hidden from non-subscribers — only your approved subscribers see this.', 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-date-time">' . esc_html__( 'Date & Time', 'orbit' ) . '</label>';
 		echo '<input type="datetime-local" id="orbit-date-time" name="date_time">';
-		echo '<label><input type="checkbox" name="date_flexible" value="1"> ' . esc_html__( 'Date is approximate', 'orbit' ) . '</label>';
+		echo '<label class="orbit-checkbox-label"><input type="checkbox" name="date_flexible" value="1"> ' . esc_html__( 'Date is approximate', 'orbit' ) . '</label>';
+		echo '<p class="orbit-help">' . esc_html__( "Tick if the date is a rough plan rather than a fixed time. Subscribers will see it as flexible so they don't expect it to be locked in.", 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
@@ -659,9 +700,13 @@ class Orbit_Shortcodes {
 		echo '<option value="names">' . esc_html__( 'Show names', 'orbit' ) . '</option>';
 		echo '<option value="none">' . esc_html__( 'Hide', 'orbit' ) . '</option>';
 		echo '</select>';
+		echo '<p class="orbit-help">' . esc_html__( 'How much do other subscribers see about who has responded?', 'orbit' ) . '</p>';
 		echo '</div>';
 
+		echo '<div class="orbit-form-actions">';
 		echo '<button type="submit" class="orbit-btn">' . esc_html__( 'Create Activity', 'orbit' ) . '</button>';
+		echo ' <a class="orbit-btn-link" href="' . esc_url( home_url( '/manage/' ) ) . '">' . esc_html__( '← Cancel and go back', 'orbit' ) . '</a>';
+		echo '</div>';
 		echo '</form>';
 		echo '</div>';
 
@@ -699,13 +744,31 @@ class Orbit_Shortcodes {
 
 		ob_start();
 
+		$tier_labels       = Orbit_Activity::get_tier_labels();
+		$tier_label        = $tier_labels[ $activity->tier ] ?? '';
+		$show_attendees_labels = array(
+			'count' => __( 'Show count', 'orbit' ),
+			'names' => __( 'Show names', 'orbit' ),
+			'none'  => __( 'Hide', 'orbit' ),
+		);
+
 		echo '<div class="orbit-edit-activity">';
 		echo '<h1>' . esc_html__( 'Edit Activity', 'orbit' ) . '</h1>';
+		echo '<p class="orbit-form-required-note">' . wp_kses(
+			__( 'Fields marked with <span class="orbit-required-mark">*</span> are required.', 'orbit' ),
+			array( 'span' => array( 'class' => array() ) )
+		) . '</p>';
 		echo '<form method="post" class="orbit-form" data-orbit-api="activities/' . esc_attr( $activity_id ) . '" data-method="PATCH">';
 
 		echo '<div class="orbit-form-group">';
-		echo '<label for="orbit-title">' . esc_html__( 'Title', 'orbit' ) . '</label>';
+		echo '<label for="orbit-title">' . esc_html__( 'Title', 'orbit' ) . ' <span class="orbit-required-mark" aria-hidden="true">*</span></label>';
 		echo '<input type="text" id="orbit-title" name="title" value="' . esc_attr( $activity->title ) . '" maxlength="300" required>';
+		echo '</div>';
+
+		echo '<div class="orbit-form-group">';
+		echo '<label>' . esc_html__( 'Commitment Level', 'orbit' ) . '</label>';
+		echo '<p class="orbit-form-static-value">' . esc_html( $tier_label ) . '</p>';
+		echo '<p class="orbit-help">' . esc_html__( "Commitment level can't be changed after posting — it's tied to how subscribers were notified. Create a new activity if you need a different level.", 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
@@ -716,21 +779,25 @@ class Orbit_Shortcodes {
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-audience">' . esc_html__( "Who's this for?", 'orbit' ) . '</label>';
 		echo '<textarea id="orbit-audience" name="audience" rows="2" placeholder="' . esc_attr__( 'e.g. Beginners welcome, or anyone who likes long walks', 'orbit' ) . '">' . esc_textarea( $activity->audience ) . '</textarea>';
+		echo '<p class="orbit-help">' . esc_html__( 'Help people decide if this is right for them.', 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-url">' . esc_html__( 'Link', 'orbit' ) . '</label>';
 		echo '<input type="url" id="orbit-url" name="url" value="' . esc_attr( $activity->url ) . '" placeholder="' . esc_attr__( 'https://example.com/event-page', 'orbit' ) . '">';
+		echo '<p class="orbit-help">' . esc_html__( 'Link to an external event page with more details.', 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-location-name">' . esc_html__( 'Location Name', 'orbit' ) . '</label>';
 		echo '<input type="text" id="orbit-location-name" name="location_name" value="' . esc_attr( $activity->location_name ) . '" maxlength="300">';
+		echo '<p class="orbit-help">' . esc_html__( 'A short name everyone will recognize, like "Dolores Park" or "the usual coffee place".', 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-location-address">' . esc_html__( 'Location Address', 'orbit' ) . '</label>';
 		echo '<textarea id="orbit-location-address" name="location_address" rows="2">' . esc_textarea( $activity->location_address ) . '</textarea>';
+		echo '<p class="orbit-help">' . esc_html__( 'Hidden from non-subscribers — only your approved subscribers see this.', 'orbit' ) . '</p>';
 		echo '</div>';
 
 		$date_value = $activity->date_time ? date( 'Y-m-d\TH:i', strtotime( $activity->date_time ) ) : '';
@@ -738,30 +805,40 @@ class Orbit_Shortcodes {
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-date-time">' . esc_html__( 'Date & Time', 'orbit' ) . '</label>';
 		echo '<input type="datetime-local" id="orbit-date-time" name="date_time" value="' . esc_attr( $date_value ) . '">';
-		echo '<label><input type="checkbox" name="date_flexible" value="1" ' . checked( $activity->date_flexible, 1, false ) . '> ' . esc_html__( 'Date is approximate', 'orbit' ) . '</label>';
+		echo '<label class="orbit-checkbox-label"><input type="checkbox" name="date_flexible" value="1" ' . checked( $activity->date_flexible, 1, false ) . '> ' . esc_html__( 'Date is approximate', 'orbit' ) . '</label>';
+		echo '<p class="orbit-help">' . esc_html__( "Tick if the date is a rough plan rather than a fixed time. Subscribers will see it as flexible so they don't expect it to be locked in.", 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-show-attendees">' . esc_html__( 'Show Attendees', 'orbit' ) . '</label>';
 		echo '<select id="orbit-show-attendees" name="show_attendees">';
 
-		foreach ( array( 'count', 'names', 'none' ) as $option ) {
+		foreach ( $show_attendees_labels as $option => $label ) {
 			$selected = selected( $activity->show_attendees, $option, false );
-			echo '<option value="' . esc_attr( $option ) . '" ' . $selected . '>' . esc_html( ucfirst( $option ) ) . '</option>';
+			echo '<option value="' . esc_attr( $option ) . '" ' . $selected . '>' . esc_html( $label ) . '</option>';
 		}
 
 		echo '</select>';
+		echo '<p class="orbit-help">' . esc_html__( 'How much do other subscribers see about who has responded?', 'orbit' ) . '</p>';
 		echo '</div>';
 
+		echo '<div class="orbit-form-actions">';
 		echo '<button type="submit" class="orbit-btn">' . esc_html__( 'Update Activity', 'orbit' ) . '</button>';
-
-		if ( 'active' === $activity->status ) {
-			echo ' <button type="button" class="orbit-btn orbit-btn-danger" data-orbit-cancel="' . esc_attr( $activity_id ) . '">';
-			echo esc_html__( 'Cancel Activity', 'orbit' );
-			echo '</button>';
-		}
+		echo ' <a class="orbit-btn-link" href="' . esc_url( home_url( '/manage/' ) ) . '">' . esc_html__( '← Back to Manage', 'orbit' ) . '</a>';
+		echo '</div>';
 
 		echo '</form>';
+
+		if ( 'active' === $activity->status ) {
+			echo '<div class="orbit-danger-zone">';
+			echo '<h2>' . esc_html__( 'Danger zone', 'orbit' ) . '</h2>';
+			echo '<p>' . esc_html__( 'Cancelling this activity tells subscribers it is off. They will see it marked Cancelled on their dashboards. This cannot be undone.', 'orbit' ) . '</p>';
+			echo '<button type="button" class="orbit-btn orbit-btn-danger orbit-btn-outline" data-orbit-cancel="' . esc_attr( $activity_id ) . '">';
+			echo esc_html__( 'Cancel this activity', 'orbit' );
+			echo '</button>';
+			echo '</div>';
+		}
+
 		echo '</div>';
 
 		return ob_get_clean();
@@ -796,6 +873,8 @@ class Orbit_Shortcodes {
 		echo '<div class="orbit-subscribers">';
 		echo '<h1>' . esc_html__( 'Subscribers', 'orbit' ) . '</h1>';
 
+		echo '<p class="orbit-page-intro">' . esc_html__( "People who've subscribed to your activities. Approve or deny pending requests; remove approved subscribers any time.", 'orbit' ) . '</p>';
+
 		if ( empty( $subscriptions ) ) {
 			echo '<p>' . esc_html__( 'No subscribers yet. Share your link to invite people.', 'orbit' ) . '</p>';
 
@@ -807,6 +886,33 @@ class Orbit_Shortcodes {
 			$user_ids = array_map( function ( $s ) { return (int) $s->user_id; }, $subscriptions );
 			cache_users( $user_ids );
 
+			$counts = array( 'approved' => 0, 'pending' => 0 );
+			foreach ( $subscriptions as $sub ) {
+				if ( isset( $counts[ $sub->status ] ) ) {
+					$counts[ $sub->status ]++;
+				}
+			}
+
+			echo '<p class="orbit-table-summary">';
+			if ( $counts['approved'] && $counts['pending'] ) {
+				echo esc_html( sprintf(
+					/* translators: 1: approved count, 2: pending count */
+					_x( '%1$d approved · %2$d pending', 'subscriber counts', 'orbit' ),
+					$counts['approved'],
+					$counts['pending']
+				) );
+			} elseif ( $counts['approved'] ) {
+				echo esc_html( sprintf( _n( '%d approved', '%d approved', $counts['approved'], 'orbit' ), $counts['approved'] ) );
+			} elseif ( $counts['pending'] ) {
+				echo esc_html( sprintf( _n( '%d pending', '%d pending', $counts['pending'], 'orbit' ), $counts['pending'] ) );
+			}
+			echo '</p>';
+
+			$status_labels = array(
+				'approved' => __( 'Approved', 'orbit' ),
+				'pending'  => __( 'Pending', 'orbit' ),
+			);
+
 			echo '<table class="orbit-table">';
 			echo '<thead><tr>';
 			echo '<th>' . esc_html__( 'Name', 'orbit' ) . '</th>';
@@ -817,12 +923,13 @@ class Orbit_Shortcodes {
 			echo '</tr></thead><tbody>';
 
 			foreach ( $subscriptions as $sub ) {
-				$user = get_userdata( $sub->user_id );
-				$name = $user ? $user->display_name : __( 'Unknown', 'orbit' );
+				$user         = get_userdata( $sub->user_id );
+				$name         = $user ? $user->display_name : __( 'Unknown', 'orbit' );
+				$status_label = $status_labels[ $sub->status ] ?? ucfirst( $sub->status );
 
 				echo '<tr>';
 				echo '<td>' . esc_html( $name ) . '</td>';
-				echo '<td>' . esc_html( $sub->status ) . '</td>';
+				echo '<td><span class="orbit-status-badge orbit-status-' . esc_attr( $sub->status ) . '">' . esc_html( $status_label ) . '</span></td>';
 				echo '<td>' . esc_html( $sub->connection_note ? $sub->connection_note : '—' ) . '</td>';
 				echo '<td>' . esc_html( self::format_datetime( $sub->created_at, 'M j, Y' ) ) . '</td>';
 				echo '<td>';
@@ -1023,6 +1130,8 @@ class Orbit_Shortcodes {
 
 				if ( $activity->date_time ) {
 					echo '<p class="orbit-activity-date">' . esc_html( self::format_datetime( $activity->date_time ) ) . '</p>';
+				} else {
+					echo '<p class="orbit-activity-date orbit-activity-date--undated">' . esc_html__( 'No date set', 'orbit' ) . '</p>';
 				}
 
 				if ( $activity->location_name ) {

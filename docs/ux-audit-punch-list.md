@@ -105,9 +105,9 @@ PHP patterns load lazily at render time (in `WP_Block_Patterns_Registry::get_con
 
 ### Empty / approval states
 
-- [ ] **My Subscriptions has zero introductory copy.** Just a table. Add: "People you've subscribed to. They have to approve you before their activities show up on your dashboard."
-- [ ] **Confirm pending subscriptions are visible from My Subscriptions.** Test fixture didn't have a pending sub to verify.
-- [ ] **Status `approved` lowercase plain text** on My Subscriptions and Subscribers. Use the `orbit-status-badge` treatment used on Manage Activities.
+- [x] **My Subscriptions has zero introductory copy.** Just a table. Add: "People you've subscribed to. They have to approve you before their activities show up on your dashboard."
+- [x] **Confirm pending subscriptions are visible from My Subscriptions.** Now merged with approved subs in a single table with status badges.
+- [x] **Status `approved` lowercase plain text** on My Subscriptions and Subscribers. Use the `orbit-status-badge` treatment used on Manage Activities.
 
 ### Subscribe form (anonymous via shared link)
 
@@ -116,14 +116,14 @@ PHP patterns load lazily at render time (in `WP_Block_Patterns_Registry::get_con
 
 ### New / Edit Activity
 
-- [ ] **No required-field markers.** Title is required but unmarked. Use `*` or "(required)".
-- [ ] **`Show Attendees` label inconsistency** between create ("Show count" / "Show names" / "Hide") and edit ("Count" / "Names" / "None"). Same control, different copy. Pick one.
-- [ ] **Tier (Commitment Level) is missing from the edit form.** If intentional (because tier drives notification routing), add inline note: "Commitment level can't be changed after posting — create a new activity instead." If unintentional, add the field.
-- [ ] **"Cancel Activity" sits next to "Update Activity"**, both in primary-button styling. Risk of mis-click. Visually demote Cancel (link or outlined-danger style) and add a confirmation dialog.
-- [ ] **No tier descriptions inline.** Add a one-line description below the dropdown that updates with selection.
-- [ ] **`Date is approximate` checkbox has no explanation.** Document what it changes for invitees.
-- [ ] **`Location Address` purpose isn't obvious.** Add help: "Hidden from non-subscribers — only your approved followers see this."
-- [ ] **No "Cancel/Back" affordance on either form.** Browser-back works, but a "← Back to Manage" link would be polite.
+- [x] **No required-field markers.** Title is required but unmarked. Use `*` or "(required)".
+- [x] **`Show Attendees` label inconsistency** between create ("Show count" / "Show names" / "Hide") and edit ("Count" / "Names" / "None"). Same control, different copy. Pick one.
+- [x] **Tier (Commitment Level) is missing from the edit form.** Now shown as a read-only static value with a note explaining why it's not editable.
+- [x] **"Cancel Activity" sits next to "Update Activity"**, both in primary-button styling. Demoted to a "Danger zone" section below the form with an outline-style button. (Confirmation dialog is on the existing JS handler.)
+- [x] **No tier descriptions inline.** Added one-line description below the dropdown that updates on tier change via JS.
+- [x] **`Date is approximate` checkbox has no explanation.** Help text added.
+- [x] **`Location Address` purpose isn't obvious.** Help added: "Hidden from non-subscribers — only your approved subscribers see this."
+- [x] **No "Cancel/Back" affordance on either form.** "← Cancel and go back" / "← Back to Manage" link added beside the submit button.
 
 ### Settings
 
@@ -134,8 +134,8 @@ PHP patterns load lazily at render time (in `WP_Block_Patterns_Registry::get_con
 
 ### Dashboard
 
-- [ ] **Poster name on cards is plain text.** "Sarah K" should link to `/@sarah-k/`. Currently only the activity title is linked.
-- [ ] **Undated tier-1 cards look empty.** Either show "(no date set)" placeholder or move undated activities to a separate "Ideas" section under the upcoming list.
+- [x] **Poster name on cards is plain text.** "Sarah K" should link to `/@sarah-k/`. Currently only the activity title is linked.
+- [x] **Undated tier-1 cards look empty.** Either show "(no date set)" placeholder or move undated activities to a separate "Ideas" section under the upcoming list.
 - [ ] **Stale "active" activities with past dates** are showing on the dashboard. Confirm `mark_past()` Action Scheduler job is registered and running.
 
 ### Profile (public)

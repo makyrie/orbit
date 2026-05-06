@@ -512,4 +512,32 @@
 				button.disabled = false;
 			} );
 	} );
+
+	/**
+	 * Tier-description swap on the New Activity form. Each <option> in the
+	 * tier select carries a `data-tier-description` with the explanatory
+	 * help text for that commitment level. Updating the matching <p> next
+	 * to the select keeps the description honest about what the user just
+	 * chose without reloading the page.
+	 */
+	document.addEventListener( 'change', function ( e ) {
+		var select = e.target.closest( '[data-orbit-tier-select]' );
+		if ( ! select ) {
+			return;
+		}
+
+		var form = select.closest( 'form' );
+		if ( ! form ) {
+			return;
+		}
+
+		var help = form.querySelector( '[data-orbit-tier-description]' );
+		if ( ! help ) {
+			return;
+		}
+
+		var option = select.options[ select.selectedIndex ];
+		var description = option ? option.getAttribute( 'data-tier-description' ) : '';
+		help.textContent = description || '';
+	} );
 } )();

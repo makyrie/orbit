@@ -425,6 +425,20 @@ class Orbit_Activity {
 	}
 
 	/**
+	 * Get one-line descriptions for each tier — used to clarify the
+	 * commitment level dropdown on the create activity form.
+	 *
+	 * @return array Associative array of tier number => description string.
+	 */
+	public static function get_tier_descriptions() {
+		return array(
+			1 => __( 'An open thought. Subscribers see it on their dashboard but get no notification.', 'orbit' ),
+			2 => __( "You're interested, but want company before committing. Subscribers get a low-priority alert.", 'orbit' ),
+			3 => __( "You're going for sure. Subscribers who opted in for this tier get a real-time alert.", 'orbit' ),
+		);
+	}
+
+	/**
 	 * Batch update past activities.
 	 *
 	 * Sets status to 'past' for all active activities with date_time in the past.
