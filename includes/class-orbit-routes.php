@@ -51,6 +51,16 @@ class Orbit_Routes {
 			return;
 		}
 
+		// Bail for Orbit virtual pages (profile, activity, unsubscribe).
+		// At template_redirect priority 5 the rewrite has set their query
+		// vars, but `handle_routes()` (priority 10) hasn't yet replaced the
+		// main query — so `is_front_page()` still reports true on these
+		// URLs, which would incorrectly redirect logged-in users away from
+		// every Orbit virtual page.
+		if ( self::is_app_route() ) {
+			return;
+		}
+
 		if ( ! is_front_page() ) {
 			return;
 		}
