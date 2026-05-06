@@ -1154,6 +1154,8 @@ class Orbit_Shortcodes {
 			echo '<div class="orbit-notice orbit-notice-warning">' . esc_html__( 'This activity has been cancelled.', 'orbit' ) . '</div>';
 		}
 
+		echo '<h1 class="orbit-activity-title">' . esc_html( $activity->title ) . '</h1>';
+
 		if ( $profile ) {
 			echo '<p class="orbit-poster-link"><a href="' . esc_url( home_url( '/@' . $profile->slug ) ) . '">';
 			echo esc_html( $profile->display_name ) . '</a></p>';
