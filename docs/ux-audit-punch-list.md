@@ -97,10 +97,10 @@ PHP patterns load lazily at render time (in `WP_Block_Patterns_Registry::get_con
 
 ### Navigation & wayfinding
 
-- [ ] **"Profile" in nav goes to the editor, not your public profile.** No way from anywhere in the app to view your own `/@slug/` page. Add either a "View profile" link on the edit form, or a separate "My page" nav item.
-- [ ] **No "Copy" button on the Share Link** in `Edit Profile`. Long URL with a token — users will mis-select. Add a copy-to-clipboard button beside it. Optional: QR code.
+- [x] **"Profile" in nav goes to the editor, not your public profile.** Added "View your profile →" link in the page intro on Edit Profile. Adding a dedicated nav item still TBD (theme-side).
+- [x] **No "Copy" button on the Share Link** in `Edit Profile`. Added input + Copy button (with "Copied!" confirmation) on Edit Profile and on the Subscribers empty state. (QR code still TBD.)
 - [ ] **"Subscriptions" vs "Subscribers" in nav** — easy to flip. Consider relabeling ("Following" / "Followers" or "I follow" / "Follow me"), or at minimum group them visually.
-- [ ] **Subscribers nav item shows for everyone with `orbit_create_activity`**, but a brand-new poster sees an empty page with no orientation. Either hide until first subscriber arrives, or add empty-state copy: "Once people subscribe to you, they'll show up here for approval."
+- [x] **Subscribers nav item shows for everyone with `orbit_create_activity`**, but a brand-new poster sees an empty page with no orientation. Empty state now explains what to do and shows the share link with a Copy button. (Hiding the nav item entirely is theme-side and a bigger judgment call — leaving it visible.)
 - [ ] **Eight nav items is a lot.** Consider grouping Manage / New Activity under "Activities".
 
 ### Empty / approval states
@@ -111,8 +111,8 @@ PHP patterns load lazily at render time (in `WP_Block_Patterns_Registry::get_con
 
 ### Subscribe form (anonymous via shared link)
 
-- [ ] **No expectation set after submit.** Add: "[Sarah K] will see your subscription request and approve you. You'll get an email when they do."
-- [ ] **"How do you know this person?" has no help text.** Is it required? Public to the poster? Add help: "Just a quick note for [Sarah K] — only they will see this."
+- [x] **No expectation set after submit.** Added intro paragraph explaining what happens after subscribing.
+- [x] **"How do you know this person?" has no help text.** Help added clarifying the note is private to the poster.
 
 ### New / Edit Activity
 
@@ -127,10 +127,10 @@ PHP patterns load lazily at render time (in `WP_Block_Patterns_Registry::get_con
 
 ### Settings
 
-- [ ] **Tier names in Notification Preferences need context.** Add an intro: "How do you want to be alerted about each kind of activity from people you've subscribed to?"
-- [ ] **`Sms` capitalization** — `ucfirst()` produces "Sms" which looks like a typo. Fix to `SMS` everywhere.
-- [ ] **Digest Time has no timezone.** Make explicit (local? site?).
-- [ ] **Phone Number forced top-level**, even for users who'll never use SMS. Consider collapsing or marking optional.
+- [x] **Tier names in Notification Preferences need context.** Intro paragraph added.
+- [x] **`Sms` capitalization** — Replaced `ucfirst()` lookup with an explicit label map. `SMS` everywhere.
+- [x] **Digest Time has no timezone.** "Site timezone: {tz}" help text added.
+- [x] **Phone Number forced top-level**, even for users who'll never use SMS. Marked with an `optional` tag and reworded help text to emphasize SMS is opt-in.
 
 ### Dashboard
 
@@ -140,7 +140,7 @@ PHP patterns load lazily at render time (in `WP_Block_Patterns_Registry::get_con
 
 ### Profile (public)
 
-- [ ] **Owner viewing their own profile** should see "This is your profile — share link / edit", not the Subscribe button. (Currently impossible due to P1 #1, but design for the post-fix state.)
+- [x] **Owner viewing their own profile** should see "This is your profile — share link / edit", not the Subscribe button. Done — owner now sees "This is your profile." with Edit profile / Manage activities buttons in a sienna-rule banner.
 - [ ] **Activity dates show past dates** but cards style as upcoming. Same root cause as the past-sweep issue.
 
 ### Footer
@@ -152,9 +152,9 @@ PHP patterns load lazily at render time (in `WP_Block_Patterns_Registry::get_con
 ## 🔵 P3 — Polish
 
 - [ ] **Manage table response counts** — currently just a number. Could link to who responded.
-- [ ] **"Cancel" in Manage table** — rename to "Cancel activity" to disambiguate.
-- [ ] **No counts/summary** at top of Manage / Subscribers / My Subscriptions ("3 active · 1 cancelled · 2 past").
-- [ ] **Login redirect** sends admin-role users to wp-admin. Add a `login_redirect` filter that sends Orbit users to `/dashboard/` regardless of role.
+- [x] **"Cancel" in Manage table** — renamed to "Cancel activity".
+- [x] **No counts/summary** at top of Manage / Subscribers / My Subscriptions. All three pages now show a `.orbit-table-summary` line above the data.
+- [x] **Login redirect** sends admin-role users to wp-admin. Added `Orbit_Routes::redirect_after_login()` `login_redirect` filter that sends users to `/dashboard/` unless they explicitly requested a non-admin URL.
 - [ ] **Activity card heading hierarchy** — make the H3 the link target rather than `<h3><a>` nested.
 - [ ] ~~**Date formatting** — consider `Apr 17 · 5:54 PM` compact form.~~ **Keep day of week — worth the space tradeoff. If mobile wraps awkwardly, solve with layout / line breaks / responsive treatment, not by dropping content.**
 - [ ] **No timezone shown** on activity date displays.

@@ -277,6 +277,20 @@ class Orbit_Shortcodes {
 
 		ob_start();
 
+		$method_labels = array(
+			'sms'    => __( 'SMS', 'orbit' ),
+			'email'  => __( 'Email', 'orbit' ),
+			'digest' => __( 'Digest', 'orbit' ),
+			'none'   => __( 'None', 'orbit' ),
+		);
+
+		$wp_timezone        = wp_timezone_string();
+		$digest_tz_label    = sprintf(
+			/* translators: %s: site timezone (e.g. "America/Los_Angeles" or "UTC+1") */
+			__( 'Site timezone: %s', 'orbit' ),
+			$wp_timezone
+		);
+
 		echo '<div class="orbit-settings">';
 
 		echo '<h1>' . esc_html__( 'Settings', 'orbit' ) . '</h1>';
@@ -284,6 +298,7 @@ class Orbit_Shortcodes {
 		echo self::render_phone_verification( $user_id );
 
 		echo '<h2>' . esc_html__( 'Notification Preferences', 'orbit' ) . '</h2>';
+		echo '<p class="orbit-page-intro">' . esc_html__( "How do you want to be alerted about each kind of activity from people you've subscribed to?", 'orbit' ) . '</p>';
 		echo '<form method="post" class="orbit-settings-form" data-orbit-api="preferences">';
 
 		foreach ( array( 1, 2, 3 ) as $tier ) {
@@ -294,9 +309,9 @@ class Orbit_Shortcodes {
 			echo '<label>' . esc_html( $tier_labels[ $tier ] ) . '</label>';
 			echo '<select name="' . esc_attr( $key ) . '">';
 
-			foreach ( array( 'sms', 'email', 'digest', 'none' ) as $method ) {
+			foreach ( $method_labels as $method => $label ) {
 				$selected = selected( $current, $method, false );
-				echo '<option value="' . esc_attr( $method ) . '" ' . $selected . '>' . esc_html( ucfirst( $method ) ) . '</option>';
+				echo '<option value="' . esc_attr( $method ) . '" ' . $selected . '>' . esc_html( $label ) . '</option>';
 			}
 
 			echo '</select>';
@@ -304,16 +319,20 @@ class Orbit_Shortcodes {
 		}
 
 		echo '<div class="orbit-setting-row">';
-		echo '<label>' . esc_html__( 'SMS Daily Cap', 'orbit' ) . '</label>';
+		echo '<label>' . esc_html__( 'SMS daily cap', 'orbit' ) . '</label>';
 		echo '<input type="number" name="sms_daily_cap" value="' . esc_attr( $prefs->sms_daily_cap ) . '" min="0" placeholder="' . esc_attr__( 'No limit', 'orbit' ) . '">';
 		echo '</div>';
+		echo '<p class="orbit-help orbit-help--inset">' . esc_html__( "If you set a daily cap, anything over the limit gets routed to your daily digest instead of an SMS.", 'orbit' ) . '</p>';
 
 		echo '<div class="orbit-setting-row">';
-		echo '<label>' . esc_html__( 'Digest Time', 'orbit' ) . '</label>';
+		echo '<label>' . esc_html__( 'Digest time', 'orbit' ) . '</label>';
 		echo '<input type="time" name="digest_time" value="' . esc_attr( substr( $prefs->digest_time, 0, 5 ) ) . '">';
 		echo '</div>';
+		echo '<p class="orbit-help orbit-help--inset">' . esc_html( $digest_tz_label ) . '</p>';
 
+		echo '<div class="orbit-form-actions">';
 		echo '<button type="submit" class="orbit-btn">' . esc_html__( 'Save Preferences', 'orbit' ) . '</button>';
+		echo '</div>';
 		echo '</form>';
 		echo '</div>';
 
@@ -349,8 +368,8 @@ class Orbit_Shortcodes {
 		ob_start();
 
 		echo '<div class="orbit-phone-verification">';
-		echo '<h2>' . esc_html__( 'Phone Number', 'orbit' ) . '</h2>';
-		echo '<p class="orbit-help">' . esc_html__( 'Required for SMS notifications. We use this only to send activity alerts you opt into.', 'orbit' ) . '</p>';
+		echo '<h2>' . esc_html__( 'Phone Number', 'orbit' ) . ' <span class="orbit-section-tag">' . esc_html__( 'optional', 'orbit' ) . '</span></h2>';
+		echo '<p class="orbit-help">' . esc_html__( "Only needed if you want SMS notifications for any of the tiers below. We use it only to send activity alerts you opt into.", 'orbit' ) . '</p>';
 
 		if ( ! $twilio_configured ) {
 			echo '<div class="orbit-notice orbit-notice-warning">';
@@ -550,9 +569,13 @@ class Orbit_Shortcodes {
 		echo '<div class="orbit-manage">';
 		echo '<h1>' . esc_html__( 'Manage Activities', 'orbit' ) . '</h1>';
 
-		echo '<p><a href="' . esc_url( home_url( '/new-activity/' ) ) . '" class="orbit-btn">';
+		echo '<p class="orbit-page-intro">' . esc_html__( "Everything you've posted, in one place. Edit details, cancel a plan, or post a new activity.", 'orbit' ) . '</p>';
+
+		echo '<div class="orbit-form-actions">';
+		echo '<a href="' . esc_url( home_url( '/new-activity/' ) ) . '" class="orbit-btn">';
 		echo esc_html__( 'New Activity', 'orbit' );
-		echo '</a></p>';
+		echo '</a>';
+		echo '</div>';
 
 		if ( ! empty( $activities ) ) {
 			// Batch-load response counts.
@@ -564,6 +587,28 @@ class Orbit_Shortcodes {
 				'cancelled' => __( 'Cancelled', 'orbit' ),
 				'past'      => __( 'Past', 'orbit' ),
 			);
+
+			$activity_counts = array( 'active' => 0, 'cancelled' => 0, 'past' => 0 );
+			foreach ( $activities as $a ) {
+				if ( isset( $activity_counts[ $a->status ] ) ) {
+					$activity_counts[ $a->status ]++;
+				}
+			}
+
+			$summary_parts = array();
+			if ( $activity_counts['active'] ) {
+				$summary_parts[] = sprintf( _n( '%d active', '%d active', $activity_counts['active'], 'orbit' ), $activity_counts['active'] );
+			}
+			if ( $activity_counts['cancelled'] ) {
+				$summary_parts[] = sprintf( _n( '%d cancelled', '%d cancelled', $activity_counts['cancelled'], 'orbit' ), $activity_counts['cancelled'] );
+			}
+			if ( $activity_counts['past'] ) {
+				$summary_parts[] = sprintf( _n( '%d past', '%d past', $activity_counts['past'], 'orbit' ), $activity_counts['past'] );
+			}
+
+			if ( $summary_parts ) {
+				echo '<p class="orbit-table-summary">' . esc_html( implode( ' · ', $summary_parts ) ) . '</p>';
+			}
 
 			echo '<table class="orbit-table">';
 			echo '<thead><tr>';
@@ -596,7 +641,7 @@ class Orbit_Shortcodes {
 				echo '<td class="orbit-manage__actions">';
 				echo '<a href="' . esc_url( home_url( '/edit-activity/?id=' . $activity->id ) ) . '">' . esc_html__( 'Edit', 'orbit' ) . '</a>';
 				if ( $is_active ) {
-					echo ' <button type="button" class="orbit-link-button" data-orbit-cancel="' . esc_attr( $activity->id ) . '">' . esc_html__( 'Cancel', 'orbit' ) . '</button>';
+					echo ' <button type="button" class="orbit-link-button" data-orbit-cancel="' . esc_attr( $activity->id ) . '">' . esc_html__( 'Cancel activity', 'orbit' ) . '</button>';
 				}
 				echo '</td>';
 				echo '</tr>';
@@ -876,11 +921,16 @@ class Orbit_Shortcodes {
 		echo '<p class="orbit-page-intro">' . esc_html__( "People who've subscribed to your activities. Approve or deny pending requests; remove approved subscribers any time.", 'orbit' ) . '</p>';
 
 		if ( empty( $subscriptions ) ) {
-			echo '<p>' . esc_html__( 'No subscribers yet. Share your link to invite people.', 'orbit' ) . '</p>';
+			echo '<p>' . esc_html__( "No subscribers yet. Send your share link to people you'd like to invite — they'll be able to subscribe with one click and you'll see them here for approval.", 'orbit' ) . '</p>';
 
 			$share_url = home_url( '/@' . $profile->slug . '/subscribe?token=' . $profile->share_token );
-			echo '<p class="orbit-share-link"><strong>' . esc_html__( 'Share link:', 'orbit' ) . '</strong> ';
-			echo '<code>' . esc_html( $share_url ) . '</code></p>';
+			echo '<div class="orbit-form-group">';
+			echo '<label for="orbit-subscribers-share-link">' . esc_html__( 'Your share link', 'orbit' ) . '</label>';
+			echo '<div class="orbit-share-link-row">';
+			echo '<input type="text" id="orbit-subscribers-share-link" class="orbit-share-link-input" value="' . esc_attr( $share_url ) . '" readonly>';
+			echo '<button type="button" class="orbit-btn orbit-btn-sm" data-orbit-copy-target="#orbit-subscribers-share-link" data-orbit-copy-label="' . esc_attr__( 'Copy', 'orbit' ) . '" data-orbit-copy-confirm="' . esc_attr__( 'Copied!', 'orbit' ) . '">' . esc_html__( 'Copy', 'orbit' ) . '</button>';
+			echo '</div>';
+			echo '</div>';
 		} else {
 			// Pre-populate WordPress user cache to avoid N+1 user lookups.
 			$user_ids = array_map( function ( $s ) { return (int) $s->user_id; }, $subscriptions );
@@ -974,36 +1024,57 @@ class Orbit_Shortcodes {
 
 		echo '<div class="orbit-edit-profile">';
 		echo '<h1>' . esc_html__( 'Edit Profile', 'orbit' ) . '</h1>';
+
+		echo '<p class="orbit-page-intro">';
+		echo esc_html__( 'How you appear to subscribers and what your share link points to.', 'orbit' );
+		echo ' <a href="' . esc_url( home_url( '/@' . $profile->slug ) ) . '">';
+		echo esc_html__( 'View your profile →', 'orbit' );
+		echo '</a></p>';
+
+		echo '<p class="orbit-form-required-note">' . wp_kses(
+			__( 'Fields marked with <span class="orbit-required-mark">*</span> are required.', 'orbit' ),
+			array( 'span' => array( 'class' => array() ) )
+		) . '</p>';
+
 		echo '<form method="post" class="orbit-form" data-orbit-api="profiles/' . esc_attr( $profile->id ) . '" data-method="PATCH">';
 
 		echo '<div class="orbit-form-group">';
-		echo '<label for="orbit-display-name">' . esc_html__( 'Display Name', 'orbit' ) . '</label>';
+		echo '<label for="orbit-display-name">' . esc_html__( 'Display Name', 'orbit' ) . ' <span class="orbit-required-mark" aria-hidden="true">*</span></label>';
 		echo '<input type="text" id="orbit-display-name" name="display_name" value="' . esc_attr( $profile->display_name ) . '" required>';
+		echo '<p class="orbit-help">' . esc_html__( "How you'll appear on activity cards and your public profile.", 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
-		echo '<label for="orbit-slug">' . esc_html__( 'URL Slug', 'orbit' ) . '</label>';
+		echo '<label for="orbit-slug">' . esc_html__( 'URL Slug', 'orbit' ) . ' <span class="orbit-required-mark" aria-hidden="true">*</span></label>';
 		echo '<input type="text" id="orbit-slug" name="slug" value="' . esc_attr( $profile->slug ) . '" required>';
-		echo '<p class="orbit-help">' . esc_html( home_url( '/@' . $profile->slug ) ) . '</p>';
+		echo '<p class="orbit-help">' . esc_html__( 'Your profile URL:', 'orbit' ) . ' <code>' . esc_html( home_url( '/@' . $profile->slug ) ) . '</code></p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-bio">' . esc_html__( 'Bio', 'orbit' ) . '</label>';
 		echo '<textarea id="orbit-bio" name="bio" rows="3">' . esc_textarea( $profile->bio ) . '</textarea>';
+		echo '<p class="orbit-help">' . esc_html__( 'A sentence or two so visitors recognize you. Shown on your public profile above your activities.', 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
-		echo '<label><input type="checkbox" name="require_approval" value="1" ' . checked( $profile->require_approval, 1, false ) . '> ';
+		echo '<label class="orbit-checkbox-label"><input type="checkbox" name="require_approval" value="1" ' . checked( $profile->require_approval, 1, false ) . '> ';
 		echo esc_html__( 'Require approval for new subscribers', 'orbit' ) . '</label>';
+		echo '<p class="orbit-help">' . esc_html__( "When ticked, new subscribers wait until you approve them before they can see your activities. Untick to let anyone with your share link subscribe immediately.", 'orbit' ) . '</p>';
 		echo '</div>';
 
 		$share_url = home_url( '/@' . $profile->slug . '/subscribe?token=' . $profile->share_token );
 		echo '<div class="orbit-form-group">';
-		echo '<label>' . esc_html__( 'Share Link', 'orbit' ) . '</label>';
-		echo '<code>' . esc_html( $share_url ) . '</code>';
+		echo '<label for="orbit-share-link">' . esc_html__( 'Share Link', 'orbit' ) . '</label>';
+		echo '<div class="orbit-share-link-row">';
+		echo '<input type="text" id="orbit-share-link" class="orbit-share-link-input" value="' . esc_attr( $share_url ) . '" readonly>';
+		echo '<button type="button" class="orbit-btn orbit-btn-sm" data-orbit-copy-target="#orbit-share-link" data-orbit-copy-label="' . esc_attr__( 'Copy', 'orbit' ) . '" data-orbit-copy-confirm="' . esc_attr__( 'Copied!', 'orbit' ) . '">' . esc_html__( 'Copy', 'orbit' ) . '</button>';
+		echo '</div>';
+		echo '<p class="orbit-help">' . esc_html__( 'Send this link to someone you want as a subscriber. The token in the link is theirs to redeem once.', 'orbit' ) . '</p>';
 		echo '</div>';
 
+		echo '<div class="orbit-form-actions">';
 		echo '<button type="submit" class="orbit-btn">' . esc_html__( 'Save Profile', 'orbit' ) . '</button>';
+		echo '</div>';
 		echo '</form>';
 		echo '</div>';
 
@@ -1089,7 +1160,13 @@ class Orbit_Shortcodes {
 		}
 
 		// Subscribe CTA (not shown to owner or existing subscribers).
-		if ( ! $is_owner && ! $is_approved && ! $is_pending ) {
+		if ( $is_owner ) {
+			echo '<div class="orbit-profile-owner-bar">';
+			echo '<span class="orbit-profile-owner-tag">' . esc_html__( "This is your profile.", 'orbit' ) . '</span> ';
+			echo '<a class="orbit-btn orbit-btn-sm" href="' . esc_url( home_url( '/edit-profile/' ) ) . '">' . esc_html__( 'Edit profile', 'orbit' ) . '</a> ';
+			echo '<a class="orbit-btn orbit-btn-sm" href="' . esc_url( home_url( '/manage/' ) ) . '">' . esc_html__( 'Manage activities', 'orbit' ) . '</a>';
+			echo '</div>';
+		} elseif ( ! $is_approved && ! $is_pending ) {
 			$subscribe_url = home_url( '/@' . $profile->slug . '/subscribe?token=' . $profile->share_token );
 			echo '<p><a href="' . esc_url( $subscribe_url ) . '" class="orbit-btn">';
 			echo esc_html__( 'Subscribe', 'orbit' );
@@ -1201,32 +1278,51 @@ class Orbit_Shortcodes {
 		/* translators: %s: profile display name */
 		echo '<h1>' . esc_html( sprintf( __( 'Subscribe to %s', 'orbit' ), $profile->display_name ) ) . '</h1>';
 
+		echo '<p class="orbit-page-intro">' . esc_html( sprintf(
+			/* translators: %s: profile display name */
+			__( "%s will see your subscription request and approve you. You'll get an email when they do — then their activities will start showing up on your dashboard.", 'orbit' ),
+			$profile->display_name
+		) ) . '</p>';
+
 		echo '<form method="post" class="orbit-form" data-orbit-api="subscribe">';
 		echo '<input type="hidden" name="share_token" value="' . esc_attr( $profile->share_token ) . '">';
 
 		if ( ! is_user_logged_in() ) {
 			echo '<div class="orbit-form-group">';
-			echo '<label for="orbit-name">' . esc_html__( 'Your Name', 'orbit' ) . '</label>';
+			echo '<label for="orbit-name">' . esc_html__( 'Your name', 'orbit' ) . ' <span class="orbit-required-mark" aria-hidden="true">*</span></label>';
 			echo '<input type="text" id="orbit-name" name="display_name" required>';
 			echo '</div>';
 
 			echo '<div class="orbit-form-group">';
-			echo '<label for="orbit-email">' . esc_html__( 'Email', 'orbit' ) . '</label>';
+			echo '<label for="orbit-email">' . esc_html__( 'Email', 'orbit' ) . ' <span class="orbit-required-mark" aria-hidden="true">*</span></label>';
 			echo '<input type="email" id="orbit-email" name="email" required>';
+			echo '<p class="orbit-help">' . esc_html__( 'Used only to send you activity notifications.', 'orbit' ) . '</p>';
 			echo '</div>';
 		} else {
 			$user = wp_get_current_user();
 			echo '<input type="hidden" name="display_name" value="' . esc_attr( $user->display_name ) . '">';
 			echo '<input type="hidden" name="email" value="' . esc_attr( $user->user_email ) . '">';
-			echo '<p>' . esc_html( sprintf( __( 'Subscribing as %s', 'orbit' ), $user->display_name ) ) . '</p>';
+			echo '<p>' . esc_html( sprintf(
+				/* translators: %s: subscriber display name */
+				__( 'Subscribing as %s', 'orbit' ),
+				$user->display_name
+			) ) . '</p>';
 		}
 
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-note">' . esc_html__( 'How do you know this person?', 'orbit' ) . '</label>';
 		echo '<textarea id="orbit-note" name="connection_note" rows="2" maxlength="500"></textarea>';
+		echo '<p class="orbit-help">' . esc_html( sprintf(
+			/* translators: %s: profile display name */
+			__( "Just a quick note for %s — only they will see this. Helps them recognize you and decide whether to approve.", 'orbit' ),
+			$profile->display_name
+		) ) . '</p>';
 		echo '</div>';
 
+		echo '<div class="orbit-form-actions">';
 		echo '<button type="submit" class="orbit-btn">' . esc_html__( 'Subscribe', 'orbit' ) . '</button>';
+		echo ' <a class="orbit-btn-link" href="' . esc_url( home_url( '/@' . $profile->slug ) ) . '">' . esc_html__( '← Back to profile', 'orbit' ) . '</a>';
+		echo '</div>';
 		echo '</form>';
 		echo '</div>';
 

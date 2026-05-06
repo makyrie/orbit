@@ -200,6 +200,28 @@
 	color: var(--orbit-color-muted);
 }
 
+/* Help text that follows a horizontally-laid-out setting row, indented
+ * to align under the input rather than the label. */
+.orbit-help--inset {
+	margin-top: -0.25em;
+	margin-bottom: var(--orbit-spacing);
+}
+
+/* Small "optional" / "required" tag pinned next to a section h2. */
+.orbit-section-tag {
+	display: inline-block;
+	margin-left: 0.4em;
+	padding: 0.05em 0.5em;
+	background-color: var(--orbit-color-bg-light);
+	border-radius: var(--orbit-radius-sm);
+	color: var(--orbit-color-muted);
+	font-size: 0.75rem;
+	font-weight: 400;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	vertical-align: middle;
+}
+
 .orbit-form-required-note {
 	margin: 0 0 var(--orbit-spacing);
 	font-size: var(--orbit-font-size-sm);
@@ -230,6 +252,19 @@
 	align-items: center;
 	gap: var(--orbit-spacing-sm);
 	margin-top: var(--orbit-spacing);
+}
+
+/* Read-only input + Copy button row, used for share-link display. */
+.orbit-share-link-row {
+	display: flex;
+	gap: var(--orbit-spacing-sm);
+	align-items: stretch;
+}
+
+.orbit-share-link-input {
+	flex: 1;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+	font-size: var(--orbit-font-size-sm);
 }
 
 .orbit-danger-zone {
@@ -706,6 +741,23 @@ a.orbit-poster-name:focus {
 	color: var(--orbit-color-muted);
 	font-size: 1.05rem;
 	line-height: 1.6;
+}
+
+.orbit-profile-owner-bar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--orbit-spacing-sm);
+	margin: var(--orbit-spacing) 0;
+	padding: 0.65em 0.85em;
+	background-color: var(--orbit-color-bg-light);
+	border-left: 3px solid var(--orbit-color-primary);
+	border-radius: 0 var(--orbit-radius) var(--orbit-radius) 0;
+	font-size: var(--orbit-font-size-sm);
+}
+
+.orbit-profile-owner-tag {
+	color: var(--orbit-color-muted);
 }
 
 /* ---- Subscribe Form ---- */

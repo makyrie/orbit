@@ -540,4 +540,54 @@
 		var description = option ? option.getAttribute( 'data-tier-description' ) : '';
 		help.textContent = description || '';
 	} );
+
+	/**
+	 * Copy-to-clipboard button. Reads the target input via
+	 * `data-orbit-copy-target` (a CSS selector), copies its value to the
+	 * clipboard, and briefly swaps the button label to the confirmation
+	 * text from `data-orbit-copy-confirm` before restoring it.
+	 */
+	document.addEventListener( 'click', function ( e ) {
+		var button = e.target.closest( '[data-orbit-copy-target]' );
+		if ( ! button ) {
+			return;
+		}
+
+		e.preventDefault();
+
+		var selector = button.getAttribute( 'data-orbit-copy-target' );
+		var target   = selector ? document.querySelector( selector ) : null;
+		if ( ! target ) {
+			return;
+		}
+
+		var value = target.value !== undefined ? target.value : target.textContent;
+		var confirmLabel = button.getAttribute( 'data-orbit-copy-confirm' ) || 'Copied!';
+		var defaultLabel = button.getAttribute( 'data-orbit-copy-label' ) || button.textContent;
+
+		var done = function () {
+			button.textContent = confirmLabel;
+			window.setTimeout( function () {
+				button.textContent = defaultLabel;
+			}, 1500 );
+		};
+
+		var fallback = function () {
+			try {
+				target.focus();
+				target.select();
+				document.execCommand( 'copy' );
+				done();
+			} catch ( err ) {
+				/* Best effort. Leave the value selected so the user can
+				 * still hit Cmd/Ctrl+C themselves. */
+			}
+		};
+
+		if ( navigator.clipboard && navigator.clipboard.writeText ) {
+			navigator.clipboard.writeText( value ).then( done ).catch( fallback );
+		} else {
+			fallback();
+		}
+	} );
 } )();
