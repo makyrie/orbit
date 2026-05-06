@@ -76,7 +76,7 @@ This is **defensive SEO** — being there when someone with the right pain point
 
 | Tier | Description | Example keyword phrases | Difficulty | Priority |
 |---|---|---|---|---|
-| Foundation | Brand + brand-adjacent terms — search for these should land on the homepage cleanly | "perihelion app", "perihelion friend coordination", "bring your own friends" + ("app" / "tool" / "perihelion") | Low | High |
+| Foundation | Brand + brand-adjacent terms — search for these should land on the homepage cleanly | "perihelion app", "perihelion social", "perihelion.social", "perihelion friend coordination", "bring your own friends" + ("app" / "tool" / "perihelion") | Low | High |
 | Growth | Long-tail searches expressing the audience's pain | "alternative to evite for casual hangouts", "less awkward way to invite friends", "social coordination without group text", "casual hangout invite app", "low-friction friend invite tool", "asynchronous invitation app", "tool for the friend who plans everything" | Medium (long-tail) | Medium |
 | Aspirational | Conceptually right, competitively unwinnable for a small site | "social network for existing friends", "alternative to meetup", "alternative to facebook events", "friend coordination app" | High | Low (don't actively pursue) |
 
@@ -188,13 +188,13 @@ These targets reflect the brand brief's "few hundred organizers" 12-month pictur
 
 These came up while planning and need user input or a future decision:
 
-1. **Production domain.** All channels, SEO, and analytics work better with a real domain than `orbit.local`. When does the production domain spin up? Is `perihelion.app` / `perihelion.tools` / `perihelion.club` available, or has a different name been claimed? **Defer to GTM phase**, but flag now because Hacker News post (Tactic B) and Search Console submission both need a real domain.
+1. ~~**Production domain.**~~ ✅ **Resolved 2026-05-06: [perihelion.social](https://perihelion.social/) registered.**
 
 2. **SEO plugin choice.** Per Section 3 recommendations. Yoast, Rank Math, and SEOPress are all reasonable. SEOPress is the leanest, Yoast the most established, Rank Math has the most modern UX. Sarah's call. Doesn't need to ship at launch — can be added later.
 
 3. **Analytics tool, if any.** Conventional answer: Google Analytics or Plausible. Privacy-first answer: **Plausible** (no cookies, no personal data, self-hostable). The brand's anti-extractive stance argues strongly for Plausible. But Plausible costs ~$9/month. Acceptable cost, just calling out.
 
-4. **Email contact for the Contact page.** The plan assumes Sarah's reply-from email is set up; the contact form might want a dedicated address (`hello@perihelion.app`) once a production domain exists. Defer to GTM phase.
+4. **Email contact for the Contact page.** Now that the domain is registered, set up `hello@perihelion.social` (or similar) and forward to Sarah's personal email. Defer to host setup.
 
 5. **Comment moderation in adjacent communities (Tactic C).** Some communities allow self-promotion only in tagged threads or with disclosure ("disclosure: I built this"). Others ban anything that looks like self-promotion. **Recommendation:** when in doubt, lead with a useful answer to the actual question and mention Perihelion only if it's directly relevant — never as a top-line "have you heard of my project."
 
@@ -233,6 +233,8 @@ marketing:
     core_positioning: "Findable by people frustrated with group-text awkwardness or asymmetric inviting, looking for a less-extractive alternative."
     foundation_keywords:
       - "perihelion app"
+      - "perihelion social"
+      - "perihelion.social"
       - "perihelion friend coordination"
       - "bring your own friends app"
     growth_keywords:
