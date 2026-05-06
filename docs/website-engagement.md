@@ -11,7 +11,7 @@ its own role-based skill to produce that phase's deliverable.
 - **Current Phase:** ✅ All 8 planning phases complete — engagement is in execution mode
 - **Plugin:** This site is powered by the Orbit / Perihelion plugin in this repo.
 - **Theme:** Built in a separate repo at [bookchiq/perihelion-theme](https://github.com/bookchiq/perihelion-theme); installed at `wp-content/themes/perihelion/`.
-- **Domain:** orbit.local (development); production domain TBD
+- **Domain:** orbit.local (development); [perihelion.social](https://perihelion.social/) (production, acquired 2026-05-06)
 
 ## Phase Status
 

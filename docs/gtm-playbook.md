@@ -23,7 +23,7 @@ into a concrete 7-week launch sequence.
 
 ### Blocking 🔴
 
-- **Production domain not yet acquired or DNS-configured.** Until this lands, none of the launch can ship — every channel and tactic in the marketing plan needs a real public URL. **Sarah's call:** pick a domain (suggestions: `perihelion.app`, `perihelion.tools`, `perihelion.club`, `peri.helio.app`) and register it. Defer to her preference; flag as the single biggest blocker.
+- ~~**Production domain not yet acquired or DNS-configured.**~~ ✅ **Resolved 2026-05-06: `perihelion.social` registered.** TLD aligns well with the brand context (the same TLD Mastodon instances and indie social tools use, signaling a different category from `.com` social products). DNS + SSL setup still ahead.
 - **Production hosting not yet provisioned.** Once the domain exists, the WP install needs to live somewhere. Managed WP (Pressable, WP Engine, Kinsta) is fast and turn-key but $20–40/mo. Self-managed VPS is cheaper but Sarah owns the maintenance. Plain DigitalOcean/Linode + a one-click WordPress droplet is the middle ground (~$6/mo). **Recommend: a managed WP host for first 12 months** — Sarah explicitly noted she doesn't want full-time-job energy on this, and managed hosting absorbs ~80% of the operational burden for $25/mo.
 - **Marketing-page content authored.** Site templates exist; the actual *copy* for `/why`, `/privacy`, and `/contact` is still placeholder-y or empty. **Especially `/why`** — that's the manifesto page; needs Sarah's voice to land. Estimate: 2 hours of focused writing.
 
@@ -188,7 +188,7 @@ Drafts to edit. Sarah should rewrite each in her actual voice.
 
 > Hey [name] — I built a small thing for the friend who plans things, and I think you'd like it given how often you're the one putting hangs together. It's called Perihelion. The short version: you post "I'm doing X, want to come?" with three commitment levels (just an idea / I'll go if you will / I'm going - join me) and people who've subscribed to you can opt in or stay quiet — no group-text pressure. Built specifically *not* to be another social network you have to babysit.
 >
-> Want to be one of my first users? It's open at [URL]. Setting up your profile takes about 30 seconds. No worries if it's not your thing.
+> Want to be one of my first users? It's open at https://perihelion.social/. Setting up your profile takes about 30 seconds. No worries if it's not your thing.
 
 ### "Here's what I've been doing" reflection post (Sarah's existing channels)
 
@@ -196,7 +196,7 @@ Drafts to edit. Sarah should rewrite each in her actual voice.
 >
 > It's been working surprisingly well for the last [N] weeks. I'm now planning museum trips, hikes, and dinners with people who've subscribed without feeling like I'm bothering anyone. Saying yes is real, saying nothing is fine.
 >
-> If you're the friend who plans things, you can take a look at [URL]. Free, open source, non-commercial.
+> If you're the friend who plans things, you can take a look at https://perihelion.social/. Free, open source, non-commercial.
 
 ### Show HN draft
 
@@ -212,7 +212,7 @@ Drafts to edit. Sarah should rewrite each in her actual voice.
 >
 > A few non-features by design: no feed to scroll, no notifications begging you back, no engagement metrics, no AI feed ranking, no DMs (deliberate — keeps moderation overhead near-zero). It's not for finding *new* friends; it's for spending more time with the ones you have. The whole thing is built around getting you off the app and into the room with your people.
 >
-> Open source (plugin: GPL, theme: GPL), non-commercial. Live at [URL]. Built solo by me, [Sarah Lewis](https://github.com/bookchiq), over the last few months.
+> Open source (plugin: GPL, theme: GPL), non-commercial. Live at https://perihelion.social/. Built solo by me, [Sarah Lewis](https://github.com/bookchiq), over the last few months.
 >
 > Plugin: https://github.com/makyrie/orbit
 > Theme: https://github.com/bookchiq/perihelion-theme
@@ -309,7 +309,7 @@ Sarah blocks 30 minutes to:
 
 These need decisions before or during launch:
 
-1. **Production domain name.** Single biggest blocker. Suggestions: `perihelion.app` (clean), `perihelion.tools` (utility framing), `perihelion.club` (community framing), shorter variants like `peri.app`. **Sarah's call.**
+1. ~~**Production domain name.**~~ ✅ **Resolved 2026-05-06: [perihelion.social](https://perihelion.social/).**
 
 2. **Hosting platform.** Recommendation: managed WordPress (Pressable, Kinsta, WP Engine, $20–40/mo). Alternative: DigitalOcean/Linode 1-click WP droplet ($6/mo, more maintenance). **Sarah's call.**
 
