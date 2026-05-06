@@ -743,7 +743,7 @@ a.orbit-poster-name:focus {
 	line-height: 1.6;
 }
 
-.orbit-profile-owner-bar {
+.orbit-notice-owner {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
@@ -756,7 +756,7 @@ a.orbit-poster-name:focus {
 	font-size: var(--orbit-font-size-sm);
 }
 
-.orbit-profile-owner-tag {
+.orbit-notice-owner__tag {
 	color: var(--orbit-color-muted);
 }
 

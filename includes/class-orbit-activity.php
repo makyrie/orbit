@@ -412,16 +412,37 @@ class Orbit_Activity {
 	}
 
 	/**
+	 * Canonical tier metadata — single source of truth for both the
+	 * dropdown label and its supporting description. Adding a new tier
+	 * requires one edit here, which guarantees the label and description
+	 * keys can never drift apart.
+	 *
+	 * @return array Associative array of tier number => array{label: string, description: string}.
+	 */
+	private static function get_tier_data() {
+		return array(
+			1 => array(
+				'label'       => __( 'Just an idea', 'orbit' ),
+				'description' => __( 'An open thought. Subscribers see it on their dashboard but get no notification.', 'orbit' ),
+			),
+			2 => array(
+				'label'       => __( "I'll go if you will", 'orbit' ),
+				'description' => __( "You're interested, but want company before committing. Subscribers get a low-priority alert.", 'orbit' ),
+			),
+			3 => array(
+				'label'       => __( "I'm going — join me", 'orbit' ),
+				'description' => __( "You're going for sure. Subscribers who opted in for this tier get a real-time alert.", 'orbit' ),
+			),
+		);
+	}
+
+	/**
 	 * Get human-readable tier labels.
 	 *
 	 * @return array Associative array of tier number => label string.
 	 */
 	public static function get_tier_labels() {
-		return array(
-			1 => __( 'Just an idea', 'orbit' ),
-			2 => __( "I'll go if you will", 'orbit' ),
-			3 => __( "I'm going — join me", 'orbit' ),
-		);
+		return wp_list_pluck( self::get_tier_data(), 'label' );
 	}
 
 	/**
@@ -431,10 +452,22 @@ class Orbit_Activity {
 	 * @return array Associative array of tier number => description string.
 	 */
 	public static function get_tier_descriptions() {
+		return wp_list_pluck( self::get_tier_data(), 'description' );
+	}
+
+	/**
+	 * Get human-readable activity status labels. The 'active' status
+	 * intentionally returns an empty string so the manage table can omit
+	 * the badge for normal activities — only cancelled and past need a
+	 * visible status indicator.
+	 *
+	 * @return array Associative array of status key => translated label.
+	 */
+	public static function get_status_labels() {
 		return array(
-			1 => __( 'An open thought. Subscribers see it on their dashboard but get no notification.', 'orbit' ),
-			2 => __( "You're interested, but want company before committing. Subscribers get a low-priority alert.", 'orbit' ),
-			3 => __( "You're going for sure. Subscribers who opted in for this tier get a real-time alert.", 'orbit' ),
+			'active'    => '',
+			'cancelled' => __( 'Cancelled', 'orbit' ),
+			'past'      => __( 'Past', 'orbit' ),
 		);
 	}
 

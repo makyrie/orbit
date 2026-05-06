@@ -348,6 +348,18 @@ class Orbit_Subscription {
 	}
 
 	/**
+	 * Get human-readable subscription status labels.
+	 *
+	 * @return array Associative array of status key => translated label.
+	 */
+	public static function get_status_labels() {
+		return array(
+			'approved' => __( 'Approved', 'orbit' ),
+			'pending'  => __( 'Pending', 'orbit' ),
+		);
+	}
+
+	/**
 	 * Change subscription status with valid-from-status enforcement.
 	 *
 	 * @param int    $id             Subscription ID.

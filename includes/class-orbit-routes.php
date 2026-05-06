@@ -90,13 +90,21 @@ class Orbit_Routes {
 			return $redirect_to;
 		}
 
-		// Respect an explicit `redirect_to` that's not the wp-admin default.
-		$wp_admin_url = admin_url();
-		if ( $requested_redirect_to && 0 !== strpos( $requested_redirect_to, $wp_admin_url ) ) {
-			return $redirect_to;
+		$dashboard_url = home_url( '/dashboard/' );
+
+		// Honor an explicit non-admin `redirect_to`, but validate it locally
+		// rather than relying on the downstream `wp_safe_redirect()` host
+		// check. `wp_validate_redirect()` enforces the `allowed_redirect_hosts`
+		// allowlist and returns the dashboard fallback for anything off-site,
+		// malformed, or empty — defense in depth regardless of where the
+		// redirect ultimately fires. Admin-default `redirect_to` values fall
+		// through to the dashboard; admin-role users wanting wp-admin are an
+		// edge case Orbit doesn't optimize for.
+		if ( $requested_redirect_to && 0 !== strpos( $requested_redirect_to, admin_url() ) ) {
+			return wp_validate_redirect( $requested_redirect_to, $dashboard_url );
 		}
 
-		return home_url( '/dashboard/' );
+		return $dashboard_url;
 	}
 
 	/**

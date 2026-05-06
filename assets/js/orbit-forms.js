@@ -543,9 +543,15 @@
 
 	/**
 	 * Copy-to-clipboard button. Reads the target input via
-	 * `data-orbit-copy-target` (a CSS selector), copies its value to the
-	 * clipboard, and briefly swaps the button label to the confirmation
-	 * text from `data-orbit-copy-confirm` before restoring it.
+	 * `data-orbit-copy-target` (an ID selector, e.g. `#orbit-share-link`),
+	 * copies its value to the clipboard, and briefly swaps the button label
+	 * to the confirmation text from `data-orbit-copy-confirm` before
+	 * restoring it.
+	 *
+	 * Selector is validated as ID-only as defense-in-depth: even if a
+	 * future XSS pathway let an attacker influence `data-orbit-copy-target`,
+	 * resolution is restricted to `getElementById` and never falls through
+	 * to arbitrary `querySelector` syntax.
 	 */
 	document.addEventListener( 'click', function ( e ) {
 		var button = e.target.closest( '[data-orbit-copy-target]' );
@@ -553,26 +559,72 @@
 			return;
 		}
 
-		e.preventDefault();
-
 		var selector = button.getAttribute( 'data-orbit-copy-target' );
-		var target   = selector ? document.querySelector( selector ) : null;
-		if ( ! target ) {
+		var warn     = function ( message ) {
+			if ( window.console && console.warn ) {
+				console.warn( '[orbit-copy] ' + message );
+			}
+		};
+
+		if ( ! selector ) {
+			warn( 'data-orbit-copy-target is missing or empty' );
 			return;
 		}
 
-		var value = target.value !== undefined ? target.value : target.textContent;
+		// ID-only: `#` followed by [A-Za-z0-9_-]+. Anything else (class,
+		// attribute, descendant combinator, etc.) is rejected.
+		if ( ! /^#[A-Za-z0-9_-]+$/.test( selector ) ) {
+			warn( 'data-orbit-copy-target must be an ID selector, got: ' + selector );
+			return;
+		}
+
+		var target = document.getElementById( selector.slice( 1 ) );
+		if ( ! target ) {
+			warn( 'data-orbit-copy-target did not resolve: ' + selector );
+			return;
+		}
+
+		// Only suppress the click once we've confirmed we'll act on it —
+		// otherwise a misconfigured button silently swallows the click.
+		e.preventDefault();
+
+		var isTextField  = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
+		var value        = isTextField ? target.value : target.textContent;
 		var confirmLabel = button.getAttribute( 'data-orbit-copy-confirm' ) || 'Copied!';
-		var defaultLabel = button.getAttribute( 'data-orbit-copy-label' ) || button.textContent;
+
+		// Cache the original label on first interaction so the confirmation
+		// text ("Copied!") can never be re-captured as the "default" if the
+		// user clicks again during the confirmation window.
+		if ( ! button._orbitCopyDefaultLabel ) {
+			button._orbitCopyDefaultLabel = button.getAttribute( 'data-orbit-copy-label' ) || button.textContent;
+		}
+		var defaultLabel = button._orbitCopyDefaultLabel;
 
 		var done = function () {
 			button.textContent = confirmLabel;
-			window.setTimeout( function () {
+
+			// Clear any pending reset from a previous click so the
+			// confirmation is shown for the full window after this click,
+			// not truncated by the earlier timer.
+			if ( button._orbitCopyTimer ) {
+				clearTimeout( button._orbitCopyTimer );
+			}
+			button._orbitCopyTimer = window.setTimeout( function () {
 				button.textContent = defaultLabel;
+				button._orbitCopyTimer = null;
 			}, 1500 );
 		};
 
 		var fallback = function () {
+			// `select()` only exists on input/textarea — calling it on a
+			// <span>/<p> throws TypeError. The current call sites are both
+			// inputs, so non-text-field targets are out of scope for the
+			// legacy `execCommand` path; warn and bail.
+			if ( ! isTextField ) {
+				warn( 'clipboard API unavailable and target is not a text input; copy aborted' );
+				return;
+			}
+
 			try {
 				target.focus();
 				target.select();
