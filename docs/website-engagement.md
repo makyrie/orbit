@@ -8,7 +8,7 @@ its own role-based skill to produce that phase's deliverable.
 
 - **Brand:** Perihelion
 - **Started:** 2026-05-05
-- **Current Phase:** 8 — Go-to-Market (next)
+- **Current Phase:** ✅ All 8 planning phases complete — engagement is in execution mode
 - **Plugin:** This site is powered by the Orbit / Perihelion plugin in this repo.
 - **Theme:** Built in a separate repo at [bookchiq/perihelion-theme](https://github.com/bookchiq/perihelion-theme); installed at `wp-content/themes/perihelion/`.
 - **Domain:** orbit.local (development); production domain TBD
@@ -106,9 +106,17 @@ its own role-based skill to produce that phase's deliverable.
 ### 8. Go-to-Market
 
 - **Skill:** `gtm-playbook-builder`
-- **Status:** Not started
-- **Output:**
+- **Status:** Complete (2026-05-06)
+- **Output:** [`docs/gtm-playbook.md`](./gtm-playbook.md)
+- **Headline:** 7-week launch sequence in 4 phases (Pre-Launch / Soft Launch / Amplification / Sustain). Intentionally smaller than a typical GTM playbook because the marketing plan declined most of the standard tactics. Single biggest blocker: production domain decision.
 - **Open Questions:**
+  - Production domain name (single biggest blocker)
+  - Hosting platform (recommend managed WP)
+  - SEO plugin choice (recommend SEOPress)
+  - Analytics: Plausible or skip
+  - Contact email (defer to domain)
+  - Twilio approval timeline (affects whether SMS launches v1 or v1.1)
+  - Social-share OG image
 
 ## Decisions Log
 
