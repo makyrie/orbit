@@ -18,6 +18,7 @@ class Orbit_Routes {
 	public static function register() {
 		add_action( 'init', array( __CLASS__, 'add_rewrite_rules' ) );
 		add_filter( 'query_vars', array( __CLASS__, 'add_query_vars' ) );
+		add_action( 'template_redirect', array( __CLASS__, 'redirect_logged_in_from_home' ), 5 );
 		add_action( 'template_redirect', array( __CLASS__, 'handle_routes' ) );
 		add_action( 'wp_head', array( __CLASS__, 'add_noindex_meta' ) );
 		add_filter( 'robots_txt', array( __CLASS__, 'modify_robots_txt' ), 10, 2 );
@@ -31,6 +32,28 @@ class Orbit_Routes {
 		foreach ( array( 'page_template_hierarchy', 'singular_template_hierarchy' ) as $hook ) {
 			add_filter( $hook, array( __CLASS__, 'force_app_template' ) );
 		}
+	}
+
+	/**
+	 * Redirect logged-in users from the marketing front page directly to
+	 * their dashboard. The home page exists to convert prospects; once
+	 * someone is logged in they don't need it.
+	 *
+	 * Only redirects from the actual front page — `/why`, `/privacy`, etc.
+	 * remain reachable for logged-in users who want to share or reread
+	 * them.
+	 */
+	public static function redirect_logged_in_from_home() {
+		if ( ! is_user_logged_in() ) {
+			return;
+		}
+
+		if ( ! is_front_page() ) {
+			return;
+		}
+
+		wp_safe_redirect( home_url( '/dashboard/' ) );
+		exit;
 	}
 
 	/**
