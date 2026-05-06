@@ -18,9 +18,89 @@ class Orbit_Routes {
 	public static function register() {
 		add_action( 'init', array( __CLASS__, 'add_rewrite_rules' ) );
 		add_filter( 'query_vars', array( __CLASS__, 'add_query_vars' ) );
+		// Priority 5 so the logged-in front-page redirect runs before
+		// `redirect_canonical` (priority 10) and any third-party
+		// `template_redirect` work that might short-circuit on the home page.
+		add_action( 'template_redirect', array( __CLASS__, 'redirect_logged_in_from_home' ), 5 );
 		add_action( 'template_redirect', array( __CLASS__, 'handle_routes' ) );
 		add_action( 'wp_head', array( __CLASS__, 'add_noindex_meta' ) );
 		add_filter( 'robots_txt', array( __CLASS__, 'modify_robots_txt' ), 10, 2 );
+
+		// Force the active theme's `page-app` template (when it provides
+		// one) for Orbit virtual pages — activity detail, profile pages,
+		// and the unsubscribe flow. Without this, WordPress falls back to
+		// the default page template, which on the Perihelion theme means
+		// the marketing-narrow layout with the marketing header instead
+		// of the wider app layout with the app nav.
+		foreach ( array( 'page_template_hierarchy', 'singular_template_hierarchy' ) as $hook ) {
+			add_filter( $hook, array( __CLASS__, 'force_app_template' ) );
+		}
+	}
+
+	/**
+	 * Redirect logged-in users from the marketing front page directly to
+	 * their dashboard. The home page exists to convert prospects; once
+	 * someone is logged in they don't need it.
+	 *
+	 * Only redirects from the actual front page — `/why`, `/privacy`, etc.
+	 * remain reachable for logged-in users who want to share or reread
+	 * them.
+	 */
+	public static function redirect_logged_in_from_home() {
+		if ( ! is_user_logged_in() ) {
+			return;
+		}
+
+		if ( ! is_front_page() ) {
+			return;
+		}
+
+		nocache_headers();
+		wp_safe_redirect( home_url( '/dashboard/' ), 303 );
+		exit;
+	}
+
+	/**
+	 * Prepend `page-app` to the template hierarchy when rendering one of
+	 * Orbit's virtual pages, so themes that ship a `page-app` template
+	 * pick it up. Themes without that template are unaffected — the
+	 * hierarchy gracefully falls through to whatever they do provide.
+	 *
+	 * @param string[] $templates Existing template hierarchy.
+	 * @return string[] Possibly-modified hierarchy.
+	 */
+	public static function force_app_template( $templates ) {
+		if ( ! self::is_app_route() ) {
+			return $templates;
+		}
+
+		// Defensive: if another filter handed us something other than an
+		// array, fall back to a sane single-entry hierarchy.
+		if ( ! is_array( $templates ) ) {
+			return array( 'page-app' );
+		}
+
+		// Both `page_template_hierarchy` and `singular_template_hierarchy`
+		// fire for our virtual pages, so guard against double-prepending
+		// `page-app` when this filter runs twice on the same request.
+		if ( ! in_array( 'page-app', $templates, true ) ) {
+			array_unshift( $templates, 'page-app' );
+		}
+
+		return $templates;
+	}
+
+	/**
+	 * Whether the current request is one of Orbit's virtual-page routes.
+	 *
+	 * @return bool
+	 */
+	public static function is_app_route() {
+		return (bool) (
+			get_query_var( 'orbit_profile_slug' )
+			|| get_query_var( 'orbit_activity_id' )
+			|| get_query_var( 'orbit_unsubscribe' )
+		);
 	}
 
 	/**
@@ -169,7 +249,8 @@ class Orbit_Routes {
 		if ( ! $token ) {
 			self::render_virtual_page(
 				__( 'Unsubscribe', 'orbit' ),
-				'<p>' . esc_html__( 'Invalid unsubscribe link.', 'orbit' ) . '</p>'
+				'<p>' . esc_html__( 'Invalid unsubscribe link.', 'orbit' ) . '</p>',
+				true
 			);
 			return;
 		}
@@ -179,7 +260,8 @@ class Orbit_Routes {
 		if ( ! $subscription ) {
 			self::render_virtual_page(
 				__( 'Unsubscribe', 'orbit' ),
-				'<p>' . esc_html__( 'Invalid or expired unsubscribe link.', 'orbit' ) . '</p>'
+				'<p>' . esc_html__( 'Invalid or expired unsubscribe link.', 'orbit' ) . '</p>',
+				true
 			);
 			return;
 		}
@@ -198,7 +280,7 @@ class Orbit_Routes {
 		<?php
 		$content = ob_get_clean();
 
-		self::render_virtual_page( __( 'Unsubscribe', 'orbit' ), $content );
+		self::render_virtual_page( __( 'Unsubscribe', 'orbit' ), $content, true );
 	}
 
 	/**
@@ -216,7 +298,8 @@ class Orbit_Routes {
 		if ( ! wp_verify_nonce( $nonce, 'orbit_unsubscribe' ) ) {
 			self::render_virtual_page(
 				__( 'Unsubscribe', 'orbit' ),
-				'<p>' . esc_html__( 'Security check failed. Please try again using the link in your email.', 'orbit' ) . '</p>'
+				'<p>' . esc_html__( 'Security check failed. Please try again using the link in your email.', 'orbit' ) . '</p>',
+				true
 			);
 			return;
 		}
@@ -224,7 +307,8 @@ class Orbit_Routes {
 		if ( ! $token ) {
 			self::render_virtual_page(
 				__( 'Unsubscribe', 'orbit' ),
-				'<p>' . esc_html__( 'Invalid unsubscribe link.', 'orbit' ) . '</p>'
+				'<p>' . esc_html__( 'Invalid unsubscribe link.', 'orbit' ) . '</p>',
+				true
 			);
 			return;
 		}
@@ -234,7 +318,8 @@ class Orbit_Routes {
 		if ( ! $subscription ) {
 			self::render_virtual_page(
 				__( 'Unsubscribe', 'orbit' ),
-				'<p>' . esc_html__( 'Invalid or expired unsubscribe link.', 'orbit' ) . '</p>'
+				'<p>' . esc_html__( 'Invalid or expired unsubscribe link.', 'orbit' ) . '</p>',
+				true
 			);
 			return;
 		}
@@ -244,7 +329,8 @@ class Orbit_Routes {
 		if ( is_wp_error( $result ) ) {
 			self::render_virtual_page(
 				__( 'Unsubscribe', 'orbit' ),
-				'<p>' . esc_html( $result->get_error_message() ) . '</p>'
+				'<p>' . esc_html( $result->get_error_message() ) . '</p>',
+				true
 			);
 			return;
 		}
@@ -254,7 +340,8 @@ class Orbit_Routes {
 
 		self::render_virtual_page(
 			__( 'Unsubscribed', 'orbit' ),
-			'<p>' . esc_html( sprintf( __( 'You have been unsubscribed from %s.', 'orbit' ), $name ) ) . '</p>'
+			'<p>' . esc_html( sprintf( __( 'You have been unsubscribed from %s.', 'orbit' ), $name ) ) . '</p>',
+			true
 		);
 	}
 
@@ -264,11 +351,24 @@ class Orbit_Routes {
 	 * Replaces the main query with a synthetic page post so WordPress
 	 * renders it using the page template (including FSE block themes).
 	 *
-	 * @param string $title   Page title.
-	 * @param string $content Page content (may contain shortcodes).
+	 * @param string $title          Page title.
+	 * @param string $content        Page content (may contain shortcodes).
+	 * @param bool   $prepend_title  Whether to prepend the title as an `<h1>`
+	 *                               in the rendered content. Useful for routes
+	 *                               whose body is a bare paragraph or form,
+	 *                               since `page-app.html` does not render
+	 *                               `wp:post-title`. Routes whose shortcode
+	 *                               already self-renders an `<h1>` (e.g.
+	 *                               `[orbit_profile]`, `[orbit_activity]`)
+	 *                               should leave this false to avoid doubling
+	 *                               the heading.
 	 */
-	private static function render_virtual_page( $title, $content ) {
+	private static function render_virtual_page( $title, $content, $prepend_title = false ) {
 		global $wp_query;
+
+		if ( $prepend_title ) {
+			$content = '<h1>' . esc_html( $title ) . '</h1>' . $content;
+		}
 
 		$post                    = new stdClass();
 		$post->ID                = 0;
@@ -309,8 +409,8 @@ class Orbit_Routes {
 			return;
 		}
 
-		// Activity pages should be noindex.
-		if ( get_query_var( 'orbit_activity_id' ) ) {
+		// Activity, profile, and unsubscribe routes should all be noindex.
+		if ( self::is_app_route() ) {
 			echo '<meta name="robots" content="noindex, nofollow">' . "\n";
 		}
 	}
