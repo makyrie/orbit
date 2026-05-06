@@ -249,7 +249,8 @@ class Orbit_Routes {
 		if ( ! $token ) {
 			self::render_virtual_page(
 				__( 'Unsubscribe', 'orbit' ),
-				'<p>' . esc_html__( 'Invalid unsubscribe link.', 'orbit' ) . '</p>'
+				'<p>' . esc_html__( 'Invalid unsubscribe link.', 'orbit' ) . '</p>',
+				true
 			);
 			return;
 		}
@@ -259,7 +260,8 @@ class Orbit_Routes {
 		if ( ! $subscription ) {
 			self::render_virtual_page(
 				__( 'Unsubscribe', 'orbit' ),
-				'<p>' . esc_html__( 'Invalid or expired unsubscribe link.', 'orbit' ) . '</p>'
+				'<p>' . esc_html__( 'Invalid or expired unsubscribe link.', 'orbit' ) . '</p>',
+				true
 			);
 			return;
 		}
@@ -278,7 +280,7 @@ class Orbit_Routes {
 		<?php
 		$content = ob_get_clean();
 
-		self::render_virtual_page( __( 'Unsubscribe', 'orbit' ), $content );
+		self::render_virtual_page( __( 'Unsubscribe', 'orbit' ), $content, true );
 	}
 
 	/**
@@ -296,7 +298,8 @@ class Orbit_Routes {
 		if ( ! wp_verify_nonce( $nonce, 'orbit_unsubscribe' ) ) {
 			self::render_virtual_page(
 				__( 'Unsubscribe', 'orbit' ),
-				'<p>' . esc_html__( 'Security check failed. Please try again using the link in your email.', 'orbit' ) . '</p>'
+				'<p>' . esc_html__( 'Security check failed. Please try again using the link in your email.', 'orbit' ) . '</p>',
+				true
 			);
 			return;
 		}
@@ -304,7 +307,8 @@ class Orbit_Routes {
 		if ( ! $token ) {
 			self::render_virtual_page(
 				__( 'Unsubscribe', 'orbit' ),
-				'<p>' . esc_html__( 'Invalid unsubscribe link.', 'orbit' ) . '</p>'
+				'<p>' . esc_html__( 'Invalid unsubscribe link.', 'orbit' ) . '</p>',
+				true
 			);
 			return;
 		}
@@ -314,7 +318,8 @@ class Orbit_Routes {
 		if ( ! $subscription ) {
 			self::render_virtual_page(
 				__( 'Unsubscribe', 'orbit' ),
-				'<p>' . esc_html__( 'Invalid or expired unsubscribe link.', 'orbit' ) . '</p>'
+				'<p>' . esc_html__( 'Invalid or expired unsubscribe link.', 'orbit' ) . '</p>',
+				true
 			);
 			return;
 		}
@@ -324,7 +329,8 @@ class Orbit_Routes {
 		if ( is_wp_error( $result ) ) {
 			self::render_virtual_page(
 				__( 'Unsubscribe', 'orbit' ),
-				'<p>' . esc_html( $result->get_error_message() ) . '</p>'
+				'<p>' . esc_html( $result->get_error_message() ) . '</p>',
+				true
 			);
 			return;
 		}
@@ -334,7 +340,8 @@ class Orbit_Routes {
 
 		self::render_virtual_page(
 			__( 'Unsubscribed', 'orbit' ),
-			'<p>' . esc_html( sprintf( __( 'You have been unsubscribed from %s.', 'orbit' ), $name ) ) . '</p>'
+			'<p>' . esc_html( sprintf( __( 'You have been unsubscribed from %s.', 'orbit' ), $name ) ) . '</p>',
+			true
 		);
 	}
 
@@ -344,11 +351,24 @@ class Orbit_Routes {
 	 * Replaces the main query with a synthetic page post so WordPress
 	 * renders it using the page template (including FSE block themes).
 	 *
-	 * @param string $title   Page title.
-	 * @param string $content Page content (may contain shortcodes).
+	 * @param string $title          Page title.
+	 * @param string $content        Page content (may contain shortcodes).
+	 * @param bool   $prepend_title  Whether to prepend the title as an `<h1>`
+	 *                               in the rendered content. Useful for routes
+	 *                               whose body is a bare paragraph or form,
+	 *                               since `page-app.html` does not render
+	 *                               `wp:post-title`. Routes whose shortcode
+	 *                               already self-renders an `<h1>` (e.g.
+	 *                               `[orbit_profile]`, `[orbit_activity]`)
+	 *                               should leave this false to avoid doubling
+	 *                               the heading.
 	 */
-	private static function render_virtual_page( $title, $content ) {
+	private static function render_virtual_page( $title, $content, $prepend_title = false ) {
 		global $wp_query;
+
+		if ( $prepend_title ) {
+			$content = '<h1>' . esc_html( $title ) . '</h1>' . $content;
+		}
 
 		$post                    = new stdClass();
 		$post->ID                = 0;

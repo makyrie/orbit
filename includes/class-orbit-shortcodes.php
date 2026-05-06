@@ -1071,6 +1071,9 @@ class Orbit_Shortcodes {
 
 		echo '<div class="orbit-subscribe-form">';
 
+		/* translators: %s: profile display name */
+		echo '<h1>' . esc_html( sprintf( __( 'Subscribe to %s', 'orbit' ), $profile->display_name ) ) . '</h1>';
+
 		echo '<form method="post" class="orbit-form" data-orbit-api="subscribe">';
 		echo '<input type="hidden" name="share_token" value="' . esc_attr( $profile->share_token ) . '">';
 
