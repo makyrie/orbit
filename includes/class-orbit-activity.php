@@ -397,7 +397,14 @@ class Orbit_Activity {
 
 		$where_clause = implode( ' AND ', $where );
 
-		$sql      = "SELECT * FROM {$table} WHERE {$where_clause} ORDER BY {$orderby} {$order} LIMIT %d OFFSET %d";
+		// When sorting by date_time, push undated activities (date_time IS NULL,
+		// e.g. tier-1 "just an idea" entries) to the end rather than letting
+		// MySQL's default null-first ASC ordering crowd the top of the list.
+		$order_clause = 'date_time' === $orderby
+			? "date_time IS NULL, date_time {$order}"
+			: "{$orderby} {$order}";
+
+		$sql      = "SELECT * FROM {$table} WHERE {$where_clause} ORDER BY {$order_clause} LIMIT %d OFFSET %d";
 		$values[] = absint( $args['per_page'] );
 		$values[] = $offset;
 

@@ -105,13 +105,16 @@ class Orbit_Shortcodes {
 
 		$profile_ids = array_unique( $profile_ids );
 
-		// Single query for all activities across all profiles.
+		// Single query for all activities across all profiles, sorted by
+		// when they're happening so the soonest upcoming events appear first.
+		// Undated activities (e.g. tier 1 "just an idea") sort to the end.
 		$activities = Orbit_Activity::list_by_profile_ids(
 			$profile_ids,
 			array(
 				'status'   => 'active',
 				'per_page' => 50,
-				'order'    => 'DESC',
+				'orderby'  => 'date_time',
+				'order'    => 'ASC',
 			)
 		);
 
