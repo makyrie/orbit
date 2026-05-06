@@ -307,6 +307,15 @@
 	box-shadow: var(--orbit-shadow-lift);
 }
 
+.orbit-dashboard .orbit-activity-card--mine {
+	border-left: 3px solid var(--orbit-color-primary);
+}
+
+.orbit-poster-name--mine {
+	color: var(--orbit-color-primary);
+	font-weight: 500;
+}
+
 .orbit-activity-meta {
 	display: flex;
 	align-items: center;

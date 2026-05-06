@@ -186,14 +186,24 @@ class Orbit_Shortcodes {
 			$my_responses_map[ (int) $resp->activity_id ] = $resp->response;
 		}
 
+		$own_profile_id = $own_profile ? (int) $own_profile->id : 0;
+
 		foreach ( $activities as $activity ) {
 			$profile    = isset( $profiles_map[ (int) $activity->profile_id ] ) ? $profiles_map[ (int) $activity->profile_id ] : null;
 			$tier_label = isset( $tier_labels[ $activity->tier ] ) ? $tier_labels[ $activity->tier ] : '';
+			$is_mine    = $own_profile_id && (int) $activity->profile_id === $own_profile_id;
 
-			echo '<div class="orbit-activity-card" data-tier="' . esc_attr( $activity->tier ) . '">';
+			$card_class = 'orbit-activity-card';
+			if ( $is_mine ) {
+				$card_class .= ' orbit-activity-card--mine';
+			}
+
+			echo '<div class="' . esc_attr( $card_class ) . '" data-tier="' . esc_attr( $activity->tier ) . '">';
 			echo '<div class="orbit-activity-meta">';
 
-			if ( $profile ) {
+			if ( $is_mine ) {
+				echo '<span class="orbit-poster-name orbit-poster-name--mine">' . esc_html__( 'You', 'orbit' ) . '</span>';
+			} elseif ( $profile ) {
 				echo '<span class="orbit-poster-name">' . esc_html( $profile->display_name ) . '</span>';
 			}
 
