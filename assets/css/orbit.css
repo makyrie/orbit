@@ -500,6 +500,59 @@
 	background-color: var(--orbit-color-bg-light);
 }
 
+/* ---- Manage page table extras ---- */
+
+.orbit-manage__actions {
+	white-space: nowrap;
+}
+
+.orbit-manage__actions a,
+.orbit-manage__actions .orbit-link-button {
+	font-size: var(--orbit-font-size-sm);
+	margin-right: 0.5em;
+}
+
+/* Inline status badge alongside the title in the manage table. */
+.orbit-status-badge {
+	display: inline-block;
+	margin-left: 0.4em;
+	padding: 0.1em 0.55em;
+	font-size: 0.75rem;
+	font-weight: 500;
+	letter-spacing: 0.02em;
+	border-radius: var(--orbit-radius-sm);
+	text-transform: uppercase;
+	vertical-align: 1px;
+}
+
+.orbit-status-cancelled {
+	background-color: var(--orbit-color-bg-error);
+	color: var(--orbit-color-primary);
+}
+
+.orbit-status-past {
+	background-color: var(--orbit-color-bg-light);
+	color: var(--orbit-color-muted);
+}
+
+/* A button that visually reads as a link — used for in-row Cancel
+ * actions where matching the adjacent Edit anchor's appearance keeps
+ * the row tidy. */
+.orbit-link-button {
+	background: none;
+	border: none;
+	padding: 0;
+	font: inherit;
+	color: var(--orbit-color-primary);
+	cursor: pointer;
+	text-decoration: underline;
+}
+
+.orbit-link-button:hover,
+.orbit-link-button:focus {
+	color: var(--orbit-color-primary-hover);
+}
+
 /* ---- Profile ---- */
 
 .orbit-profile .orbit-bio {

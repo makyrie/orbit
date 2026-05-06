@@ -31,6 +31,44 @@ class Orbit_Shortcodes {
 		add_shortcode( 'orbit_profile', array( __CLASS__, 'profile' ) );
 		add_shortcode( 'orbit_subscribe_form', array( __CLASS__, 'subscribe_form' ) );
 		add_shortcode( 'orbit_activity', array( __CLASS__, 'activity' ) );
+		add_shortcode( 'orbit_cta', array( __CLASS__, 'cta' ) );
+	}
+
+	/**
+	 * Render a user-aware call-to-action button.
+	 *
+	 * Used in the marketing-site front page so the CTA adapts to the
+	 * viewer's state instead of always pointing at "Set up your profile."
+	 *
+	 *   - Logged-out OR logged-in without a profile: Set up your profile
+	 *   - Logged-in with a profile: Go to your dashboard
+	 *
+	 * Output is wrapped in WP's button-block markup so it inherits the
+	 * theme's button styling.
+	 *
+	 * @param array $atts Shortcode attributes (none used currently).
+	 * @return string Rendered HTML for a single button block.
+	 */
+	public static function cta( $atts ) {
+		$has_profile = false;
+
+		if ( is_user_logged_in() ) {
+			$has_profile = (bool) Orbit_Profile::get_by_user_id( get_current_user_id() );
+		}
+
+		if ( $has_profile ) {
+			$href  = home_url( '/dashboard/' );
+			$label = __( 'Go to your dashboard', 'orbit' );
+		} else {
+			$href  = home_url( '/edit-profile/' );
+			$label = __( 'Set up your profile', 'orbit' );
+		}
+
+		return sprintf(
+			'<div class="wp-block-buttons"><div class="wp-block-button"><a class="wp-block-button__link wp-element-button" href="%s">%s</a></div></div>',
+			esc_url( $href ),
+			esc_html( $label )
+		);
 	}
 
 	/**
@@ -471,25 +509,45 @@ class Orbit_Shortcodes {
 			// Batch-load response counts.
 			$activity_ids    = array_map( function ( $a ) { return (int) $a->id; }, $activities );
 			$response_counts = Orbit_Response::count_by_activity_ids( $activity_ids );
+			$tier_labels     = Orbit_Activity::get_tier_labels();
+
+			$status_labels = array(
+				'active'    => '',                         // Default; show nothing.
+				'cancelled' => __( 'Cancelled', 'orbit' ),
+				'past'      => __( 'Past', 'orbit' ),
+			);
 
 			echo '<table class="orbit-table">';
 			echo '<thead><tr>';
 			echo '<th>' . esc_html__( 'Title', 'orbit' ) . '</th>';
 			echo '<th>' . esc_html__( 'Tier', 'orbit' ) . '</th>';
-			echo '<th>' . esc_html__( 'Status', 'orbit' ) . '</th>';
 			echo '<th>' . esc_html__( 'Date', 'orbit' ) . '</th>';
 			echo '<th>' . esc_html__( 'Responses', 'orbit' ) . '</th>';
+			echo '<th>' . esc_html__( 'Actions', 'orbit' ) . '</th>';
 			echo '</tr></thead><tbody>';
 
 			foreach ( $activities as $activity ) {
 				$response_count = isset( $response_counts[ $activity->id ]['total'] ) ? $response_counts[ $activity->id ]['total'] : 0;
+				$tier_label     = isset( $tier_labels[ (int) $activity->tier ] ) ? $tier_labels[ (int) $activity->tier ] : '';
+				$status_label   = isset( $status_labels[ $activity->status ] ) ? $status_labels[ $activity->status ] : '';
+				$is_active      = 'active' === $activity->status;
+
+				$title_html = '<a href="' . esc_url( home_url( '/activity/' . $activity->id ) ) . '">' . esc_html( $activity->title ) . '</a>';
+				if ( '' !== $status_label ) {
+					$title_html .= ' <span class="orbit-status-badge orbit-status-' . esc_attr( $activity->status ) . '">' . esc_html( $status_label ) . '</span>';
+				}
 
 				echo '<tr>';
-				echo '<td><a href="' . esc_url( home_url( '/activity/' . $activity->id ) ) . '">' . esc_html( $activity->title ) . '</a></td>';
-				echo '<td>' . esc_html( $activity->tier ) . '</td>';
-				echo '<td>' . esc_html( $activity->status ) . '</td>';
+				echo '<td>' . $title_html . '</td>';
+				echo '<td>' . esc_html( $tier_label ) . '</td>';
 				echo '<td>' . ( $activity->date_time ? esc_html( self::format_datetime( $activity->date_time, 'M j, Y g:i A' ) ) : '—' ) . '</td>';
 				echo '<td>' . esc_html( $response_count ) . '</td>';
+				echo '<td class="orbit-manage__actions">';
+				echo '<a href="' . esc_url( home_url( '/edit-activity/?id=' . $activity->id ) ) . '">' . esc_html__( 'Edit', 'orbit' ) . '</a>';
+				if ( $is_active ) {
+					echo ' <button type="button" class="orbit-link-button" data-orbit-cancel="' . esc_attr( $activity->id ) . '">' . esc_html__( 'Cancel', 'orbit' ) . '</button>';
+				}
+				echo '</td>';
 				echo '</tr>';
 			}
 

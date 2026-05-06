@@ -21,6 +21,48 @@ class Orbit_Routes {
 		add_action( 'template_redirect', array( __CLASS__, 'handle_routes' ) );
 		add_action( 'wp_head', array( __CLASS__, 'add_noindex_meta' ) );
 		add_filter( 'robots_txt', array( __CLASS__, 'modify_robots_txt' ), 10, 2 );
+
+		// Force the active theme's `page-app` template (when it provides
+		// one) for Orbit virtual pages — activity detail, profile pages,
+		// and the unsubscribe flow. Without this, WordPress falls back to
+		// the default page template, which on the Perihelion theme means
+		// the marketing-narrow layout with the marketing header instead
+		// of the wider app layout with the app nav.
+		foreach ( array( 'page_template_hierarchy', 'singular_template_hierarchy' ) as $hook ) {
+			add_filter( $hook, array( __CLASS__, 'force_app_template' ) );
+		}
+	}
+
+	/**
+	 * Prepend `page-app` to the template hierarchy when rendering one of
+	 * Orbit's virtual pages, so themes that ship a `page-app` template
+	 * pick it up. Themes without that template are unaffected — the
+	 * hierarchy gracefully falls through to whatever they do provide.
+	 *
+	 * @param string[] $templates Existing template hierarchy.
+	 * @return string[] Possibly-modified hierarchy.
+	 */
+	public static function force_app_template( $templates ) {
+		if ( ! self::is_app_route() ) {
+			return $templates;
+		}
+
+		array_unshift( $templates, 'page-app' );
+
+		return $templates;
+	}
+
+	/**
+	 * Whether the current request is one of Orbit's virtual-page routes.
+	 *
+	 * @return bool
+	 */
+	private static function is_app_route() {
+		return (bool) (
+			get_query_var( 'orbit_profile_slug' )
+			|| get_query_var( 'orbit_activity_id' )
+			|| get_query_var( 'orbit_unsubscribe' )
+		);
 	}
 
 	/**
