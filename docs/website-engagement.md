@@ -8,7 +8,7 @@ its own role-based skill to produce that phase's deliverable.
 
 - **Brand:** Perihelion
 - **Started:** 2026-05-05
-- **Current Phase:** 7 — Marketing (next)
+- **Current Phase:** 8 — Go-to-Market (next)
 - **Plugin:** This site is powered by the Orbit / Perihelion plugin in this repo.
 - **Theme:** Built in a separate repo at [bookchiq/perihelion-theme](https://github.com/bookchiq/perihelion-theme); installed at `wp-content/themes/perihelion/`.
 - **Domain:** orbit.local (development); production domain TBD
@@ -93,9 +93,15 @@ its own role-based skill to produce that phase's deliverable.
 ### 7. Marketing
 
 - **Skill:** `marketing-planner`
-- **Status:** Not started
-- **Output:**
+- **Status:** Complete (2026-05-06)
+- **Output:** [`docs/marketing-plan.md`](./marketing-plan.md)
+- **Headline:** Plan is intentionally smaller than a default SaaS marketing playbook — declining most growth tactics (newsletter, branded social, paid, blog, community platforms) because they conflict with the brand's anti-extractive posture. Three primary channels: product share-tokens, the marketing site itself, and Sarah's existing personal voice. Five growth tactics, all low-medium effort. Three primary KPIs; explicitly not measuring vanity metrics.
 - **Open Questions:**
+  - Production domain — needed before HN post + Search Console submission. Defer to GTM phase.
+  - SEO plugin choice (Yoast / Rank Math / SEOPress) — Sarah's call.
+  - Analytics tool — recommend Plausible for privacy-first alignment with brand values; ~$9/mo.
+  - Contact email address — defer to production domain setup.
+  - Comment etiquette in adjacent communities (Tactic C) — judgment call per community.
 
 ### 8. Go-to-Market
 
