@@ -122,6 +122,12 @@ class Orbit_Shortcodes {
 
 		echo '<div class="orbit-dashboard">';
 
+		echo '<h1>' . esc_html__( 'Dashboard', 'orbit' ) . '</h1>';
+
+		if ( ! empty( $activities ) ) {
+			echo '<p class="orbit-dashboard-intro">' . esc_html__( 'Upcoming activities from you and the people you\'ve subscribed to, soonest first.', 'orbit' ) . '</p>';
+		}
+
 		if ( empty( $activities ) ) {
 			// Check for pending subscriptions.
 			$pending_subs = Orbit_Subscription::list(
@@ -260,6 +266,8 @@ class Orbit_Shortcodes {
 		ob_start();
 
 		echo '<div class="orbit-settings">';
+
+		echo '<h1>' . esc_html__( 'Settings', 'orbit' ) . '</h1>';
 
 		echo self::render_phone_verification( $user_id );
 
@@ -427,7 +435,7 @@ class Orbit_Shortcodes {
 		ob_start();
 
 		echo '<div class="orbit-my-subscriptions">';
-		echo '<h2>' . esc_html__( 'My Subscriptions', 'orbit' ) . '</h2>';
+		echo '<h1>' . esc_html__( 'My Subscriptions', 'orbit' ) . '</h1>';
 
 		if ( empty( $all_subs ) ) {
 			echo '<p>' . esc_html__( 'You are not subscribed to anyone yet.', 'orbit' ) . '</p>';
@@ -502,7 +510,7 @@ class Orbit_Shortcodes {
 		ob_start();
 
 		echo '<div class="orbit-manage">';
-		echo '<h2>' . esc_html__( 'Manage Activities', 'orbit' ) . '</h2>';
+		echo '<h1>' . esc_html__( 'Manage Activities', 'orbit' ) . '</h1>';
 
 		echo '<p><a href="' . esc_url( home_url( '/new-activity/' ) ) . '" class="orbit-btn">';
 		echo esc_html__( 'New Activity', 'orbit' );
@@ -584,7 +592,7 @@ class Orbit_Shortcodes {
 		ob_start();
 
 		echo '<div class="orbit-new-activity">';
-		echo '<h2>' . esc_html__( 'New Activity', 'orbit' ) . '</h2>';
+		echo '<h1>' . esc_html__( 'New Activity', 'orbit' ) . '</h1>';
 		echo '<form method="post" class="orbit-form" data-orbit-api="activities" data-profile-id="' . esc_attr( $profile->id ) . '">';
 
 		echo '<div class="orbit-form-group">';
@@ -682,7 +690,7 @@ class Orbit_Shortcodes {
 		ob_start();
 
 		echo '<div class="orbit-edit-activity">';
-		echo '<h2>' . esc_html__( 'Edit Activity', 'orbit' ) . '</h2>';
+		echo '<h1>' . esc_html__( 'Edit Activity', 'orbit' ) . '</h1>';
 		echo '<form method="post" class="orbit-form" data-orbit-api="activities/' . esc_attr( $activity_id ) . '" data-method="PATCH">';
 
 		echo '<div class="orbit-form-group">';
@@ -776,7 +784,7 @@ class Orbit_Shortcodes {
 		ob_start();
 
 		echo '<div class="orbit-subscribers">';
-		echo '<h2>' . esc_html__( 'Subscribers', 'orbit' ) . '</h2>';
+		echo '<h1>' . esc_html__( 'Subscribers', 'orbit' ) . '</h1>';
 
 		if ( empty( $subscriptions ) ) {
 			echo '<p>' . esc_html__( 'No subscribers yet. Share your link to invite people.', 'orbit' ) . '</p>';
@@ -848,7 +856,7 @@ class Orbit_Shortcodes {
 		ob_start();
 
 		echo '<div class="orbit-edit-profile">';
-		echo '<h2>' . esc_html__( 'Edit Profile', 'orbit' ) . '</h2>';
+		echo '<h1>' . esc_html__( 'Edit Profile', 'orbit' ) . '</h1>';
 		echo '<form method="post" class="orbit-form" data-orbit-api="profiles/' . esc_attr( $profile->id ) . '" data-method="PATCH">';
 
 		echo '<div class="orbit-form-group">';
@@ -896,7 +904,7 @@ class Orbit_Shortcodes {
 		ob_start();
 
 		echo '<div class="orbit-edit-profile">';
-		echo '<h2>' . esc_html__( 'Create Your Profile', 'orbit' ) . '</h2>';
+		echo '<h1>' . esc_html__( 'Create Your Profile', 'orbit' ) . '</h1>';
 		echo '<p>' . esc_html__( 'Set up a profile to start sharing activities with your people.', 'orbit' ) . '</p>';
 		echo '<form method="post" class="orbit-form" data-orbit-api="profiles/me">';
 

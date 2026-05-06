@@ -279,6 +279,15 @@
 	color: var(--orbit-color-muted);
 }
 
+/* ---- Dashboard ---- */
+
+.orbit-dashboard-intro {
+	margin: 0 0 var(--orbit-spacing-lg);
+	color: var(--orbit-color-muted);
+	font-size: 1.05rem;
+	line-height: 1.6;
+}
+
 /* ---- Activity Cards ---- */
 
 .orbit-dashboard .orbit-activity-card,
