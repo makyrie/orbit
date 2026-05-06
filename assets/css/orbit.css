@@ -522,7 +522,8 @@
 	letter-spacing: 0.02em;
 	border-radius: var(--orbit-radius-sm);
 	text-transform: uppercase;
-	vertical-align: 1px;
+	vertical-align: middle;
+	line-height: 1;
 }
 
 .orbit-status-cancelled {

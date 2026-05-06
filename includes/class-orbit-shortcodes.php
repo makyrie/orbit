@@ -58,10 +58,10 @@ class Orbit_Shortcodes {
 
 		if ( $has_profile ) {
 			$href  = home_url( '/dashboard/' );
-			$label = __( 'Go to your dashboard', 'orbit' );
+			$label = _x( 'Go to your dashboard', 'orbit_cta button label', 'orbit' );
 		} else {
 			$href  = home_url( '/edit-profile/' );
-			$label = __( 'Set up your profile', 'orbit' );
+			$label = _x( 'Set up your profile', 'orbit_cta button label', 'orbit' );
 		}
 
 		return sprintf(
@@ -512,7 +512,6 @@ class Orbit_Shortcodes {
 			$tier_labels     = Orbit_Activity::get_tier_labels();
 
 			$status_labels = array(
-				'active'    => '',                         // Default; show nothing.
 				'cancelled' => __( 'Cancelled', 'orbit' ),
 				'past'      => __( 'Past', 'orbit' ),
 			);
@@ -529,16 +528,19 @@ class Orbit_Shortcodes {
 			foreach ( $activities as $activity ) {
 				$response_count = isset( $response_counts[ $activity->id ]['total'] ) ? $response_counts[ $activity->id ]['total'] : 0;
 				$tier_label     = isset( $tier_labels[ (int) $activity->tier ] ) ? $tier_labels[ (int) $activity->tier ] : '';
-				$status_label   = isset( $status_labels[ $activity->status ] ) ? $status_labels[ $activity->status ] : '';
+				$status_label   = $status_labels[ $activity->status ] ?? '';
 				$is_active      = 'active' === $activity->status;
 
-				$title_html = '<a href="' . esc_url( home_url( '/activity/' . $activity->id ) ) . '">' . esc_html( $activity->title ) . '</a>';
-				if ( '' !== $status_label ) {
-					$title_html .= ' <span class="orbit-status-badge orbit-status-' . esc_attr( $activity->status ) . '">' . esc_html( $status_label ) . '</span>';
-				}
-
 				echo '<tr>';
-				echo '<td>' . $title_html . '</td>';
+				echo '<td><a href="' . esc_url( home_url( '/activity/' . $activity->id ) ) . '">' . esc_html( $activity->title ) . '</a>';
+				if ( '' !== $status_label ) {
+					echo ' <span class="orbit-status-badge orbit-status-' . esc_attr( $activity->status ) . '" aria-label="' . esc_attr( sprintf(
+						/* translators: %s: status label e.g. Cancelled, Past */
+						__( 'Status: %s', 'orbit' ),
+						$status_label
+					) ) . '">' . esc_html( $status_label ) . '</span>';
+				}
+				echo '</td>';
 				echo '<td>' . esc_html( $tier_label ) . '</td>';
 				echo '<td>' . ( $activity->date_time ? esc_html( self::format_datetime( $activity->date_time, 'M j, Y g:i A' ) ) : '—' ) . '</td>';
 				echo '<td>' . esc_html( $response_count ) . '</td>';

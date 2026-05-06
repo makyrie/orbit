@@ -18,6 +18,9 @@ class Orbit_Routes {
 	public static function register() {
 		add_action( 'init', array( __CLASS__, 'add_rewrite_rules' ) );
 		add_filter( 'query_vars', array( __CLASS__, 'add_query_vars' ) );
+		// Priority 5 so the logged-in front-page redirect runs before
+		// `redirect_canonical` (priority 10) and any third-party
+		// `template_redirect` work that might short-circuit on the home page.
 		add_action( 'template_redirect', array( __CLASS__, 'redirect_logged_in_from_home' ), 5 );
 		add_action( 'template_redirect', array( __CLASS__, 'handle_routes' ) );
 		add_action( 'wp_head', array( __CLASS__, 'add_noindex_meta' ) );
@@ -52,7 +55,8 @@ class Orbit_Routes {
 			return;
 		}
 
-		wp_safe_redirect( home_url( '/dashboard/' ) );
+		nocache_headers();
+		wp_safe_redirect( home_url( '/dashboard/' ), 303 );
 		exit;
 	}
 
@@ -70,7 +74,18 @@ class Orbit_Routes {
 			return $templates;
 		}
 
-		array_unshift( $templates, 'page-app' );
+		// Defensive: if another filter handed us something other than an
+		// array, fall back to a sane single-entry hierarchy.
+		if ( ! is_array( $templates ) ) {
+			return array( 'page-app' );
+		}
+
+		// Both `page_template_hierarchy` and `singular_template_hierarchy`
+		// fire for our virtual pages, so guard against double-prepending
+		// `page-app` when this filter runs twice on the same request.
+		if ( ! in_array( 'page-app', $templates, true ) ) {
+			array_unshift( $templates, 'page-app' );
+		}
 
 		return $templates;
 	}
@@ -80,7 +95,7 @@ class Orbit_Routes {
 	 *
 	 * @return bool
 	 */
-	private static function is_app_route() {
+	public static function is_app_route() {
 		return (bool) (
 			get_query_var( 'orbit_profile_slug' )
 			|| get_query_var( 'orbit_activity_id' )
@@ -374,8 +389,8 @@ class Orbit_Routes {
 			return;
 		}
 
-		// Activity pages should be noindex.
-		if ( get_query_var( 'orbit_activity_id' ) ) {
+		// Activity, profile, and unsubscribe routes should all be noindex.
+		if ( self::is_app_route() ) {
 			echo '<meta name="robots" content="noindex, nofollow">' . "\n";
 		}
 	}
