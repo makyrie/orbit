@@ -556,6 +556,10 @@
 
 /* ---- Profile ---- */
 
+.orbit-profile .orbit-profile-name {
+	margin: 0 0 var(--orbit-spacing-sm);
+}
+
 .orbit-profile .orbit-bio {
 	color: var(--orbit-color-muted);
 	font-size: 1.05rem;

@@ -957,6 +957,8 @@ class Orbit_Shortcodes {
 
 		echo '<div class="orbit-profile">';
 
+		echo '<h1 class="orbit-profile-name">' . esc_html( $profile->display_name ) . '</h1>';
+
 		if ( $profile->bio ) {
 			echo '<p class="orbit-bio">' . esc_html( $profile->bio ) . '</p>';
 		}
