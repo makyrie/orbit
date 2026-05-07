@@ -146,6 +146,22 @@
 	text-decoration: underline;
 }
 
+button.orbit-btn-link {
+	background: none;
+	border: 0;
+	cursor: pointer;
+	font-family: inherit;
+}
+
+.orbit-btn-link--danger {
+	color: var(--orbit-color-danger);
+}
+
+.orbit-btn-link--danger:hover,
+.orbit-btn-link--danger:focus {
+	color: var(--orbit-color-danger-hover);
+}
+
 /* ---- Forms ---- */
 
 .orbit-form {
@@ -397,17 +413,14 @@
 	color: var(--orbit-color-muted);
 }
 
-/* ---- Dashboard ---- */
+/* ---- Cards ---- */
 
-.orbit-dashboard-intro {
-	margin: 0 0 var(--orbit-spacing-lg);
-	color: var(--orbit-color-muted);
-	font-size: 1.05rem;
-	line-height: 1.6;
-}
-
-/* ---- Activity Cards ---- */
-
+/* Generic card surface — paper-warm bg, soft shadow, inviting padding.
+ * Used for activity cards on the dashboard / profile pages, and as the
+ * primitive for `manage`, `my-subscriptions`, and `subscribers` lists
+ * (which used to be utilitarian tables). All three list pages share
+ * this card style so the auth surface reads consistently. */
+.orbit-card,
 .orbit-dashboard .orbit-activity-card,
 .orbit-profile .orbit-activity-card {
 	padding: var(--orbit-spacing-lg);
@@ -419,10 +432,81 @@
 	transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
 
+.orbit-card:hover,
 .orbit-dashboard .orbit-activity-card:hover,
 .orbit-profile .orbit-activity-card:hover {
 	transform: translateY(-2px);
 	box-shadow: var(--orbit-shadow-lift);
+}
+
+/* Card list wrapper — vertical stack of cards. */
+.orbit-card-list {
+	list-style: none;
+	padding: 0;
+	margin: 0 0 var(--orbit-spacing);
+}
+
+/* Top meta row inside a card — name/title at left, status badge at right. */
+.orbit-card__header {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--orbit-spacing-sm);
+	flex-wrap: wrap;
+}
+
+.orbit-card__title {
+	margin: 0;
+	font-size: 1.25rem;
+}
+
+.orbit-card__title a {
+	color: inherit;
+	text-decoration: none;
+}
+
+.orbit-card__title a:hover,
+.orbit-card__title a:focus {
+	text-decoration: underline;
+}
+
+/* Secondary card lines — date, location, note, since. Muted slate. */
+.orbit-card__meta {
+	margin: 0.4em 0 0;
+	font-size: var(--orbit-font-size-sm);
+	color: var(--orbit-color-muted);
+}
+
+.orbit-card__meta + .orbit-card__meta {
+	margin-top: 0.25em;
+}
+
+/* Optional connection note / quote line in a card. */
+.orbit-card__note {
+	margin: 0.6em 0 0;
+	font-style: italic;
+	color: var(--orbit-color-text);
+}
+
+/* Action row at the bottom of a card — buttons / links right-aligned. */
+.orbit-card__actions {
+	display: flex;
+	justify-content: flex-end;
+	flex-wrap: wrap;
+	gap: var(--orbit-spacing-sm);
+	margin-top: var(--orbit-spacing);
+	padding-top: var(--orbit-spacing-sm);
+	border-top: 1px solid var(--orbit-color-border);
+}
+
+.orbit-card--cancelled,
+.orbit-card--past {
+	opacity: 0.85;
+}
+
+.orbit-card--cancelled .orbit-card__title,
+.orbit-card--past .orbit-card__title {
+	color: var(--orbit-color-muted);
 }
 
 .orbit-dashboard .orbit-activity-card--mine {
@@ -458,7 +542,11 @@ a.orbit-poster-name:focus {
 	color: var(--orbit-color-muted);
 }
 
-.orbit-activity-title {
+/* Card-level activity title — used inside `.orbit-activity-card` on
+ * the dashboard and the public profile's "Recent Activities" list.
+ * Scoped to h3 so the activity detail page's h1.orbit-activity-title
+ * keeps its h1 size from theme.json. */
+h3.orbit-activity-title {
 	margin: 0.25em 0;
 	font-size: 1.125rem;
 }
@@ -697,13 +785,28 @@ a.orbit-poster-name:focus {
 	color: var(--orbit-color-warning);
 }
 
-/* Page-level intro paragraph below an h1 — sets context for what
- * the page is for before the user dives into a table or form. */
+/* Page-level intro paragraph below an h1 — sets context for the
+ * page before the user dives into a table or form. Echoes the
+ * marketing-site tagline treatment (Fraunces italic in slate at lead
+ * size) so the auth surface feels of-a-piece with the homepage. */
 .orbit-page-intro {
-	margin: 0 0 var(--orbit-spacing);
-	color: var(--orbit-color-muted);
-	font-size: 1.05rem;
-	line-height: 1.6;
+	margin: 0.5em 0 var(--orbit-spacing-lg);
+	color: var(--wp--preset--color--slate, var(--orbit-color-muted));
+	font-family: var(--wp--preset--font-family--heading, Georgia, serif);
+	font-size: var(--wp--preset--font-size--lead, 1.1875rem);
+	font-style: italic;
+	line-height: 1.4;
+	max-width: 40rem;
+}
+
+/* The first heading on an app-page shortcode anchors the page header.
+ * Tighten its bottom margin so the .orbit-page-intro that follows
+ * reads as a kerned subhead, not a separate paragraph. */
+[class^="orbit-"] > h1:first-child,
+[class^="orbit-"] > h1.orbit-profile-name,
+[class^="orbit-"] > h1.orbit-activity-title {
+	margin-top: 0;
+	margin-bottom: 0.1em;
 }
 
 /* Compact summary line above a data table (e.g. "3 approved · 1 pending"). */
@@ -737,10 +840,17 @@ a.orbit-poster-name:focus {
 	margin: 0 0 var(--orbit-spacing-sm);
 }
 
+/* The bio sits directly under the profile name h1. Styled like the
+ * marketing tagline (Fraunces italic in slate at lead size) so it
+ * reads as a sub-heading rather than as just another paragraph. */
 .orbit-profile .orbit-bio {
-	color: var(--orbit-color-muted);
-	font-size: 1.05rem;
-	line-height: 1.6;
+	margin: 0 0 var(--orbit-spacing-lg);
+	color: var(--wp--preset--color--slate, var(--orbit-color-muted));
+	font-family: var(--wp--preset--font-family--heading, Georgia, serif);
+	font-size: var(--wp--preset--font-size--lead, 1.1875rem);
+	font-style: italic;
+	line-height: 1.4;
+	max-width: 40rem;
 }
 
 .orbit-notice-owner {
@@ -779,16 +889,23 @@ a.orbit-poster-name:focus {
 /* ---- Settings ---- */
 
 .orbit-settings {
-	max-width: 30rem;
+	max-width: 36rem;
 }
 
+/* Each tier-preference row sits as a label-input pair, vertically
+ * spaced to give them breathing room rather than crowding into a
+ * spreadsheet. */
 .orbit-setting-row {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
 	gap: var(--orbit-spacing);
-	padding: 0.75em 0;
+	padding: var(--orbit-spacing-sm) 0;
 	border-bottom: 1px solid var(--orbit-color-border);
+}
+
+.orbit-setting-row:first-of-type {
+	border-top: 1px solid var(--orbit-color-border);
 }
 
 .orbit-setting-row label {
@@ -798,12 +915,24 @@ a.orbit-poster-name:focus {
 
 .orbit-setting-row select,
 .orbit-setting-row input {
-	padding: 0.4em 0.6em;
+	min-width: 9rem;
+	padding: 0.45em 0.7em;
 	border: 1px solid var(--orbit-color-border);
 	border-radius: var(--orbit-radius);
 	font-size: var(--orbit-font-size-sm);
+	background-color: #fff;
 }
 
-.orbit-settings-form .orbit-btn {
-	margin-top: var(--orbit-spacing);
+.orbit-settings-form .orbit-btn,
+.orbit-settings-form .orbit-form-actions {
+	margin-top: var(--orbit-spacing-lg);
+}
+
+/* Section separator between the phone-verification block and the
+ * notification preferences. The phone block already has a dashed
+ * bottom border via .orbit-phone-verification, which provides the
+ * structural break — no additional spacing needed here, but tighten
+ * the H2 below it. */
+.orbit-settings h2 {
+	margin-top: var(--orbit-spacing-lg);
 }

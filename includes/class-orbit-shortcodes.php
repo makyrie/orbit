@@ -125,7 +125,7 @@ class Orbit_Shortcodes {
 		echo '<h1>' . esc_html__( 'Dashboard', 'orbit' ) . '</h1>';
 
 		if ( ! empty( $activities ) ) {
-			echo '<p class="orbit-dashboard-intro">' . esc_html__( 'Upcoming activities from you and the people you\'ve subscribed to, soonest first.', 'orbit' ) . '</p>';
+			echo '<p class="orbit-page-intro">' . esc_html__( 'Upcoming activities from you and the people you\'ve subscribed to, soonest first.', 'orbit' ) . '</p>';
 		}
 
 		if ( empty( $activities ) ) {
@@ -505,37 +505,40 @@ class Orbit_Shortcodes {
 
 			$status_labels = Orbit_Subscription::get_status_labels();
 
-			echo '<table class="orbit-table">';
-			echo '<thead><tr>';
-			echo '<th>' . esc_html__( 'Poster', 'orbit' ) . '</th>';
-			echo '<th>' . esc_html__( 'Status', 'orbit' ) . '</th>';
-			echo '<th>' . esc_html__( 'Since', 'orbit' ) . '</th>';
-			echo '<th><span class="screen-reader-text">' . esc_html__( 'Actions', 'orbit' ) . '</span></th>';
-			echo '</tr></thead><tbody>';
+			echo '<ul class="orbit-card-list">';
 
 			foreach ( $all_subs as $sub ) {
 				$profile      = isset( $profiles_map[ (int) $sub->profile_id ] ) ? $profiles_map[ (int) $sub->profile_id ] : null;
 				$name         = $profile ? $profile->display_name : __( 'Unknown', 'orbit' );
 				$url          = $profile ? home_url( '/@' . $profile->slug ) : '#';
 				$status_label = $status_labels[ $sub->status ] ?? __( 'Unknown', 'orbit' );
+				$since        = self::format_datetime( $sub->created_at, 'M j, Y' );
 
-				echo '<tr>';
-				echo '<td><a href="' . esc_url( $url ) . '">' . esc_html( $name ) . '</a></td>';
-				echo '<td><span class="orbit-status-badge orbit-status-' . esc_attr( $sub->status ) . '">' . esc_html( $status_label ) . '</span></td>';
-				echo '<td>' . esc_html( self::format_datetime( $sub->created_at, 'M j, Y' ) ) . '</td>';
-				echo '<td>';
+				echo '<li class="orbit-card">';
+
+				echo '<div class="orbit-card__header">';
+				echo '<h3 class="orbit-card__title"><a href="' . esc_url( $url ) . '">' . esc_html( $name ) . '</a></h3>';
+				echo '<span class="orbit-status-badge orbit-status-' . esc_attr( $sub->status ) . '">' . esc_html( $status_label ) . '</span>';
+				echo '</div>';
+
+				echo '<p class="orbit-card__meta">' . esc_html( sprintf(
+					/* translators: %s: date, e.g. "Apr 17, 2026" */
+					__( 'Subscribed %s', 'orbit' ),
+					$since
+				) ) . '</p>';
 
 				if ( 'approved' === $sub->status ) {
-					echo '<button class="orbit-btn orbit-btn-sm orbit-btn-danger" data-orbit-unsubscribe="' . esc_attr( $sub->id ) . '">';
+					echo '<div class="orbit-card__actions">';
+					echo '<button type="button" class="orbit-btn-link orbit-btn-link--danger" data-orbit-unsubscribe="' . esc_attr( $sub->id ) . '">';
 					echo esc_html__( 'Unsubscribe', 'orbit' );
 					echo '</button>';
+					echo '</div>';
 				}
 
-				echo '</td>';
-				echo '</tr>';
+				echo '</li>';
 			}
 
-			echo '</tbody></table>';
+			echo '</ul>';
 		}
 
 		echo '</div>';
@@ -612,46 +615,54 @@ class Orbit_Shortcodes {
 				echo '<p class="orbit-table-summary">' . esc_html( implode( ' · ', $summary_parts ) ) . '</p>';
 			}
 
-			echo '<table class="orbit-table">';
-			echo '<thead><tr>';
-			echo '<th>' . esc_html__( 'Title', 'orbit' ) . '</th>';
-			echo '<th>' . esc_html__( 'Tier', 'orbit' ) . '</th>';
-			echo '<th>' . esc_html__( 'Date', 'orbit' ) . '</th>';
-			echo '<th>' . esc_html__( 'Responses', 'orbit' ) . '</th>';
-			echo '<th>' . esc_html__( 'Actions', 'orbit' ) . '</th>';
-			echo '</tr></thead><tbody>';
+			echo '<ul class="orbit-card-list">';
 
 			foreach ( $activities as $activity ) {
 				$response_count = isset( $response_counts[ $activity->id ]['total'] ) ? $response_counts[ $activity->id ]['total'] : 0;
 				$tier_label     = isset( $tier_labels[ (int) $activity->tier ] ) ? $tier_labels[ (int) $activity->tier ] : '';
 				$is_active      = 'active' === $activity->status;
-				// Skip the badge for active activities — the absence of a badge
-				// already communicates the "active" state.
 				$status_label   = $is_active ? '' : ( $status_labels[ $activity->status ] ?? '' );
+				$card_class     = 'orbit-card';
+				if ( ! $is_active ) {
+					$card_class .= ' orbit-card--' . $activity->status;
+				}
 
-				echo '<tr>';
-				echo '<td><a href="' . esc_url( home_url( '/activity/' . $activity->id ) ) . '">' . esc_html( $activity->title ) . '</a>';
+				echo '<li class="' . esc_attr( $card_class ) . '">';
+
+				echo '<div class="orbit-card__header">';
+				echo '<h3 class="orbit-card__title"><a href="' . esc_url( home_url( '/activity/' . $activity->id ) ) . '">' . esc_html( $activity->title ) . '</a></h3>';
 				if ( '' !== $status_label ) {
-					echo ' <span class="orbit-status-badge orbit-status-' . esc_attr( $activity->status ) . '" aria-label="' . esc_attr( sprintf(
+					echo '<span class="orbit-status-badge orbit-status-' . esc_attr( $activity->status ) . '" aria-label="' . esc_attr( sprintf(
 						/* translators: %s: status label e.g. Cancelled, Past */
 						__( 'Status: %s', 'orbit' ),
 						$status_label
 					) ) . '">' . esc_html( $status_label ) . '</span>';
 				}
-				echo '</td>';
-				echo '<td>' . esc_html( $tier_label ) . '</td>';
-				echo '<td>' . ( $activity->date_time ? esc_html( self::format_datetime( $activity->date_time, 'M j, Y g:i A' ) ) : '—' ) . '</td>';
-				echo '<td>' . esc_html( $response_count ) . '</td>';
-				echo '<td class="orbit-manage__actions">';
-				echo '<a href="' . esc_url( home_url( '/edit-activity/?id=' . $activity->id ) ) . '">' . esc_html__( 'Edit', 'orbit' ) . '</a>';
+				echo '</div>';
+
+				echo '<p class="orbit-card__meta">';
+				echo esc_html( $tier_label );
+				echo ' <span aria-hidden="true">·</span> ';
+				echo $activity->date_time ? esc_html( self::format_datetime( $activity->date_time, 'M j, Y g:i A' ) ) : esc_html__( 'No date set', 'orbit' );
+				echo ' <span aria-hidden="true">·</span> ';
+				echo esc_html( sprintf(
+					/* translators: %d: response count */
+					_n( '%d response', '%d responses', $response_count, 'orbit' ),
+					$response_count
+				) );
+				echo '</p>';
+
+				echo '<div class="orbit-card__actions">';
+				echo '<a class="orbit-btn-link" href="' . esc_url( home_url( '/edit-activity/?id=' . $activity->id ) ) . '">' . esc_html__( 'Edit', 'orbit' ) . '</a>';
 				if ( $is_active ) {
-					echo ' <button type="button" class="orbit-link-button" data-orbit-cancel="' . esc_attr( $activity->id ) . '">' . esc_html__( 'Cancel activity', 'orbit' ) . '</button>';
+					echo '<button type="button" class="orbit-btn-link orbit-btn-link--danger" data-orbit-cancel="' . esc_attr( $activity->id ) . '">' . esc_html__( 'Cancel activity', 'orbit' ) . '</button>';
 				}
-				echo '</td>';
-				echo '</tr>';
+				echo '</div>';
+
+				echo '</li>';
 			}
 
-			echo '</tbody></table>';
+			echo '</ul>';
 		}
 
 		echo '</div>';
@@ -962,39 +973,44 @@ class Orbit_Shortcodes {
 
 			$status_labels = Orbit_Subscription::get_status_labels();
 
-			echo '<table class="orbit-table">';
-			echo '<thead><tr>';
-			echo '<th>' . esc_html__( 'Name', 'orbit' ) . '</th>';
-			echo '<th>' . esc_html__( 'Status', 'orbit' ) . '</th>';
-			echo '<th>' . esc_html__( 'Note', 'orbit' ) . '</th>';
-			echo '<th>' . esc_html__( 'Since', 'orbit' ) . '</th>';
-			echo '<th>' . esc_html__( 'Actions', 'orbit' ) . '</th>';
-			echo '</tr></thead><tbody>';
+			echo '<ul class="orbit-card-list">';
 
 			foreach ( $subscriptions as $sub ) {
 				$user         = get_userdata( $sub->user_id );
 				$name         = $user ? $user->display_name : __( 'Unknown', 'orbit' );
 				$status_label = $status_labels[ $sub->status ] ?? __( 'Unknown', 'orbit' );
+				$since        = self::format_datetime( $sub->created_at, 'M j, Y' );
 
-				echo '<tr>';
-				echo '<td>' . esc_html( $name ) . '</td>';
-				echo '<td><span class="orbit-status-badge orbit-status-' . esc_attr( $sub->status ) . '">' . esc_html( $status_label ) . '</span></td>';
-				echo '<td>' . esc_html( $sub->connection_note ? $sub->connection_note : '—' ) . '</td>';
-				echo '<td>' . esc_html( self::format_datetime( $sub->created_at, 'M j, Y' ) ) . '</td>';
-				echo '<td>';
+				echo '<li class="orbit-card">';
 
-				if ( 'pending' === $sub->status ) {
-					echo '<button class="orbit-btn orbit-btn-sm" data-orbit-subscriber-action="approve" data-id="' . esc_attr( $sub->id ) . '">' . esc_html__( 'Approve', 'orbit' ) . '</button> ';
-					echo '<button class="orbit-btn orbit-btn-sm orbit-btn-danger" data-orbit-subscriber-action="deny" data-id="' . esc_attr( $sub->id ) . '">' . esc_html__( 'Deny', 'orbit' ) . '</button>';
-				} elseif ( 'approved' === $sub->status ) {
-					echo '<button class="orbit-btn orbit-btn-sm orbit-btn-danger" data-orbit-subscriber-action="remove" data-id="' . esc_attr( $sub->id ) . '">' . esc_html__( 'Remove', 'orbit' ) . '</button>';
+				echo '<div class="orbit-card__header">';
+				echo '<h3 class="orbit-card__title">' . esc_html( $name ) . '</h3>';
+				echo '<span class="orbit-status-badge orbit-status-' . esc_attr( $sub->status ) . '">' . esc_html( $status_label ) . '</span>';
+				echo '</div>';
+
+				if ( $sub->connection_note ) {
+					echo '<p class="orbit-card__note">' . esc_html( $sub->connection_note ) . '</p>';
 				}
 
-				echo '</td>';
-				echo '</tr>';
+				echo '<p class="orbit-card__meta">' . esc_html( sprintf(
+					/* translators: %s: date, e.g. "Apr 17, 2026" */
+					__( 'Subscribed %s', 'orbit' ),
+					$since
+				) ) . '</p>';
+
+				echo '<div class="orbit-card__actions">';
+				if ( 'pending' === $sub->status ) {
+					echo '<button type="button" class="orbit-btn-link" data-orbit-subscriber-action="approve" data-id="' . esc_attr( $sub->id ) . '">' . esc_html__( 'Approve', 'orbit' ) . '</button>';
+					echo '<button type="button" class="orbit-btn-link orbit-btn-link--danger" data-orbit-subscriber-action="deny" data-id="' . esc_attr( $sub->id ) . '">' . esc_html__( 'Deny', 'orbit' ) . '</button>';
+				} elseif ( 'approved' === $sub->status ) {
+					echo '<button type="button" class="orbit-btn-link orbit-btn-link--danger" data-orbit-subscriber-action="remove" data-id="' . esc_attr( $sub->id ) . '">' . esc_html__( 'Remove', 'orbit' ) . '</button>';
+				}
+				echo '</div>';
+
+				echo '</li>';
 			}
 
-			echo '</tbody></table>';
+			echo '</ul>';
 		}
 
 		echo '</div>';
