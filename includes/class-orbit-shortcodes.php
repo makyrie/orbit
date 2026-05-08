@@ -1543,14 +1543,30 @@ class Orbit_Shortcodes {
 	}
 
 	/**
-	 * Format a UTC datetime string for display in the viewer's timezone.
+	 * Format a stored datetime string for display.
 	 *
-	 * @param string $utc_datetime UTC datetime string (Y-m-d H:i:s).
-	 * @param string $format       PHP date format. Default: full readable.
+	 * Activity datetimes are stored naively — the clock time the poster
+	 * typed in, with no timezone conversion at save. They represent the
+	 * local clock time of the physical event ("5pm at the park") rather
+	 * than a timezone-bearing instant. This formatter therefore parses
+	 * the value naively (interpreting it as UTC purely so PHP's
+	 * DateTime can read it) and formats it without timezone shifting,
+	 * so a viewer in any timezone sees the same clock time the poster
+	 * intended.
+	 *
+	 * Other persisted timestamps that this same helper also formats —
+	 * `created_at` on subscriptions, for instance — are MySQL `datetime`
+	 * columns set via `current_time( 'mysql' )` which produces site-tz
+	 * (or UTC, depending on caller) values. Those are read back here in
+	 * the same naive way, which is fine for the "Subscribed Apr 17,
+	 * 2026" date-only display they're used for.
+	 *
+	 * @param string $datetime Stored datetime string (Y-m-d H:i:s).
+	 * @param string $format   PHP date format. Default: full readable.
 	 * @return string Formatted date string.
 	 */
-	private static function format_datetime( $utc_datetime, $format = '' ) {
-		if ( empty( $utc_datetime ) ) {
+	private static function format_datetime( $datetime, $format = '' ) {
+		if ( empty( $datetime ) ) {
 			return '';
 		}
 
@@ -1558,25 +1574,13 @@ class Orbit_Shortcodes {
 			$format = 'l, F j \a\t g:i A';
 		}
 
-		$timezone_string = '';
-
-		if ( is_user_logged_in() ) {
-			$timezone_string = get_user_meta( get_current_user_id(), 'orbit_timezone', true );
-		}
-
-		if ( ! $timezone_string ) {
-			$timezone_string = wp_timezone_string();
-		}
-
 		try {
-			$utc      = new DateTimeZone( 'UTC' );
-			$local_tz = new DateTimeZone( $timezone_string );
-			$dt       = new DateTime( $utc_datetime, $utc );
-			$dt->setTimezone( $local_tz );
+			$utc = new DateTimeZone( 'UTC' );
+			$dt  = new DateTime( $datetime, $utc );
 
 			return $dt->format( $format );
 		} catch ( Exception $e ) {
-			return $utc_datetime;
+			return $datetime;
 		}
 	}
 
