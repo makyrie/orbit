@@ -184,7 +184,9 @@ class Orbit_REST_Subscription {
 			}
 			$user_id = $existing_user->ID;
 		} else {
-			// Create new WordPress user.
+			// Create new WordPress user with a generated placeholder
+			// password — `wp_send_new_user_notifications()` below emails
+			// them a "set your password" link so they can come back later.
 			$username = sanitize_user( strtolower( str_replace( ' ', '', $display_name ) ) . wp_rand( 100, 999 ) );
 			$password = wp_generate_password();
 
@@ -207,6 +209,21 @@ class Orbit_REST_Subscription {
 
 			// Set default timezone.
 			update_user_meta( $user_id, 'orbit_timezone', wp_timezone_string() );
+
+			// Auto-log them in. Without this the user lands back on the
+			// subscribe form anonymously after the post-submit reload and
+			// has no idea anything happened. With auto-login, the reload
+			// renders the "Your subscription is pending approval" message
+			// from the subscribe shortcode's logged-in branch.
+			wp_clear_auth_cookie();
+			wp_set_current_user( $user_id );
+			wp_set_auth_cookie( $user_id, true );
+
+			// Email them WP's standard "your account has been created"
+			// message with a password-set link. Lets them come back
+			// later (e.g. when their friend approves the subscription
+			// and the notification email arrives).
+			wp_send_new_user_notifications( $user_id, 'user' );
 		}
 
 		// Create subscription.

@@ -90,7 +90,8 @@ class Orbit_Routes {
 			return $redirect_to;
 		}
 
-		$dashboard_url = home_url( '/dashboard/' );
+		$dashboard_url    = home_url( '/dashboard/' );
+		$edit_profile_url = home_url( '/edit-profile/' );
 
 		// Honor an explicit non-admin `redirect_to`, but validate it locally
 		// rather than relying on the downstream `wp_safe_redirect()` host
@@ -102,6 +103,22 @@ class Orbit_Routes {
 		// edge case Orbit doesn't optimize for.
 		if ( $requested_redirect_to && 0 !== strpos( $requested_redirect_to, admin_url() ) ) {
 			return wp_validate_redirect( $requested_redirect_to, $dashboard_url );
+		}
+
+		// Greenfield-poster fast path: if the user has no profile AND no
+		// subscriptions, they're a fresh `users_can_register=1` signup
+		// who came in to be a poster. Send them straight to the profile
+		// editor instead of the (empty) dashboard. Subscribers, who at
+		// minimum have one subscription, fall through to /dashboard/.
+		if ( ! Orbit_Profile::get_by_user_id( $user->ID ) ) {
+			$has_subscriptions = ! empty( Orbit_Subscription::list( array(
+				'user_id'  => $user->ID,
+				'per_page' => 1,
+			) ) );
+
+			if ( ! $has_subscriptions ) {
+				return $edit_profile_url;
+			}
 		}
 
 		return $dashboard_url;
