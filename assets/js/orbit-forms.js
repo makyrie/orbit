@@ -213,7 +213,11 @@
 					}
 				}
 
-				showMessage( form, orbitForms.strings.success, 'success' );
+				// Prefer the server-provided message when present — it's
+				// already context-specific ("Your subscription request
+				// has been sent for approval." vs. a generic "Saved.").
+				var successMessage = ( result && result.message ) || orbitForms.strings.success;
+				showMessage( form, successMessage, 'success' );
 
 				// Redirect on certain actions.
 				if ( endpoint === 'activities' && method === 'POST' ) {

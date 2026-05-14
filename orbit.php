@@ -61,6 +61,7 @@ require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-notification.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rate-limiter.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-routes.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-shortcodes.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-spam.php';
 
 /**
  * Register WP-CLI commands.
@@ -224,6 +225,7 @@ add_action( 'rest_api_init', array( 'Orbit_REST_API', 'register_routes' ) );
  * Register custom routes and shortcodes.
  */
 Orbit_Routes::register();
+Orbit_Spam::register();
 add_action( 'init', array( 'Orbit_Shortcodes', 'register' ) );
 
 /**
