@@ -226,6 +226,16 @@
 					} else {
 						window.location.href = orbitForms.manageUrl;
 					}
+				} else if ( endpoint === 'signup' ) {
+					// Server response carries a `redirect_url` pointing
+					// at the next step (/edit-profile/). Use it so the
+					// new user lands on the profile editor instead of
+					// re-rendering the now-stale sign-up page.
+					if ( result && result.redirect_url ) {
+						window.location.href = result.redirect_url;
+					} else {
+						window.location.reload();
+					}
 				} else if ( endpoint === 'subscribe' || endpoint === 'profiles/me' ) {
 					window.location.reload();
 				}

@@ -30,6 +30,7 @@ class Orbit_REST_API {
 		Orbit_REST_Activity::register_routes();
 		Orbit_REST_Profile::register_routes();
 		Orbit_REST_Notification::register_routes();
+		Orbit_REST_Signup::register_routes();
 	}
 
 	/**

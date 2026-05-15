@@ -203,6 +203,10 @@ class Orbit_Activator {
 				'title'   => 'Edit Profile',
 				'content' => '[orbit_edit_profile]',
 			),
+			'sign-up'       => array(
+				'title'   => 'Sign Up',
+				'content' => '[orbit_sign_up]',
+			),
 		);
 
 		foreach ( $pages as $slug => $page_data ) {

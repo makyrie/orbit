@@ -62,6 +62,7 @@ require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rate-limiter.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-routes.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-shortcodes.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-spam.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-signup.php';
 
 /**
  * Register WP-CLI commands.
@@ -233,7 +234,9 @@ add_action( 'init', array( 'Orbit_Shortcodes', 'register' ) );
  */
 function orbit_enqueue_scripts() {
 	// Only load on pages that need it: Orbit pages, profile routes, activity routes.
-	$dominated_by_orbit = is_page( orbit_get_internal_page_slugs() );
+	// Sign-up is a public marketing page (kept out of the internal list, which
+	// controls nav-menu hiding) but needs the form handler too.
+	$dominated_by_orbit = is_page( orbit_get_internal_page_slugs() ) || is_page( 'sign-up' );
 
 	$is_orbit_route = get_query_var( 'orbit_profile_slug' )
 		|| get_query_var( 'orbit_activity_id' )
