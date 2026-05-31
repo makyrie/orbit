@@ -58,7 +58,9 @@
 			return response.json().then( function ( body ) {
 				if ( ! response.ok ) {
 					var msg = ( body && body.message ) ? body.message : 'An error occurred.';
-					throw new Error( msg );
+					var err = new Error( msg );
+					err.data = ( body && body.data ) ? body.data : null;
+					throw err;
 				}
 				return body;
 			} );
@@ -108,6 +110,50 @@
 				}
 			}, 8000 );
 		}
+	}
+
+	/**
+	 * Show an error message followed by an inline link.
+	 *
+	 * Builds the DOM nodes safely (textContent + setAttribute) so that
+	 * server-supplied strings cannot inject markup. The href is validated
+	 * via the URL constructor; if it parses, the link is rendered, else
+	 * the helper falls back to a plain message.
+	 *
+	 * @param {HTMLElement} el       - Element to show the message near.
+	 * @param {string}      message  - Message text.
+	 * @param {string}      href     - URL the inline link should target.
+	 * @param {string}      linkText - Visible link text.
+	 */
+	function showMessageWithLink( el, message, href, linkText ) {
+		// Validate the href so we don't inject something unparseable.
+		try {
+			// eslint-disable-next-line no-new
+			new URL( href, window.location.origin );
+		} catch ( e ) {
+			showMessage( el, message, 'error' );
+			return;
+		}
+
+		// Remove any existing message.
+		var existing = el.parentNode.querySelector( '.orbit-message' );
+		if ( existing ) {
+			existing.remove();
+		}
+
+		var div = document.createElement( 'div' );
+		div.className = 'orbit-message orbit-message-error';
+
+		var text = document.createTextNode( message + ' ' );
+		div.appendChild( text );
+
+		var link = document.createElement( 'a' );
+		link.setAttribute( 'href', href );
+		link.textContent = linkText;
+		div.appendChild( link );
+
+		el.parentNode.insertBefore( div, el.nextSibling );
+		div.scrollIntoView( { behavior: 'smooth', block: 'nearest' } );
 	}
 
 	/**
@@ -213,11 +259,24 @@
 					}
 				}
 
-				// Prefer the server-provided message when present — it's
-				// already context-specific ("Your subscription request
-				// has been sent for approval." vs. a generic "Saved.").
-				var successMessage = ( result && result.message ) || orbitForms.strings.success;
-				showMessage( form, successMessage, 'success' );
+				// Determine whether this success path is about to
+				// navigate the user away. When it is, skip the
+				// success message so it doesn't flash in the DOM
+				// for a microsecond before the redirect fires —
+				// it was never actually readable.
+				var willRedirect = ( endpoint === 'activities' && method === 'POST' )
+					|| ( endpoint === 'signup' )
+					|| ( endpoint === 'subscribe' )
+					|| ( endpoint === 'profiles/me' );
+
+				if ( ! willRedirect ) {
+					// Prefer the server-provided message when present —
+					// it's already context-specific ("Your subscription
+					// request has been sent for approval." vs. a generic
+					// "Saved.").
+					var successMessage = ( result && result.message ) || orbitForms.strings.success;
+					showMessage( form, successMessage, 'success' );
+				}
 
 				// Redirect on certain actions.
 				if ( endpoint === 'activities' && method === 'POST' ) {
@@ -241,6 +300,15 @@
 				}
 			} )
 			.catch( function ( err ) {
+				// When the signup endpoint hands back a `login_url`
+				// (e.g. 409 — email already exists), surface it as
+				// an inline "Log in" link so the user has a clear
+				// next step right in the error message rather than
+				// having to hunt for the footer link.
+				if ( endpoint === 'signup' && err && err.data && err.data.login_url ) {
+					showMessageWithLink( form, err.message, err.data.login_url, orbitForms.strings.logIn );
+					return;
+				}
 				showMessage( form, err.message, 'error' );
 			} )
 			.finally( function () {

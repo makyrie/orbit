@@ -70,7 +70,7 @@ class Orbit_REST_Signup {
 		// Rate limit: 5 signup attempts per hour per IP — same envelope
 		// as subscribe, since both create WP user accounts and we don't
 		// want either to be a spray-target.
-		$ip = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ?? '' ) );
+		$ip = Orbit_Client_IP::get();
 		if ( $ip && ! Orbit_Rate_Limiter::attempt( 'signup', $ip, 5, HOUR_IN_SECONDS ) ) {
 			return new WP_Error(
 				'rate_limited',
@@ -102,9 +102,9 @@ class Orbit_REST_Signup {
 			return new WP_Error( 'invalid_name', __( 'Please enter your name.', 'orbit' ), array( 'status' => 400 ) );
 		}
 
-		// Email collision → send them to login. Don't leak whether the
-		// email exists with an explicit "yes, that's a user" — but give
-		// a useful login_url so the JS can redirect there.
+		// Email collision → tell the user clearly and offer a login link.
+		// Deliberate enumeration tradeoff: UX > marginal privacy benefit on
+		// an invite-driven product where account existence is low-value info.
 		if ( get_user_by( 'email', $email ) ) {
 			return new WP_Error(
 				'login_required',
@@ -117,41 +117,50 @@ class Orbit_REST_Signup {
 		}
 
 		// Build a unique username from the display name. Same shape as
-		// the subscribe flow: lowercased, spaces stripped, three-digit
-		// suffix. Username collisions are likely on multisite where
-		// usernames are network-wide.
+		// the subscribe flow: lowercased, spaces stripped, then a random
+		// 5-digit suffix. Username collisions are likely on multisite
+		// where usernames are network-wide; the post-check retry loop
+		// below also closes the race between `username_exists()` and
+		// `wp_insert_user()` when two requests share a base.
 		$base     = sanitize_user( strtolower( str_replace( ' ', '', $display_name ) ), true );
 		$base     = '' !== $base ? $base : 'orbit-user';
-		$username = $base . wp_rand( 100, 999 );
+		$username = $base . wp_rand( 10000, 99999 );
 
-		// Defensive: regenerate if the suffix happened to collide.
-		$tries = 0;
-		while ( username_exists( $username ) && $tries < 5 ) {
-			$username = $base . wp_rand( 100, 999 );
-			++$tries;
-		}
+		$attempts = 0;
+		$user_id  = null;
+		do {
+			$user_id = wp_insert_user(
+				array(
+					'user_login'   => $username,
+					'user_pass'    => wp_generate_password(),
+					'user_email'   => $email,
+					'display_name' => $display_name,
+					'role'         => 'subscriber',
+				)
+			);
 
-		$password = wp_generate_password();
-		$user_id  = wp_create_user( $username, $password, $email );
+			if ( ! is_wp_error( $user_id ) ) {
+				break;
+			}
+
+			if ( 'existing_user_login' !== $user_id->get_error_code() ) {
+				return new WP_Error( 'user_creation_failed', $user_id->get_error_message(), array( 'status' => 500 ) );
+			}
+
+			$username = $base . wp_rand( 10000, 99999 );
+			++$attempts;
+		} while ( $attempts < 5 );
 
 		if ( is_wp_error( $user_id ) ) {
-			return new WP_Error( 'user_creation_failed', $user_id->get_error_message(), array( 'status' => 500 ) );
+			return new WP_Error(
+				'user_creation_failed',
+				__( "We couldn't create your account right now. Please try again in a moment.", 'orbit' ),
+				array( 'status' => 503 )
+			);
 		}
 
-		wp_update_user(
-			array(
-				'ID'           => $user_id,
-				'display_name' => $display_name,
-			)
-		);
-
-		// On multisite, `wp_create_user` makes a network user with no
-		// role on this sub-site. `add_user_to_blog` attaches them with
-		// the subscriber role. On single-site this is a no-op-ish that
-		// idempotently sets the same role.
-		if ( function_exists( 'add_user_to_blog' ) ) {
-			add_user_to_blog( get_current_blog_id(), $user_id, 'subscriber' );
-		}
+		// Multisite: attach subscriber role on this sub-site. Idempotent on single-site.
+		add_user_to_blog( get_current_blog_id(), $user_id, 'subscriber' );
 
 		// Default timezone — used when formatting "Subscribed Apr 17, 2026"
 		// type display strings (the orbit_timezone meta would be set

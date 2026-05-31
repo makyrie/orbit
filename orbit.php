@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Perihelion
  * Description: Person-centric social activity tool. Subscribe to people, get notified about their activities, respond with lightweight going/maybe actions.
- * Version:     1.4.1
+ * Version:     1.5.0
  * Author:      Perihelion
  * License:     GPL-2.0-or-later
  * Text Domain: orbit
@@ -17,7 +17,7 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Plugin constants.
  */
-define( 'ORBIT_VERSION', '1.4.1' );
+define( 'ORBIT_VERSION', '1.5.0' );
 define( 'ORBIT_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ORBIT_PLUGIN_FILE', __FILE__ );
 
@@ -58,6 +58,7 @@ require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-subscription.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-activity.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-profile.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-notification.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-client-ip.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rate-limiter.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-routes.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-shortcodes.php';
@@ -124,6 +125,7 @@ function orbit_maybe_upgrade() {
 
 	if ( $installed_version !== ORBIT_VERSION ) {
 		Orbit_Activator::create_tables();
+		Orbit_Activator::create_pages();
 		Orbit_Roles::register();
 		orbit_migrate_page_slugs();
 		orbit_migrate_app_page_templates();
@@ -276,6 +278,7 @@ function orbit_enqueue_scripts() {
 				'confirmUnsubscribe' => __( 'Are you sure you want to unsubscribe?', 'orbit' ),
 				'retract'            => __( 'Cancel RSVP', 'orbit' ),
 				'timeout'            => __( 'The request timed out. Please try again.', 'orbit' ),
+				'logIn'              => __( 'Log in', 'orbit' ),
 			),
 		)
 	);

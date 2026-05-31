@@ -172,40 +172,49 @@ class Orbit_Activator {
 	public static function create_pages() {
 		$pages = array(
 			'dashboard'     => array(
-				'title'   => 'Dashboard',
-				'content' => '[orbit_dashboard]',
+				'title'    => 'Dashboard',
+				'content'  => '[orbit_dashboard]',
+				'template' => 'page-app',
 			),
 			'settings'      => array(
-				'title'   => 'Settings',
-				'content' => '[orbit_settings]',
+				'title'    => 'Settings',
+				'content'  => '[orbit_settings]',
+				'template' => 'page-app',
 			),
 			'subscriptions' => array(
-				'title'   => 'Subscriptions',
-				'content' => '[orbit_my_subscriptions]',
+				'title'    => 'Subscriptions',
+				'content'  => '[orbit_my_subscriptions]',
+				'template' => 'page-app',
 			),
 			'manage'        => array(
-				'title'   => 'Manage',
-				'content' => '[orbit_manage]',
+				'title'    => 'Manage',
+				'content'  => '[orbit_manage]',
+				'template' => 'page-app',
 			),
 			'new-activity'  => array(
-				'title'   => 'New Activity',
-				'content' => '[orbit_new_activity]',
+				'title'    => 'New Activity',
+				'content'  => '[orbit_new_activity]',
+				'template' => 'page-app',
 			),
 			'edit-activity' => array(
-				'title'   => 'Edit Activity',
-				'content' => '[orbit_edit_activity]',
+				'title'    => 'Edit Activity',
+				'content'  => '[orbit_edit_activity]',
+				'template' => 'page-app',
 			),
 			'subscribers'   => array(
-				'title'   => 'Subscribers',
-				'content' => '[orbit_subscribers]',
+				'title'    => 'Subscribers',
+				'content'  => '[orbit_subscribers]',
+				'template' => 'page-app',
 			),
 			'edit-profile'  => array(
-				'title'   => 'Edit Profile',
-				'content' => '[orbit_edit_profile]',
+				'title'    => 'Edit Profile',
+				'content'  => '[orbit_edit_profile]',
+				'template' => 'page-app',
 			),
 			'sign-up'       => array(
-				'title'   => 'Sign Up',
-				'content' => '[orbit_sign_up]',
+				'title'    => 'Sign Up',
+				'content'  => '[orbit_sign_up]',
+				'template' => '',
 			),
 		);
 
@@ -216,19 +225,22 @@ class Orbit_Activator {
 				continue;
 			}
 
-			wp_insert_post(
-				array(
-					'post_title'   => $page_data['title'],
-					'post_name'    => $slug,
-					'post_content' => $page_data['content'],
-					'post_status'  => 'publish',
-					'post_type'    => 'page',
-					'post_author'  => 1,
-					'meta_input'   => array(
-						'_wp_page_template' => 'page-app',
-					),
-				)
+			$post_args = array(
+				'post_title'   => $page_data['title'],
+				'post_name'    => $slug,
+				'post_content' => $page_data['content'],
+				'post_status'  => 'publish',
+				'post_type'    => 'page',
+				'post_author'  => 1,
 			);
+
+			if ( ! empty( $page_data['template'] ) ) {
+				$post_args['meta_input'] = array(
+					'_wp_page_template' => $page_data['template'],
+				);
+			}
+
+			wp_insert_post( $post_args );
 		}
 	}
 }
