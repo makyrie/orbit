@@ -32,16 +32,18 @@ class Orbit_Shortcodes {
 		add_shortcode( 'orbit_subscribe_form', array( __CLASS__, 'subscribe_form' ) );
 		add_shortcode( 'orbit_activity', array( __CLASS__, 'activity' ) );
 		add_shortcode( 'orbit_cta', array( __CLASS__, 'cta' ) );
+		add_shortcode( 'orbit_sign_up', array( __CLASS__, 'sign_up' ) );
 	}
 
 	/**
 	 * Render a user-aware call-to-action button.
 	 *
 	 * Used in the marketing-site front page so the CTA adapts to the
-	 * viewer's state instead of always pointing at "Set up your profile."
+	 * viewer's state instead of always pointing at one destination.
 	 *
-	 *   - Logged-out OR logged-in without a profile: Set up your profile
-	 *   - Logged-in with a profile: Go to your dashboard
+	 *   - Logged-out: Sign up → /sign-up/
+	 *   - Logged-in without a profile: Set up your profile → /edit-profile/
+	 *   - Logged-in with a profile: Go to your dashboard → /dashboard/
 	 *
 	 * Output is wrapped in WP's button-block markup so it inherits the
 	 * theme's button styling.
@@ -50,13 +52,10 @@ class Orbit_Shortcodes {
 	 * @return string Rendered HTML for a single button block.
 	 */
 	public static function cta( $atts ) {
-		$has_profile = false;
-
-		if ( is_user_logged_in() ) {
-			$has_profile = (bool) Orbit_Profile::get_by_user_id( get_current_user_id() );
-		}
-
-		if ( $has_profile ) {
+		if ( ! is_user_logged_in() ) {
+			$href  = home_url( '/sign-up/' );
+			$label = _x( 'Sign up', 'orbit_cta button label', 'orbit' );
+		} elseif ( Orbit_Profile::get_by_user_id( get_current_user_id() ) ) {
 			$href  = home_url( '/dashboard/' );
 			$label = _x( 'Go to your dashboard', 'orbit_cta button label', 'orbit' );
 		} else {
@@ -69,6 +68,85 @@ class Orbit_Shortcodes {
 			esc_url( $href ),
 			esc_html( $label )
 		);
+	}
+
+	/**
+	 * Sign-up form.
+	 *
+	 * Marketing-surface form for new posters. Calls POST
+	 * `orbit/v1/signup` (handled by `Orbit_REST_Signup`), which creates
+	 * a WP user, auto-logs them in, sends the password-set email, and
+	 * returns a `redirect_url` to /edit-profile/ so the JS handler can
+	 * forward them straight into setting up their profile.
+	 *
+	 * Multisite-friendly: bypasses wp-signup.php (which requires
+	 * `users_can_register` at the network level and forces a two-step
+	 * email-confirm flow that's overkill for an invite-driven product).
+	 *
+	 * @param array $atts Shortcode attributes (none used currently).
+	 * @return string HTML output.
+	 */
+	public static function sign_up( $atts ) {
+		if ( is_user_logged_in() ) {
+			// Logged in already → bounce to the natural next step. The
+			// `redirect_after_login` filter already handles the
+			// no-profile-yet → /edit-profile/ branch, so we just match
+			// that here for direct hits to /sign-up/.
+			$has_profile = (bool) Orbit_Profile::get_by_user_id( get_current_user_id() );
+			$href        = $has_profile ? home_url( '/dashboard/' ) : home_url( '/edit-profile/' );
+
+			return sprintf(
+				'<p class="orbit-empty">%s <a href="%s">%s</a></p>',
+				esc_html__( "You're already signed in.", 'orbit' ),
+				esc_url( $href ),
+				esc_html( $has_profile ? __( 'Go to your dashboard', 'orbit' ) : __( 'Set up your profile', 'orbit' ) )
+			);
+		}
+
+		$login_url = wp_login_url( home_url( '/dashboard/' ) );
+
+		ob_start();
+		?>
+		<h1 class="orbit-h1"><?php esc_html_e( 'Create your account', 'orbit' ); ?></h1>
+		<p class="orbit-page-intro">
+			<?php esc_html_e( "A poster account lets you share what you're up to with the friends you invite. Two steps: this one, then a short profile so people know who they're subscribing to.", 'orbit' ); ?>
+		</p>
+		<p class="orbit-required-note">
+			<?php
+			echo wp_kses(
+				/* translators: %s is a red asterisk indicating the required-field marker. */
+				sprintf( __( 'Fields marked with %s are required.', 'orbit' ), '<span class="orbit-required-mark" aria-hidden="true">*</span>' ),
+				array( 'span' => array( 'class' => array(), 'aria-hidden' => array() ) )
+			);
+			?>
+		</p>
+		<form data-orbit-api="signup" method="post" class="orbit-form">
+			<p>
+				<label for="orbit-signup-name">
+					<?php esc_html_e( 'Your name', 'orbit' ); ?>
+					<span class="orbit-required-mark" aria-hidden="true">*</span>
+				</label>
+				<input type="text" id="orbit-signup-name" name="display_name" required autocomplete="name">
+				<span class="orbit-field-help"><?php esc_html_e( "How you'll appear on activity cards and your public profile. You can change it later.", 'orbit' ); ?></span>
+			</p>
+			<p>
+				<label for="orbit-signup-email">
+					<?php esc_html_e( 'Email', 'orbit' ); ?>
+					<span class="orbit-required-mark" aria-hidden="true">*</span>
+				</label>
+				<input type="email" id="orbit-signup-email" name="email" required autocomplete="email">
+				<span class="orbit-field-help"><?php esc_html_e( 'Used to send you activity notifications and a link to set your password.', 'orbit' ); ?></span>
+			</p>
+			<?php Orbit_Spam::render_traps(); ?>
+			<p>
+				<button type="submit" class="orbit-btn orbit-btn-primary"><?php esc_html_e( 'Create account', 'orbit' ); ?></button>
+			</p>
+			<p class="orbit-form-footer">
+				<a href="<?php echo esc_url( $login_url ); ?>"><?php esc_html_e( 'Already have an account? Log in', 'orbit' ); ?></a>
+			</p>
+		</form>
+		<?php
+		return ob_get_clean();
 	}
 
 	/**

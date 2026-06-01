@@ -75,7 +75,49 @@ class Orbit_Spam {
 	}
 
 	/**
-	 * Validate honeypot + timestamp on registration.
+	 * Shape-agnostic honeypot + timestamp check.
+	 *
+	 * Reads `orbit_url` and `orbit_form_init` out of an arbitrary input
+	 * map and returns either `null` (clean) or a `WP_Error` describing
+	 * the rejection. Lets callers pass `$_POST` directly (WP register
+	 * form) or the body of a REST request (Orbit's own signup endpoint)
+	 * without each one re-implementing the same logic.
+	 *
+	 * @param array $post_data Input map (e.g. `$_POST` or `$request->get_params()`).
+	 * @return WP_Error|null `WP_Error` on rejection, `null` if clean.
+	 */
+	public static function check_traps( $post_data ) {
+		$honeypot = isset( $post_data['orbit_url'] ) ? wp_unslash( $post_data['orbit_url'] ) : '';
+
+		if ( '' !== trim( (string) $honeypot ) ) {
+			return new WP_Error( 'orbit_spam_detected', __( 'Submission could not be completed. Please try again.', 'orbit' ) );
+		}
+
+		$init_ms = isset( $post_data['orbit_form_init'] ) ? (int) wp_unslash( $post_data['orbit_form_init'] ) : 0;
+
+		if ( $init_ms <= 0 ) {
+			return new WP_Error( 'orbit_spam_detected', __( 'Submission could not be completed. Please try again.', 'orbit' ) );
+		}
+
+		$now_ms     = (int) round( microtime( true ) * 1000 );
+		$elapsed_ms = $now_ms - $init_ms;
+
+		if ( $elapsed_ms < self::MIN_FILL_MS ) {
+			return new WP_Error( 'orbit_spam_detected', __( 'Submission could not be completed. Please try again.', 'orbit' ) );
+		}
+
+		if ( $elapsed_ms > self::MAX_AGE_SECONDS * 1000 ) {
+			return new WP_Error( 'orbit_form_expired', __( 'This form has expired. Please reload the page and try again.', 'orbit' ) );
+		}
+
+		return null;
+	}
+
+	/**
+	 * Validate honeypot + timestamp on the WP registration form.
+	 *
+	 * Adapter that bridges `check_traps()` to the `registration_errors`
+	 * filter's `WP_Error` accumulator API.
 	 *
 	 * @param WP_Error $errors               Existing registration errors.
 	 * @param string   $sanitized_user_login Sanitized username (unused).
@@ -83,31 +125,10 @@ class Orbit_Spam {
 	 * @return WP_Error Possibly-augmented error object.
 	 */
 	public static function validate_traps( $errors, $sanitized_user_login, $user_email ) {
-		$honeypot = isset( $_POST['orbit_url'] ) ? wp_unslash( $_POST['orbit_url'] ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- WP core verifies the registration nonce.
+		$trap_error = self::check_traps( $_POST ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- WP core verifies the registration nonce.
 
-		if ( '' !== trim( (string) $honeypot ) ) {
-			$errors->add( 'orbit_spam_detected', __( 'Registration could not be completed. Please try again.', 'orbit' ) );
-			return $errors;
-		}
-
-		$init_ms = isset( $_POST['orbit_form_init'] ) ? (int) wp_unslash( $_POST['orbit_form_init'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- ditto.
-
-		if ( $init_ms <= 0 ) {
-			$errors->add( 'orbit_spam_detected', __( 'Registration could not be completed. Please try again.', 'orbit' ) );
-			return $errors;
-		}
-
-		$now_ms     = (int) round( microtime( true ) * 1000 );
-		$elapsed_ms = $now_ms - $init_ms;
-
-		if ( $elapsed_ms < self::MIN_FILL_MS ) {
-			$errors->add( 'orbit_spam_detected', __( 'Registration could not be completed. Please try again.', 'orbit' ) );
-			return $errors;
-		}
-
-		if ( $elapsed_ms > self::MAX_AGE_SECONDS * 1000 ) {
-			$errors->add( 'orbit_form_expired', __( 'This registration form has expired. Please reload the page and try again.', 'orbit' ) );
-			return $errors;
+		if ( is_wp_error( $trap_error ) ) {
+			$errors->add( $trap_error->get_error_code(), $trap_error->get_error_message() );
 		}
 
 		return $errors;

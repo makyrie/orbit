@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Perihelion
  * Description: Person-centric social activity tool. Subscribe to people, get notified about their activities, respond with lightweight going/maybe actions.
- * Version:     1.4.1
+ * Version:     1.5.0
  * Author:      Perihelion
  * License:     GPL-2.0-or-later
  * Text Domain: orbit
@@ -17,7 +17,7 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Plugin constants.
  */
-define( 'ORBIT_VERSION', '1.4.1' );
+define( 'ORBIT_VERSION', '1.5.0' );
 define( 'ORBIT_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ORBIT_PLUGIN_FILE', __FILE__ );
 
@@ -58,10 +58,12 @@ require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-subscription.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-activity.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-profile.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-notification.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-client-ip.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rate-limiter.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-routes.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-shortcodes.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-spam.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-signup.php';
 
 /**
  * Register WP-CLI commands.
@@ -123,6 +125,7 @@ function orbit_maybe_upgrade() {
 
 	if ( $installed_version !== ORBIT_VERSION ) {
 		Orbit_Activator::create_tables();
+		Orbit_Activator::create_pages();
 		Orbit_Roles::register();
 		orbit_migrate_page_slugs();
 		orbit_migrate_app_page_templates();
@@ -233,7 +236,9 @@ add_action( 'init', array( 'Orbit_Shortcodes', 'register' ) );
  */
 function orbit_enqueue_scripts() {
 	// Only load on pages that need it: Orbit pages, profile routes, activity routes.
-	$dominated_by_orbit = is_page( orbit_get_internal_page_slugs() );
+	// Sign-up is a public marketing page (kept out of the internal list, which
+	// controls nav-menu hiding) but needs the form handler too.
+	$dominated_by_orbit = is_page( orbit_get_internal_page_slugs() ) || is_page( 'sign-up' );
 
 	$is_orbit_route = get_query_var( 'orbit_profile_slug' )
 		|| get_query_var( 'orbit_activity_id' )
@@ -273,6 +278,7 @@ function orbit_enqueue_scripts() {
 				'confirmUnsubscribe' => __( 'Are you sure you want to unsubscribe?', 'orbit' ),
 				'retract'            => __( 'Cancel RSVP', 'orbit' ),
 				'timeout'            => __( 'The request timed out. Please try again.', 'orbit' ),
+				'logIn'              => __( 'Log in', 'orbit' ),
 			),
 		)
 	);
