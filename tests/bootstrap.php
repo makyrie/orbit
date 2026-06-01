@@ -8,6 +8,11 @@
 // Composer autoloader.
 require_once dirname( __DIR__ ) . '/vendor/autoload.php';
 
+// Define test-environment salt used by Orbit_Consent::record() to hash IPs.
+// Real installs set this in wp-config.php; tests use a fixed value so
+// hash chains are reproducible across runs.
+defined( 'ORBIT_CONSENT_IP_SALT' ) || define( 'ORBIT_CONSENT_IP_SALT', 'orbit_test_salt_do_not_use_in_production' );
+
 // Load WordPress test environment.
 $_tests_dir = getenv( 'WP_TESTS_DIR' );
 

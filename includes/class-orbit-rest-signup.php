@@ -159,8 +159,14 @@ class Orbit_REST_Signup {
 			);
 		}
 
-		// Multisite: attach subscriber role on this sub-site. Idempotent on single-site.
-		add_user_to_blog( get_current_blog_id(), $user_id, 'subscriber' );
+		// On multisite, wp_insert_user creates a network user with no
+		// role on the current sub-site — add_user_to_blog() attaches the
+		// subscriber role here. On single-site the function isn't loaded
+		// (ms-functions.php is multisite-only), and wp_insert_user has
+		// already set the role globally, so the call is unnecessary.
+		if ( is_multisite() ) {
+			add_user_to_blog( get_current_blog_id(), $user_id, 'subscriber' );
+		}
 
 		// Default timezone — used when formatting "Subscribed Apr 17, 2026"
 		// type display strings (the orbit_timezone meta would be set

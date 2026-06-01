@@ -123,20 +123,30 @@ class Orbit_Activator {
 		) {$charset_collate};";
 
 		// orbit_notification_log.
+		//
+		// Status widened to varchar(32) (not enum) so future statuses
+		// (`coerced_email`, `delivered`, `undelivered`, `suppressed`,
+		// `deferred`) can land without further schema migrations.
+		// provider_message_id correlates a log row to the upstream
+		// provider's message ID (Twilio MessageSid, SendGrid X-Message-Id)
+		// so v1.1 delivery callbacks can update the row's status.
 		$table_notif_log = $wpdb->prefix . ORBIT_TABLE_NOTIFICATION_LOG;
 		$sql[]           = "CREATE TABLE {$table_notif_log} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 			user_id bigint(20) unsigned NOT NULL,
 			activity_id bigint(20) unsigned NOT NULL,
 			method enum('sms','email','digest') NOT NULL,
-			status enum('queued','sent','failed') NOT NULL DEFAULT 'queued',
+			status varchar(32) NOT NULL DEFAULT 'queued',
+			provider_message_id varchar(100) DEFAULT NULL,
 			sent_at datetime DEFAULT NULL,
+			status_updated_at datetime DEFAULT NULL,
 			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY  (id),
 			KEY user_id (user_id),
 			KEY activity_id (activity_id),
 			KEY user_method_date (user_id, method, created_at),
-			KEY created_at (created_at)
+			KEY created_at (created_at),
+			KEY provider_message_id (provider_message_id)
 		) {$charset_collate};";
 
 		// orbit_phone_verification.
@@ -154,11 +164,56 @@ class Orbit_Activator {
 			KEY phone_created (phone, created_at)
 		) {$charset_collate};";
 
+		// orbit_consent_ledger.
+		//
+		// Network-scoped on multisite (base_prefix, not prefix). Consent
+		// attaches to a user identity, which is network-wide. Per-site
+		// scoping would fragment the audit trail.
+		//
+		// Append-only by design — see Orbit_Consent for the hash-chain
+		// invariant and the query-filter guard that refuses UPDATE/DELETE
+		// outside an ORBIT_CONSENT_MIGRATION window.
+		//
+		// `user_id` has no FK constraint — TCPA evidence must survive user
+		// deletion. `Orbit_Privacy::cleanup_user_data()` will redact PII
+		// (ip_hash, user_agent) when a user is deleted but leave the row.
+		$table_consent_ledger = $wpdb->base_prefix . ORBIT_TABLE_CONSENT_LEDGER;
+		$sql[]                = "CREATE TABLE {$table_consent_ledger} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			user_id bigint(20) unsigned NOT NULL,
+			channel enum('email','sms') NOT NULL,
+			event enum('opt_in','opt_out','re_opt_in') NOT NULL,
+			program varchar(64) NOT NULL DEFAULT 'creator-notifications',
+			cta_snapshot text NOT NULL,
+			cta_snapshot_sha256 char(64) NOT NULL DEFAULT '',
+			source varchar(64) NOT NULL DEFAULT '',
+			ip_hash char(64) NOT NULL DEFAULT '',
+			user_agent varchar(255) NOT NULL DEFAULT '',
+			privacy_policy_version varchar(32) NOT NULL DEFAULT '',
+			terms_version varchar(32) NOT NULL DEFAULT '',
+			created_at_utc datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			row_hash char(64) NOT NULL,
+			prev_hash char(64) NOT NULL DEFAULT '',
+			redacted_at_utc datetime DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY chain_pos (user_id, channel, prev_hash),
+			KEY user_channel_time (user_id, channel, created_at_utc),
+			KEY channel_event_time (channel, event, created_at_utc),
+			KEY redacted_at (redacted_at_utc)
+		) {$charset_collate};";
+
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
 		foreach ( $sql as $query ) {
 			dbDelta( $query );
 		}
+
+		// dbDelta is unreliable at converting an existing ENUM column to
+		// VARCHAR. For installs upgrading from <=1.5.x, run an explicit
+		// ALTER for the notification log's status column. The MODIFY is
+		// idempotent on already-VARCHAR(32) columns.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$wpdb->query( "ALTER TABLE {$table_notif_log} MODIFY COLUMN status varchar(32) NOT NULL DEFAULT 'queued'" );
 
 		update_option( 'orbit_db_version', ORBIT_VERSION );
 	}

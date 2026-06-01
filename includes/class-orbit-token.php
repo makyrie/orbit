@@ -32,6 +32,26 @@ class Orbit_Token {
 	const ACTION_TOKEN_EXPIRY_DATELESS = 30 * DAY_IN_SECONDS;
 
 	/**
+	 * Unsubscribe token expiry: 1 year. Long enough that an unread email
+	 * months later still works; short enough that a stolen mail spool
+	 * doesn't grant indefinite unsub capability.
+	 *
+	 * @var int
+	 */
+	const UNSUBSCRIBE_TOKEN_EXPIRY = 365 * DAY_IN_SECONDS;
+
+	/**
+	 * Domain-separation string for unsubscribe tokens.
+	 *
+	 * Mixed into the HMAC payload so an unsubscribe token cannot be
+	 * misvalidated as an action (RSVP) token and vice versa, even though
+	 * both share the subscription_secret key.
+	 *
+	 * @var string
+	 */
+	const UNSUBSCRIBE_DOMAIN = 'unsubscribe';
+
+	/**
 	 * Generate a random token for share tokens or subscription secrets.
 	 *
 	 * @return string 32-character alphanumeric string.
@@ -119,6 +139,69 @@ class Orbit_Token {
 	}
 
 	/**
+	 * Generate an unsubscribe token for a subscription.
+	 *
+	 * Format: {subscription_id}.{base64(expiry)}:{hmac_hex}
+	 *
+	 * Same composite shape as action tokens (for parser reuse and O(1)
+	 * lookup via embedded subscription_id), but the HMAC payload includes
+	 * the UNSUBSCRIBE_DOMAIN constant so an action token can never be
+	 * misvalidated as an unsubscribe and vice versa.
+	 *
+	 * @param string   $subscription_secret The subscription secret.
+	 * @param int      $subscription_id     The subscription ID.
+	 * @param int|null $expiry_timestamp    Optional explicit expiry. Defaults to 1 year from now.
+	 * @return string The composite unsubscribe token.
+	 */
+	public static function generate_unsubscribe_token( $subscription_secret, $subscription_id, $expiry_timestamp = null ) {
+		if ( null === $expiry_timestamp ) {
+			$expiry_timestamp = time() + self::UNSUBSCRIBE_TOKEN_EXPIRY;
+		}
+
+		$hmac = self::compute_unsubscribe_hmac( $subscription_secret, $subscription_id, $expiry_timestamp );
+
+		return $subscription_id . '.' . base64_encode( (string) $expiry_timestamp ) . ':' . $hmac;
+	}
+
+	/**
+	 * Validate an unsubscribe token.
+	 *
+	 * @param string $token               The composite unsubscribe token.
+	 * @param string $subscription_secret The subscription secret.
+	 * @param int    $subscription_id     The subscription ID.
+	 * @return bool True if valid and not expired.
+	 */
+	public static function validate_unsubscribe_token( $token, $subscription_secret, $subscription_id ) {
+		$dot_pos = strpos( $token, '.' );
+		if ( false === $dot_pos ) {
+			return false;
+		}
+
+		$remaining = substr( $token, $dot_pos + 1 );
+		$parts     = explode( ':', $remaining, 2 );
+
+		if ( 2 !== count( $parts ) ) {
+			return false;
+		}
+
+		$expiry_decoded = base64_decode( $parts[0], true );
+
+		if ( false === $expiry_decoded ) {
+			return false;
+		}
+
+		$expiry_timestamp = (int) $expiry_decoded;
+
+		if ( time() > $expiry_timestamp ) {
+			return false;
+		}
+
+		$expected_hmac = self::compute_unsubscribe_hmac( $subscription_secret, $subscription_id, $expiry_timestamp );
+
+		return hash_equals( $expected_hmac, $parts[1] );
+	}
+
+	/**
 	 * Compute HMAC-SHA256 for an action token.
 	 *
 	 * @param string $subscription_secret The subscription secret (key).
@@ -128,6 +211,23 @@ class Orbit_Token {
 	 */
 	private static function compute_hmac( $subscription_secret, $activity_id, $expiry_timestamp ) {
 		$data = $activity_id . '|' . $expiry_timestamp;
+
+		return hash_hmac( 'sha256', $data, $subscription_secret );
+	}
+
+	/**
+	 * Compute HMAC-SHA256 for an unsubscribe token.
+	 *
+	 * Domain-separated from action tokens via UNSUBSCRIBE_DOMAIN constant
+	 * mixed into the HMAC payload.
+	 *
+	 * @param string $subscription_secret The subscription secret (key).
+	 * @param int    $subscription_id     The subscription ID.
+	 * @param int    $expiry_timestamp    The expiry timestamp.
+	 * @return string Hex-encoded HMAC.
+	 */
+	private static function compute_unsubscribe_hmac( $subscription_secret, $subscription_id, $expiry_timestamp ) {
+		$data = self::UNSUBSCRIBE_DOMAIN . '|' . $subscription_id . '|' . $expiry_timestamp;
 
 		return hash_hmac( 'sha256', $data, $subscription_secret );
 	}

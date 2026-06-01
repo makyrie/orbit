@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Perihelion
  * Description: Person-centric social activity tool. Subscribe to people, get notified about their activities, respond with lightweight going/maybe actions.
- * Version:     1.5.0
+ * Version:     1.6.0
  * Author:      Perihelion
  * License:     GPL-2.0-or-later
  * Text Domain: orbit
@@ -17,12 +17,23 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Plugin constants.
  */
-define( 'ORBIT_VERSION', '1.5.0' );
+define( 'ORBIT_VERSION', '1.6.0' );
 define( 'ORBIT_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ORBIT_PLUGIN_FILE', __FILE__ );
 
 /**
+ * Brand name used in user-facing messaging (SMS body, HELP/STOP replies,
+ * sample messages submitted to TCR). Pinned via constant so it cannot drift
+ * via Settings → General. Override in wp-config.php if needed.
+ */
+defined( 'ORBIT_MESSAGING_BRAND' ) || define( 'ORBIT_MESSAGING_BRAND', 'Perihelion' );
+
+/**
  * Table name constants (without $wpdb->prefix).
+ *
+ * Note: ORBIT_TABLE_CONSENT_LEDGER is network-scoped on multisite (uses
+ * $wpdb->base_prefix in Orbit_Activator + Orbit_Consent). All other Orbit
+ * tables are per-site.
  */
 define( 'ORBIT_TABLE_PROFILES', 'orbit_profiles' );
 define( 'ORBIT_TABLE_SUBSCRIPTIONS', 'orbit_subscriptions' );
@@ -31,6 +42,7 @@ define( 'ORBIT_TABLE_RESPONSES', 'orbit_responses' );
 define( 'ORBIT_TABLE_NOTIFICATION_PREFERENCES', 'orbit_notification_preferences' );
 define( 'ORBIT_TABLE_NOTIFICATION_LOG', 'orbit_notification_log' );
 define( 'ORBIT_TABLE_PHONE_VERIFICATION', 'orbit_phone_verification' );
+define( 'ORBIT_TABLE_CONSENT_LEDGER', 'orbit_consent_ledger' );
 
 /**
  * Autoload dependencies via Composer.
@@ -44,6 +56,8 @@ if ( file_exists( ORBIT_PLUGIN_DIR . 'vendor/autoload.php' ) ) {
  */
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-activator.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-roles.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-features.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-consent.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-token.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-profile.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-activity.php';
@@ -211,7 +225,20 @@ function orbit_migrate_app_page_templates() {
 		update_post_meta( $page->ID, '_wp_page_template', 'page-app' );
 	}
 }
-add_action( 'plugins_loaded', 'orbit_maybe_upgrade' );
+// Fire at `init` priority 0 (not `plugins_loaded`) because create_pages()
+// calls wp_insert_post() which needs $wp_rewrite. WP only finalizes the
+// rewrite global on `init` — calling it earlier crashes with
+// "Call to a member function get_page_permastruct() on null".
+add_action( 'init', 'orbit_maybe_upgrade', 0 );
+
+/**
+ * Register the consent ledger's append-only query guard.
+ *
+ * Prevents UPDATE/DELETE statements against the consent ledger from any
+ * code path outside a deliberate migration window. Append-only is a
+ * legal-defense invariant (TCPA), not a soft convention.
+ */
+Orbit_Consent::register_query_guard();
 
 /**
  * Register ActionScheduler hooks and schedule recurring jobs.
