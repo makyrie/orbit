@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p1
 issue_id: "084"
 tags: [code-review, bug, sms, tokens, PR-24]

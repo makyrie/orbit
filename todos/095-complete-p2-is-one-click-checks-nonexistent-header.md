@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: "095"
 tags: [code-review, rfc-8058, dead-code, PR-24]

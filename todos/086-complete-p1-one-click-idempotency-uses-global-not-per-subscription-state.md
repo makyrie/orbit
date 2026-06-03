@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p1
 issue_id: "086"
 tags: [code-review, bug, unsubscribe, multi-subscription, PR-24]

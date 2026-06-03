@@ -202,8 +202,6 @@ class Orbit_Activator {
 		foreach ( $sql as $query ) {
 			dbDelta( $query );
 		}
-
-		update_option( 'orbit_db_version', ORBIT_VERSION );
 	}
 
 	/**

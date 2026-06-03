@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p1
 issue_id: "090"
 tags: [code-review, configuration, operability, PR-24]

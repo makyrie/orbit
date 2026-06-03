@@ -36,6 +36,25 @@ class OrbitConsentTest extends WP_UnitTestCase {
 		delete_option( 'orbit_consent_ip_salt' );
 	}
 
+	public function tear_down() {
+		// Mirror set_up() so the ledger is empty on the way out of the class
+		// too, not just on the way in. Otherwise the last test's rows linger
+		// in the DB until the next class's set_up() flushes them — confusing
+		// when inspecting state mid-run.
+		Orbit_Consent::with_migration_mode(
+			static function () {
+				global $wpdb;
+				$table = Orbit_Consent::table_name();
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				$wpdb->query( "DELETE FROM {$table}" );
+			}
+		);
+
+		delete_option( 'orbit_consent_ip_salt' );
+
+		parent::tear_down();
+	}
+
 	public function test_record_returns_row_id() {
 		$id = Orbit_Consent::record( $this->user_id, 'email', 'opt_in', array( 'source' => 'test' ) );
 

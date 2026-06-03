@@ -52,14 +52,14 @@ defined( 'ORBIT_LEGACY_UNSUB_TOKEN_SUNSET' ) || define( 'ORBIT_LEGACY_UNSUB_TOKE
  * $wpdb->base_prefix in Orbit_Activator + Orbit_Consent). All other Orbit
  * tables are per-site.
  */
-define( 'ORBIT_TABLE_PROFILES', 'orbit_profiles' );
-define( 'ORBIT_TABLE_SUBSCRIPTIONS', 'orbit_subscriptions' );
-define( 'ORBIT_TABLE_ACTIVITIES', 'orbit_activities' );
-define( 'ORBIT_TABLE_RESPONSES', 'orbit_responses' );
-define( 'ORBIT_TABLE_NOTIFICATION_PREFERENCES', 'orbit_notification_preferences' );
-define( 'ORBIT_TABLE_NOTIFICATION_LOG', 'orbit_notification_log' );
-define( 'ORBIT_TABLE_PHONE_VERIFICATION', 'orbit_phone_verification' );
-define( 'ORBIT_TABLE_CONSENT_LEDGER', 'orbit_consent_ledger' );
+defined( 'ORBIT_TABLE_PROFILES' ) || define( 'ORBIT_TABLE_PROFILES', 'orbit_profiles' );
+defined( 'ORBIT_TABLE_SUBSCRIPTIONS' ) || define( 'ORBIT_TABLE_SUBSCRIPTIONS', 'orbit_subscriptions' );
+defined( 'ORBIT_TABLE_ACTIVITIES' ) || define( 'ORBIT_TABLE_ACTIVITIES', 'orbit_activities' );
+defined( 'ORBIT_TABLE_RESPONSES' ) || define( 'ORBIT_TABLE_RESPONSES', 'orbit_responses' );
+defined( 'ORBIT_TABLE_NOTIFICATION_PREFERENCES' ) || define( 'ORBIT_TABLE_NOTIFICATION_PREFERENCES', 'orbit_notification_preferences' );
+defined( 'ORBIT_TABLE_NOTIFICATION_LOG' ) || define( 'ORBIT_TABLE_NOTIFICATION_LOG', 'orbit_notification_log' );
+defined( 'ORBIT_TABLE_PHONE_VERIFICATION' ) || define( 'ORBIT_TABLE_PHONE_VERIFICATION', 'orbit_phone_verification' );
+defined( 'ORBIT_TABLE_CONSENT_LEDGER' ) || define( 'ORBIT_TABLE_CONSENT_LEDGER', 'orbit_consent_ledger' );
 
 /**
  * Autoload dependencies via Composer.
@@ -124,6 +124,10 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 function orbit_activate() {
 	Orbit_Activator::activate();
 	Orbit_Roles::register();
+	// Single owner of the version write: this function for fresh activations,
+	// and orbit_maybe_upgrade() for in-place upgrades. The activator no longer
+	// writes the version itself to keep the write path centralized.
+	update_option( 'orbit_db_version', ORBIT_VERSION );
 	flush_rewrite_rules();
 }
 register_activation_hook( ORBIT_PLUGIN_FILE, 'orbit_activate' );
@@ -148,13 +152,16 @@ register_deactivation_hook( ORBIT_PLUGIN_FILE, 'orbit_deactivate' );
  * Database upgrade mechanism.
  *
  * Compares the stored DB version against the current plugin version.
- * On mismatch, re-runs table creation (dbDelta is safe for updates)
- * and re-registers roles/capabilities.
+ * On a forward jump (no stored version, or stored < current), re-runs
+ * table creation (dbDelta is safe for updates) and re-registers
+ * roles/capabilities. A downgrade (stored > current) is treated as a
+ * no-op — an admin who rolled the plugin back should not have the
+ * older code attempt to "upgrade" against a newer schema.
  */
 function orbit_maybe_upgrade() {
 	$installed_version = get_option( 'orbit_db_version' );
 
-	if ( $installed_version !== ORBIT_VERSION ) {
+	if ( ! $installed_version || version_compare( $installed_version, ORBIT_VERSION, '<' ) ) {
 		Orbit_Activator::create_tables();
 		Orbit_Activator::create_pages();
 		Orbit_Roles::register();

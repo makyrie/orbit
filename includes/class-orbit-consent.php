@@ -160,6 +160,17 @@ class Orbit_Consent {
 		$table = self::table_name();
 
 		$cta_snapshot = isset( $args['cta_snapshot'] ) ? (string) $args['cta_snapshot'] : '';
+
+		// Defend against callers who accidentally pass the entire rendered
+		// HTML page (or megabytes of irrelevant context) instead of the CTA
+		// text. Silent truncation would invalidate future hash verification,
+		// so reject loudly instead.
+		if ( strlen( $cta_snapshot ) > 16000 ) {
+			return new WP_Error(
+				'orbit_consent_cta_too_long',
+				__( 'cta_snapshot exceeds 16,000 character limit.', 'orbit' )
+			);
+		}
 		$source       = isset( $args['source'] ) ? sanitize_text_field( $args['source'] ) : '';
 		$program      = isset( $args['program'] ) ? sanitize_text_field( $args['program'] ) : self::PROGRAM_DEFAULT;
 
@@ -602,7 +613,15 @@ class Orbit_Consent {
 	 * @return bool
 	 */
 	protected static function is_consent_ledger_query( $query ) {
-		$pattern = '/\b' . preg_quote( self::table_name(), '/' ) . '\b/i';
+		// Memoize self::table_name() so the wpdb global isn't re-read for
+		// every query the filter sees — this runs on the `query` filter, so
+		// "every query" is literally every query for the request.
+		static $table = null;
+		if ( null === $table ) {
+			$table = self::table_name();
+		}
+
+		$pattern = '/\b' . preg_quote( $table, '/' ) . '\b/i';
 		return 1 === preg_match( $pattern, (string) $query );
 	}
 }

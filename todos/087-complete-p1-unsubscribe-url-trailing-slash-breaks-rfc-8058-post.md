@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p1
 issue_id: "087"
 tags: [code-review, rfc-8058, deliverability, PR-24]

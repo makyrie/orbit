@@ -23,6 +23,19 @@ class Orbit_Notifier {
 	const HOOK_DISPATCH       = 'orbit_dispatch_activity_notifications';
 
 	/**
+	 * Public-API hook names.
+	 *
+	 * These mirror the AS HOOK_* constants above for the third-party-facing
+	 * `do_action` / `apply_filters` call sites. Centralizing the names as
+	 * constants means renaming a public hook is a one-line change and the
+	 * compiler will flag stale string references during refactors.
+	 */
+	const HOOK_NOTIFICATION_METHOD   = 'orbit_notification_method';
+	const HOOK_NOTIFICATION_SENT     = 'orbit_notification_sent';
+	const HOOK_NOTIFICATION_FAILED   = 'orbit_notification_failed';
+	const HOOK_NOTIFICATION_COERCED  = 'orbit_notification_coerced';
+
+	/**
 	 * Whitelist of accepted notification methods.
 	 *
 	 * Used as the canonical set for both `update_preferences()` input
@@ -261,7 +274,7 @@ class Orbit_Notifier {
 			 * @param int    $log_id          Notification log row ID.
 			 * @param string $idempotency_key "{user_id}|{activity_id}|{method}" — stable across retries.
 			 */
-			do_action( 'orbit_notification_sent', $user_id, $activity_id, $method, $log_id, $idempotency_key );
+			do_action( self::HOOK_NOTIFICATION_SENT, $user_id, $activity_id, $method, $log_id, $idempotency_key );
 		} else {
 			/**
 			 * Fires after a subscriber-notification send fails at the
@@ -276,7 +289,7 @@ class Orbit_Notifier {
 			 * @param WP_Error $error           The WP_Error returned by the sender.
 			 * @param string   $idempotency_key "{user_id}|{activity_id}|{method}" — stable across retries.
 			 */
-			do_action( 'orbit_notification_failed', $user_id, $activity_id, $method, $log_id, $result, $idempotency_key );
+			do_action( self::HOOK_NOTIFICATION_FAILED, $user_id, $activity_id, $method, $log_id, $result, $idempotency_key );
 		}
 	}
 
@@ -639,7 +652,7 @@ class Orbit_Notifier {
 		 * @param int    $tier    Activity tier.
 		 * @param array  $context Optional context (activity_id, source, ...).
 		 */
-		$resolved = apply_filters( 'orbit_notification_method', $method, $user_id, $tier, $context );
+		$resolved = apply_filters( self::HOOK_NOTIFICATION_METHOD, $method, $user_id, $tier, $context );
 
 		// Whitelist filter return — third-party code returning garbage
 		// (null, an arbitrary string, a stale channel name) must not bypass
@@ -664,18 +677,12 @@ class Orbit_Notifier {
 			 * @param int   $tier    Activity tier (1, 2, or 3).
 			 * @param array $context Caller-supplied context (e.g. activity_id).
 			 */
-			do_action( 'orbit_notification_coerced', $user_id, $tier, $context );
+			do_action( self::HOOK_NOTIFICATION_COERCED, $user_id, $tier, $context );
 		}
 
 		return $resolved;
 	}
 
-	/**
-	 * Get or create notification preferences for a user.
-	 *
-	 * @param int $user_id User ID.
-	 * @return object Preferences row.
-	 */
 	/**
 	 * Static request-level cache for preferences.
 	 *
@@ -739,6 +746,12 @@ class Orbit_Notifier {
 		}
 	}
 
+	/**
+	 * Get or create notification preferences for a user.
+	 *
+	 * @param int $user_id User ID.
+	 * @return object Preferences row.
+	 */
 	public static function get_or_create_preferences( $user_id ) {
 		if ( isset( self::$preferences_cache[ $user_id ] ) ) {
 			return self::$preferences_cache[ $user_id ];
