@@ -40,6 +40,19 @@ class Orbit_Consent {
 	const PROGRAM_DEFAULT = 'creator-notifications';
 
 	/**
+	 * Hash-chain version tag.
+	 *
+	 * Every row's row_hash payload is prefixed with this tag so we can
+	 * evolve the hash inputs without invalidating older rows. v1.6.0 ships
+	 * with v2 directly because no production rows exist yet; if a future
+	 * change adds more fields we'll bump to v3 and add a compat codepath
+	 * in verify_chain().
+	 *
+	 * @var string
+	 */
+	const CHAIN_VERSION = 'v2';
+
+	/**
 	 * Runtime flag complement to the ORBIT_CONSENT_MIGRATION constant.
 	 *
 	 * The constant is the production gate (defined for deliberate migration
@@ -48,9 +61,12 @@ class Orbit_Consent {
 	 * state. Use Orbit_Consent::with_migration_mode() to flip it around a
 	 * callable.
 	 *
+	 * Visibility is private (not protected) so subclasses and reflection
+	 * cannot quietly flip the guard outside the sanctioned wrapper.
+	 *
 	 * @var bool
 	 */
-	protected static $in_migration_mode = false;
+	private static $in_migration_mode = false;
 
 	/**
 	 * Returns the fully-prefixed table name.
@@ -63,6 +79,40 @@ class Orbit_Consent {
 	public static function table_name() {
 		global $wpdb;
 		return $wpdb->base_prefix . ORBIT_TABLE_CONSENT_LEDGER;
+	}
+
+	/**
+	 * Resolve the effective IP salt for hashing.
+	 *
+	 * Production should pin the salt to wp-config.php via the
+	 * ORBIT_CONSENT_IP_SALT constant. When the constant is undefined we
+	 * fall back to the `orbit_consent_ip_salt` option so a fresh install
+	 * does not silently fail every consent write. The activator seeds the
+	 * option with a generated value; admin notices encourage ops to move
+	 * it to wp-config for key-rotation discipline.
+	 *
+	 * The `orbit_consent_ip_salt_resolved` filter runs last so tests and
+	 * HSM-backed integrations can fully override the resolution.
+	 *
+	 * @return string Effective salt, or '' when neither source is set.
+	 */
+	protected static function resolve_ip_salt() {
+		if ( defined( 'ORBIT_CONSENT_IP_SALT' ) && '' !== ORBIT_CONSENT_IP_SALT ) {
+			$salt = (string) ORBIT_CONSENT_IP_SALT;
+		} else {
+			$salt = (string) get_option( 'orbit_consent_ip_salt', '' );
+		}
+
+		/**
+		 * Filter the resolved consent IP salt.
+		 *
+		 * Last-mile override for HSM-backed deployments and tests that
+		 * need to exercise the salt-missing branch. Returning '' triggers
+		 * the orbit_consent_salt_missing WP_Error path in record().
+		 *
+		 * @param string $salt Resolved salt (from constant or option fallback).
+		 */
+		return (string) apply_filters( 'orbit_consent_ip_salt_resolved', $salt );
 	}
 
 	/**
@@ -82,13 +132,14 @@ class Orbit_Consent {
 	 *     @type string $user_agent       Override the $_SERVER detection (for CLI/admin paths).
 	 *     @type string $ip               Override the Orbit_Client_IP detection.
 	 * }
-	 * @return int|WP_Error Inserted row ID, or WP_Error on validation failure or chain conflict.
+	 * @return int|WP_Error Inserted row ID, or WP_Error on validation failure, salt missing, chain conflict, or DB error.
 	 */
 	public static function record( $user_id, $channel, $event, array $args = array() ) {
-		if ( ! defined( 'ORBIT_CONSENT_IP_SALT' ) || '' === ORBIT_CONSENT_IP_SALT ) {
+		$salt = self::resolve_ip_salt();
+		if ( '' === $salt ) {
 			return new WP_Error(
 				'orbit_consent_salt_missing',
-				__( 'ORBIT_CONSENT_IP_SALT constant must be defined in wp-config.php before consent rows can be recorded.', 'orbit' )
+				__( 'ORBIT_CONSENT_IP_SALT is not defined in wp-config.php and the orbit_consent_ip_salt fallback option is empty. Consent rows cannot be recorded.', 'orbit' )
 			);
 		}
 
@@ -116,18 +167,20 @@ class Orbit_Consent {
 		$terms_version   = isset( $args['terms_version'] ) ? sanitize_text_field( $args['terms_version'] ) : self::current_policy_version( 'terms' );
 
 		$ip         = isset( $args['ip'] ) ? (string) $args['ip'] : Orbit_Client_IP::get();
-		$ip_hash    = '' === $ip ? '' : self::hash_ip( $ip );
+		$ip_hash    = '' === $ip ? '' : self::hash_ip( $ip, $salt );
 		$user_agent = isset( $args['user_agent'] ) ? (string) $args['user_agent'] : self::detect_user_agent();
 		$user_agent = mb_substr( $user_agent, 0, 255 );
 
 		$now = isset( $args['created_at_utc'] ) ? $args['created_at_utc'] : gmdate( 'Y-m-d H:i:s' );
 
-		$prev_hash    = self::latest_row_hash( $user_id, $channel );
-		$cta_checksum = '' === $cta_snapshot ? '' : hash( 'sha256', $cta_snapshot );
-		$row_hash     = self::compute_row_hash(
+		$prev_hash = self::latest_row_hash( $user_id, $channel );
+		$row_hash  = self::compute_row_hash(
 			$user_id,
 			$channel,
 			$event,
+			$program,
+			$privacy_version,
+			$terms_version,
 			$cta_snapshot,
 			$source,
 			$ip_hash,
@@ -148,7 +201,6 @@ class Orbit_Consent {
 				'event'                  => $event,
 				'program'                => $program,
 				'cta_snapshot'           => $cta_snapshot,
-				'cta_snapshot_sha256'    => $cta_checksum,
 				'source'                 => $source,
 				'ip_hash'                => $ip_hash,
 				'user_agent'             => $user_agent,
@@ -158,15 +210,27 @@ class Orbit_Consent {
 				'row_hash'               => $row_hash,
 				'prev_hash'              => $prev_hash,
 			),
-			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
+			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
 		);
 
 		if ( false === $inserted ) {
-			// Duplicate-key on (user_id, channel, prev_hash) means another
-			// process just appended to this chain. The caller should retry.
+			// Distinguish chain conflict (retry-able) from other DB errors
+			// (real failures) so callers can decide whether to retry.
+			$last_error = (string) $wpdb->last_error;
+
+			if ( '' !== $last_error && (
+				false !== stripos( $last_error, 'Duplicate entry' )
+				|| false !== strpos( $last_error, '1062' )
+			) ) {
+				return new WP_Error(
+					'orbit_consent_chain_conflict',
+					__( 'Consent chain conflict — another write was committed concurrently. Retry with a refreshed prev_hash.', 'orbit' )
+				);
+			}
+
 			return new WP_Error(
-				'orbit_consent_chain_conflict',
-				__( 'Consent chain conflict — another write was committed concurrently. Retry with a refreshed prev_hash.', 'orbit' )
+				'orbit_consent_insert_failed',
+				'' === $last_error ? __( 'Consent ledger insert failed with no DB error message.', 'orbit' ) : $last_error
 			);
 		}
 
@@ -209,6 +273,9 @@ class Orbit_Consent {
 	 * row_hash. The first row at which the stored hash diverges from the
 	 * recomputed hash is reported. An intact chain returns array().
 	 *
+	 * The recompute uses the row's stored user_id (not the URL-supplied
+	 * parameter) so a tamper attempt that rewrites user_id is detectable.
+	 *
 	 * @param int    $user_id User ID.
 	 * @param string $channel Channel.
 	 * @return array Array of broken row IDs, or empty array if chain is intact.
@@ -225,7 +292,7 @@ class Orbit_Consent {
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT id, channel, event, cta_snapshot, source, ip_hash, user_agent, created_at_utc, row_hash, prev_hash
+				"SELECT id, user_id, channel, event, program, cta_snapshot, source, ip_hash, user_agent, privacy_policy_version, terms_version, created_at_utc, row_hash, prev_hash
 				 FROM {$table}
 				 WHERE user_id = %d AND channel = %s
 				 ORDER BY created_at_utc ASC, id ASC",
@@ -239,7 +306,7 @@ class Orbit_Consent {
 			return array();
 		}
 
-		$broken      = array();
+		$broken        = array();
 		$expected_prev = '';
 		foreach ( $rows as $row ) {
 			if ( $row->prev_hash !== $expected_prev ) {
@@ -248,9 +315,12 @@ class Orbit_Consent {
 			}
 
 			$recomputed = self::compute_row_hash(
-				(int) $user_id,
+				(int) $row->user_id,
 				$row->channel,
 				$row->event,
+				$row->program,
+				$row->privacy_policy_version,
+				$row->terms_version,
 				$row->cta_snapshot,
 				$row->source,
 				$row->ip_hash,
@@ -270,36 +340,67 @@ class Orbit_Consent {
 	}
 
 	/**
-	 * Hash an IP for storage using ORBIT_CONSENT_IP_SALT.
+	 * Hash an IP for storage using the resolved consent salt.
 	 *
 	 * HMAC-SHA256 over the IP with a per-install salt. Storing the hash
 	 * lets us prove "we recorded an IP at consent time" without retaining
 	 * raw personal data after the TCPA retention horizon.
 	 *
-	 * @param string $ip IP address.
-	 * @return string 64-char hex digest.
+	 * @param string $ip   IP address.
+	 * @param string $salt Optional explicit salt; resolves via resolve_ip_salt() when omitted.
+	 * @return string 64-char hex digest, or '' when no salt is available.
 	 */
-	public static function hash_ip( $ip ) {
-		return hash_hmac( 'sha256', (string) $ip, ORBIT_CONSENT_IP_SALT );
+	public static function hash_ip( $ip, $salt = null ) {
+		if ( null === $salt ) {
+			$salt = self::resolve_ip_salt();
+		}
+
+		if ( '' === $salt ) {
+			return '';
+		}
+
+		return hash_hmac( 'sha256', (string) $ip, (string) $salt );
 	}
 
 	/**
 	 * Compute the row_hash for a row.
 	 *
-	 * Pure function over the eight chained fields plus prev_hash. Used
-	 * during both insertion (Orbit_Consent::record()) and verification
+	 * Pure function over every TCPA-load-bearing field plus prev_hash, with
+	 * a leading chain-version tag (see self::CHAIN_VERSION). Used during
+	 * both insertion (Orbit_Consent::record()) and verification
 	 * (Orbit_Consent::verify_chain()) so the hash computation is
 	 * symmetrical.
 	 *
+	 * The version tag lets us evolve the payload later without breaking
+	 * pre-existing rows. v1.6.0 ships as v2 because the v1 payload omitted
+	 * program / privacy_policy_version / terms_version (a tampering hole)
+	 * and we have no production rows to retain compatibility with.
+	 *
+	 * @param int    $user_id                User ID.
+	 * @param string $channel                Channel.
+	 * @param string $event                  Event.
+	 * @param string $program                Program identifier.
+	 * @param string $privacy_policy_version Privacy policy version at consent time.
+	 * @param string $terms_version          Terms version at consent time.
+	 * @param string $cta_snapshot           CTA copy shown to the user.
+	 * @param string $source                 Free-form source label.
+	 * @param string $ip_hash                HMAC-SHA256 of the client IP.
+	 * @param string $user_agent             User agent string.
+	 * @param string $created_at_utc         Row creation timestamp (UTC).
+	 * @param string $prev_hash              Previous row hash.
 	 * @return string 64-char hex digest.
 	 */
-	public static function compute_row_hash( $user_id, $channel, $event, $cta_snapshot, $source, $ip_hash, $user_agent, $created_at_utc, $prev_hash ) {
+	public static function compute_row_hash( $user_id, $channel, $event, $program, $privacy_policy_version, $terms_version, $cta_snapshot, $source, $ip_hash, $user_agent, $created_at_utc, $prev_hash ) {
 		$payload = implode(
 			'|',
 			array(
+				self::CHAIN_VERSION,
 				(int) $user_id,
 				(string) $channel,
 				(string) $event,
+				(string) $program,
+				(string) $privacy_policy_version,
+				(string) $terms_version,
 				(string) $cta_snapshot,
 				(string) $source,
 				(string) $ip_hash,
@@ -379,13 +480,13 @@ class Orbit_Consent {
 	/**
 	 * Register the append-only query guard.
 	 *
-	 * Hooks the `query` filter so any UPDATE or DELETE against the consent
-	 * ledger table outside an ORBIT_CONSENT_MIGRATION window is replaced
-	 * with a no-op SELECT. Append-only is an audit / legal-defense
-	 * invariant — a stray UPDATE from any plugin, theme, or `wp db query`
-	 * would silently invalidate TCPA records. The guard is loud about
-	 * what it blocks (E_USER_WARNING) so the offending code is findable
-	 * in error logs.
+	 * Hooks the `query` filter so any non-INSERT statement against the
+	 * consent ledger table outside an ORBIT_CONSENT_MIGRATION window is
+	 * replaced with a no-op SELECT. Append-only is an audit / legal-defense
+	 * invariant — a stray UPDATE / REPLACE / DELETE from any plugin, theme,
+	 * or `wp db query` would silently invalidate TCPA records. The guard is
+	 * loud about what it blocks (E_USER_WARNING) so the offending code is
+	 * findable in error logs.
 	 *
 	 * Must be called once at file-load time (from orbit.php).
 	 */
@@ -394,7 +495,14 @@ class Orbit_Consent {
 	}
 
 	/**
-	 * Query filter callback: refuse non-INSERT writes against the ledger.
+	 * Query filter callback: refuse any non-INSERT write against the ledger.
+	 *
+	 * Implements an allow-list: the only permitted operation is a bare
+	 * INSERT (without ON DUPLICATE KEY UPDATE, which would turn into a
+	 * functional UPDATE via the unique key on chain_pos). Leading SQL
+	 * comments are stripped before classification so trace-prepended
+	 * statements from Query Monitor / NewRelic etc. cannot smuggle a
+	 * write past the guard.
 	 *
 	 * @param string $query SQL query.
 	 * @return string Possibly substituted no-op query.
@@ -418,16 +526,29 @@ class Orbit_Consent {
 			return $query;
 		}
 
-		// Match UPDATE, DELETE, and TRUNCATE — all destructive against
-		// the append-only invariant.
-		if ( ! preg_match( '/^\s*(update|delete|truncate)\s+/i', $query ) ) {
+		// Strip leading SQL comments so a comment-prefixed write cannot
+		// slip past the first-word classification.
+		$stripped = preg_replace( '#^\s*(/\*.*?\*/|--[^\n]*\n|\#[^\n]*\n|\s)+#s', '', (string) $query );
+		if ( null === $stripped ) {
+			$stripped = (string) $query;
+		}
+
+		$first_token = strtok( $stripped, " \t\n(" );
+		$first_word  = false === $first_token ? '' : strtoupper( $first_token );
+
+		// Allow-list: bare INSERT only. Everything else (UPDATE, DELETE,
+		// REPLACE, TRUNCATE, RENAME, CALL, etc.) gets no-oped.
+		$is_bare_insert = ( 'INSERT' === $first_word )
+			&& ( false === stripos( $stripped, 'ON DUPLICATE KEY UPDATE' ) );
+
+		if ( $is_bare_insert ) {
 			return $query;
 		}
 
 		// Don't use wp_die — that would crash the request. Just no-op the
 		// write and emit a warning so the source is findable in logs.
 		trigger_error(
-			'Orbit_Consent: refused UPDATE/DELETE against append-only ledger. Query: ' . esc_html( substr( $query, 0, 200 ) ),
+			'Orbit_Consent: refused non-INSERT write against append-only ledger. Query: ' . esc_html( substr( (string) $query, 0, 200 ) ),
 			E_USER_WARNING
 		);
 
@@ -443,12 +564,28 @@ class Orbit_Consent {
 	 * redaction, reconciliation) without polluting global PHP constant
 	 * state.
 	 *
+	 * WARNING: `exit()`, `die()`, and `wp_die()` inside the callback BYPASS
+	 * the try/finally — PHP's shutdown sequence does not unwind pending
+	 * finally blocks. To defend against that we also register a shutdown
+	 * function that restores the prior state. The finally block still runs
+	 * for normal returns and thrown exceptions; the shutdown callback is
+	 * idempotent (restores prior over prior) when both fire.
+	 *
 	 * @param callable $callback Work to run with the guard relaxed.
 	 * @return mixed Whatever the callback returns.
 	 */
 	public static function with_migration_mode( callable $callback ) {
-		$prior                    = self::$in_migration_mode;
-		self::$in_migration_mode  = true;
+		$prior                   = self::$in_migration_mode;
+		self::$in_migration_mode = true;
+
+		// Safety net for exit() / die() / wp_die() inside the callback —
+		// finally would not run in that case, but shutdown functions do.
+		register_shutdown_function(
+			static function () use ( $prior ) {
+				self::$in_migration_mode = $prior;
+			}
+		);
+
 		try {
 			return $callback();
 		} finally {
@@ -457,13 +594,15 @@ class Orbit_Consent {
 	}
 
 	/**
-	 * Cheap substring check to decide whether a query touches the ledger
-	 * table. Avoids parsing SQL for the common-path check.
+	 * Cheap regex check to decide whether a query touches the ledger
+	 * table. Uses word boundaries so an audit-log INSERT that merely
+	 * mentions the table name as a string literal does not false-positive.
 	 *
 	 * @param string $query SQL query.
 	 * @return bool
 	 */
 	protected static function is_consent_ledger_query( $query ) {
-		return false !== strpos( $query, self::table_name() );
+		$pattern = '/\b' . preg_quote( self::table_name(), '/' ) . '\b/i';
+		return 1 === preg_match( $pattern, (string) $query );
 	}
 }

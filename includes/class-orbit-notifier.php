@@ -23,6 +23,16 @@ class Orbit_Notifier {
 	const HOOK_DISPATCH       = 'orbit_dispatch_activity_notifications';
 
 	/**
+	 * Whitelist of accepted notification methods.
+	 *
+	 * Used as the canonical set for both `update_preferences()` input
+	 * validation and post-filter validation of `orbit_notification_method`
+	 * return values. Adding a new channel (e.g., web-push) requires updating
+	 * this constant AND the dispatcher branches in dispatch_to_subscriber().
+	 */
+	const VALID_METHODS = array( 'sms', 'email', 'digest', 'none' );
+
+	/**
 	 * Register ActionScheduler hooks.
 	 */
 	public static function register_hooks() {
@@ -135,6 +145,11 @@ class Orbit_Notifier {
 			);
 			cache_users( $user_ids );
 
+			// Pre-warm notification preferences in a single batched SELECT
+			// so the per-subscriber resolve_notification_method() loop hits
+			// the request-level cache instead of issuing one query per row.
+			self::prewarm_preferences( $user_ids );
+
 			foreach ( $subscribers as $subscription ) {
 				self::dispatch_to_subscriber( $subscription, $activity, $activity_id );
 			}
@@ -222,27 +237,46 @@ class Orbit_Notifier {
 		$status = is_wp_error( $result ) ? 'failed' : 'sent';
 		self::update_log_status( $log_id, $status );
 
+		// Idempotency key — listeners that need exactly-once semantics
+		// (analytics counters, webhooks, ledger writes) can dedupe on this
+		// without joining the log table. Same (user, activity, method)
+		// re-fired by a retry yields the same key.
+		$idempotency_key = $user_id . '|' . $activity_id . '|' . $method;
+
 		if ( 'sent' === $status ) {
 			/**
-			 * Fires after a subscriber-notification successfully sends.
+			 * Fires after a subscriber-notification is accepted by the
+			 * upstream provider (Twilio API ack, wp_mail returning true).
 			 *
-			 * @param int    $user_id     Recipient user ID.
-			 * @param int    $activity_id Activity ID.
-			 * @param string $method      Final dispatch method ('sms' or 'email').
-			 * @param int    $log_id      Notification log row ID.
+			 * NOTE: "sent" here means "handed off successfully" — NOT
+			 * delivery confirmation. Twilio webhooks (delivered / failed)
+			 * and email bounces are not surfaced through this hook.
+			 * v1.1 will add a dedicated `orbit_notification_delivered`
+			 * hook fired from the Twilio status webhook handler. We are
+			 * NOT renaming this hook to preserve the v1.0 API contract.
+			 *
+			 * @param int    $user_id         Recipient user ID.
+			 * @param int    $activity_id     Activity ID.
+			 * @param string $method          Final dispatch method ('sms' or 'email').
+			 * @param int    $log_id          Notification log row ID.
+			 * @param string $idempotency_key "{user_id}|{activity_id}|{method}" — stable across retries.
 			 */
-			do_action( 'orbit_notification_sent', $user_id, $activity_id, $method, $log_id );
+			do_action( 'orbit_notification_sent', $user_id, $activity_id, $method, $log_id, $idempotency_key );
 		} else {
 			/**
-			 * Fires after a subscriber-notification send fails.
+			 * Fires after a subscriber-notification send fails at the
+			 * provider handoff (Twilio API rejection, wp_mail returning
+			 * false). Downstream delivery failures (Twilio status
+			 * webhook = failed/undelivered) are out of scope for v1.0.
 			 *
-			 * @param int      $user_id     Recipient user ID.
-			 * @param int      $activity_id Activity ID.
-			 * @param string   $method      Final dispatch method ('sms' or 'email').
-			 * @param int      $log_id      Notification log row ID.
-			 * @param WP_Error $error       The WP_Error returned by the sender.
+			 * @param int      $user_id         Recipient user ID.
+			 * @param int      $activity_id     Activity ID.
+			 * @param string   $method          Final dispatch method ('sms' or 'email').
+			 * @param int      $log_id          Notification log row ID.
+			 * @param WP_Error $error           The WP_Error returned by the sender.
+			 * @param string   $idempotency_key "{user_id}|{activity_id}|{method}" — stable across retries.
 			 */
-			do_action( 'orbit_notification_failed', $user_id, $activity_id, $method, $log_id, $result );
+			do_action( 'orbit_notification_failed', $user_id, $activity_id, $method, $log_id, $result, $idempotency_key );
 		}
 	}
 
@@ -273,7 +307,7 @@ class Orbit_Notifier {
 
 		if ( $subscription ) {
 			$token      = Orbit_Token::generate_action_token( $subscription->subscription_secret, $activity_id, $subscription->id );
-			$action_url = "\n" . home_url( '/activity/' . $activity_id . '?act=' . urlencode( $token ) );
+			$action_url = "\n" . home_url( '/activity/' . $activity_id . '?act=' . rawurlencode( $token ) );
 		}
 
 		$tier_labels = Orbit_Activity::get_tier_labels();
@@ -320,7 +354,7 @@ class Orbit_Notifier {
 			$action_url = home_url( '/activity/' . $activity_id . '?act=' . rawurlencode( $token ) );
 
 			$unsub_token = Orbit_Token::generate_unsubscribe_token( $subscription->subscription_secret, (int) $subscription->id );
-			$unsub_url   = home_url( '/unsubscribe?token=' . rawurlencode( $unsub_token ) );
+			$unsub_url   = home_url( '/unsubscribe/?token=' . rawurlencode( $unsub_token ) );
 		}
 
 		$tier_labels = Orbit_Activity::get_tier_labels();
@@ -442,7 +476,7 @@ class Orbit_Notifier {
 
 				if ( $subscription ) {
 					$token      = Orbit_Token::generate_action_token( $subscription->subscription_secret, $item->activity_id, $subscription->id );
-					$action_url = home_url( '/activity/' . $item->activity_id . '?act=' . urlencode( $token ) );
+					$action_url = home_url( '/activity/' . $item->activity_id . '?act=' . rawurlencode( $token ) );
 				}
 
 				$tier_label = isset( $tier_labels[ $item->tier ] ) ? $tier_labels[ $item->tier ] : '';
@@ -483,7 +517,7 @@ class Orbit_Notifier {
 		if ( ! empty( $subscriptions ) ) {
 			$pivot       = reset( $subscriptions );
 			$unsub_token = Orbit_Token::generate_unsubscribe_token( $pivot->subscription_secret, (int) $pivot->id );
-			$unsub_url   = home_url( '/unsubscribe?token=' . rawurlencode( $unsub_token ) );
+			$unsub_url   = home_url( '/unsubscribe/?token=' . rawurlencode( $unsub_token ) );
 		}
 
 		$headers = self::build_email_headers( $unsub_url );
@@ -576,18 +610,13 @@ class Orbit_Notifier {
 		$tier_key = 'tier' . $tier . '_method';
 		$method   = isset( $prefs->$tier_key ) ? $prefs->$tier_key : 'digest';
 
+		// Capture the user's intent BEFORE any coercion or filter so the
+		// post-filter audit signal reflects the real "from" value.
+		$pre_filter_method = $method;
+
 		// Kill-switch invariant: while SMS is disabled, coerce sms → email.
 		// Stored preference is NOT mutated; the filter is read-time only.
 		if ( 'sms' === $method && ! Orbit_Features::sms_enabled() ) {
-			/**
-			 * Fires when the kill-switch coerces a user's stored SMS
-			 * preference to email. Auditable signal for the dormant period.
-			 *
-			 * @param int   $user_id     Recipient user ID.
-			 * @param int   $tier        Activity tier (1, 2, or 3).
-			 * @param array $context     Caller-supplied context (e.g. activity_id).
-			 */
-			do_action( 'orbit_notification_coerced', $user_id, $tier, $context );
 			$method = 'email';
 		}
 
@@ -597,9 +626,9 @@ class Orbit_Notifier {
 		 * HOT PATH: called once per subscriber per activity dispatch
 		 * (potentially thousands of times in a single fan-out). Callbacks
 		 * MUST be O(1) and MUST NOT perform DB queries. Use static caches
-		 * keyed by $user_id if you need stateful logic. Returning a
-		 * value outside {'sms', 'email', 'digest', 'none'} will fall
-		 * through to the dispatcher's 'else' branch (immediate send) so
+		 * keyed by $user_id if you need stateful logic. Returning a value
+		 * outside Orbit_Notifier::VALID_METHODS is rejected post-filter and
+		 * the pre-filter (kill-switch-coerced) value is used instead, so
 		 * stick to the four known values.
 		 *
 		 * The $context array is forward-compatible — new keys may appear
@@ -610,7 +639,35 @@ class Orbit_Notifier {
 		 * @param int    $tier    Activity tier.
 		 * @param array  $context Optional context (activity_id, source, ...).
 		 */
-		return apply_filters( 'orbit_notification_method', $method, $user_id, $tier, $context );
+		$resolved = apply_filters( 'orbit_notification_method', $method, $user_id, $tier, $context );
+
+		// Whitelist filter return — third-party code returning garbage
+		// (null, an arbitrary string, a stale channel name) must not bypass
+		// the dispatcher's channel guards. Fall back to the pre-filter,
+		// already-coerced value so kill-switch + tier invariants hold.
+		if ( ! in_array( $resolved, self::VALID_METHODS, true ) ) {
+			$resolved = $method;
+		}
+
+		// Fire orbit_notification_coerced AFTER the filter so the audit
+		// signal reflects the FINAL "from sms" decision, including any
+		// filter overrides. Pre-filter sms with a non-sms outcome (either
+		// because of the kill switch OR a filter override that downgraded
+		// sms) is the signal Twilio reviewers want to inspect.
+		if ( 'sms' === $pre_filter_method && 'sms' !== $resolved ) {
+			/**
+			 * Fires when a user's stored SMS preference is coerced to a
+			 * different channel before dispatch. Auditable signal for the
+			 * kill-switch dormant period and for filter-driven downgrades.
+			 *
+			 * @param int   $user_id Recipient user ID.
+			 * @param int   $tier    Activity tier (1, 2, or 3).
+			 * @param array $context Caller-supplied context (e.g. activity_id).
+			 */
+			do_action( 'orbit_notification_coerced', $user_id, $tier, $context );
+		}
+
+		return $resolved;
 	}
 
 	/**
@@ -625,6 +682,62 @@ class Orbit_Notifier {
 	 * @var array
 	 */
 	private static $preferences_cache = array();
+
+	/**
+	 * Pre-warm the preferences cache for a batch of user IDs.
+	 *
+	 * Issues a single `WHERE user_id IN (...)` SELECT and populates
+	 * `self::$preferences_cache` so subsequent `get_or_create_preferences()`
+	 * calls within the same request are served from memory.
+	 *
+	 * Users who do NOT have an existing preferences row are intentionally
+	 * left out of the cache here — the per-row code path will still INSERT
+	 * a default row when first asked, preserving the existing create-on-read
+	 * behavior. Already-cached user IDs are skipped to avoid stomping fresh
+	 * data with stale DB reads.
+	 *
+	 * @param array $user_ids List of WP user IDs to pre-warm.
+	 */
+	public static function prewarm_preferences( array $user_ids ) {
+		if ( empty( $user_ids ) ) {
+			return;
+		}
+
+		// Normalize, dedupe, and skip already-cached IDs to avoid an
+		// unnecessary query when the loop is re-entered.
+		$user_ids = array_unique( array_map( 'absint', $user_ids ) );
+		$user_ids = array_filter(
+			$user_ids,
+			static function ( $uid ) {
+				return $uid > 0 && ! isset( self::$preferences_cache[ $uid ] );
+			}
+		);
+
+		if ( empty( $user_ids ) ) {
+			return;
+		}
+
+		global $wpdb;
+
+		$table        = $wpdb->prefix . ORBIT_TABLE_NOTIFICATION_PREFERENCES;
+		$placeholders = implode( ',', array_fill( 0, count( $user_ids ), '%d' ) );
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $placeholders is built from %d formats only.
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE user_id IN ({$placeholders})",
+				...array_values( $user_ids )
+			)
+		);
+
+		if ( empty( $rows ) ) {
+			return;
+		}
+
+		foreach ( $rows as $row ) {
+			self::$preferences_cache[ (int) $row->user_id ] = $row;
+		}
+	}
 
 	public static function get_or_create_preferences( $user_id ) {
 		if ( isset( self::$preferences_cache[ $user_id ] ) ) {
@@ -684,13 +797,12 @@ class Orbit_Notifier {
 		self::get_or_create_preferences( $user_id );
 
 		$table          = $wpdb->prefix . ORBIT_TABLE_NOTIFICATION_PREFERENCES;
-		$valid_methods  = array( 'sms', 'email', 'digest', 'none' );
 		$data           = array();
 		$formats        = array();
 		$set_cap_null   = false;
 
 		foreach ( array( 'tier1_method', 'tier2_method', 'tier3_method' ) as $key ) {
-			if ( isset( $args[ $key ] ) && in_array( $args[ $key ], $valid_methods, true ) ) {
+			if ( isset( $args[ $key ] ) && in_array( $args[ $key ], self::VALID_METHODS, true ) ) {
 				$data[ $key ] = $args[ $key ];
 				$formats[]    = '%s';
 			}
@@ -824,6 +936,17 @@ class Orbit_Notifier {
 	 * subscription is available (e.g., system mail with no per-subscriber
 	 * context), the unsubscribe headers are omitted.
 	 *
+	 * Per RFC 2369 / RFC 8058 we emit BOTH an https:// URL and a mailto:
+	 * fallback in the same `List-Unsubscribe` header. Yahoo's deliverability
+	 * heuristics specifically check for the mailto: form and improve sender
+	 * reputation when both are present, even though the https one-click
+	 * endpoint is the one the mail client will actually POST to.
+	 *
+	 * NOTE: The `unsubscribe@{home-domain}` mailbox does NOT need to be
+	 * deliverable in v1.6.0 — the mailto: handler (catch the bounce, look
+	 * up the subscriber by From:) is v1.1 work. Emitting the header now is
+	 * a no-cost deliverability win while we build the receiving side.
+	 *
 	 * @param string $unsub_url Fully-qualified one-click unsubscribe URL,
 	 *                          or empty string to omit unsubscribe headers.
 	 * @return array Headers array suitable for wp_mail().
@@ -832,7 +955,15 @@ class Orbit_Notifier {
 		$headers = array( 'Content-Type: text/plain; charset=UTF-8' );
 
 		if ( '' !== $unsub_url ) {
-			$headers[] = 'List-Unsubscribe: <' . $unsub_url . '>';
+			$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
+			if ( empty( $home_host ) ) {
+				// Defensive: home_url() should always parse, but if it
+				// doesn't, omit the mailto: rather than emit a broken one.
+				$headers[] = 'List-Unsubscribe: <' . $unsub_url . '>';
+			} else {
+				$mailto    = 'mailto:unsubscribe@' . $home_host . '?subject=unsubscribe';
+				$headers[] = 'List-Unsubscribe: <' . $unsub_url . '>, <' . $mailto . '>';
+			}
 			$headers[] = 'List-Unsubscribe-Post: List-Unsubscribe=One-Click';
 		}
 

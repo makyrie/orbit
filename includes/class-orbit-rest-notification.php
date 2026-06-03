@@ -81,6 +81,14 @@ class Orbit_REST_Notification {
 	 * `<Response>` for keywords with no reply, or a `<Message>` body for
 	 * HELP / STOP / START confirmations per CTIA.
 	 *
+	 * Invalid-signature requests return 204 No Content rather than 403.
+	 * Twilio's retry policy treats 4xx/5xx as "retry for up to 24h with
+	 * exponential backoff" — a misconfigured Messaging Service URL during
+	 * a routing change would otherwise flood this endpoint with hours of
+	 * bad-signature retries. 204 silently drops the request from Twilio's
+	 * perspective and avoids the retry storm. Ops still gets signal via
+	 * the internal error_log() entry below.
+	 *
 	 * @param WP_REST_Request $request Request object.
 	 * @return WP_REST_Response|WP_Error Response.
 	 */
@@ -88,7 +96,10 @@ class Orbit_REST_Notification {
 		$expected_url = rest_url( Orbit_REST_API::API_NAMESPACE . '/twilio/incoming' );
 
 		if ( ! Orbit_Twilio::validate_webhook( $request, $expected_url ) ) {
-			return new WP_Error( 'invalid_signature', __( 'Invalid webhook signature.', 'orbit' ), array( 'status' => 403 ) );
+			// Log so ops keeps visibility on bad-signature traffic without
+			// returning a status code that Twilio will retry.
+			error_log( 'Orbit_Twilio: rejected incoming webhook with invalid signature.' );
+			return new WP_REST_Response( null, 204 );
 		}
 
 		$result = Orbit_Twilio::handle_incoming( $request );

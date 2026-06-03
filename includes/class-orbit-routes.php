@@ -316,8 +316,11 @@ class Orbit_Routes {
 
 	/**
 	 * Render the unsubscribe confirmation form (GET step).
+	 *
+	 * Public for test access — production callers only reach it via
+	 * `handle_unsubscribe_route()` on the `template_redirect` action.
 	 */
-	private static function handle_unsubscribe_get() {
+	public static function handle_unsubscribe_get() {
 		$token = isset( $_GET['token'] )
 			? sanitize_text_field( wp_unslash( $_GET['token'] ) )
 			: '';
@@ -363,8 +366,11 @@ class Orbit_Routes {
 	 *
 	 * Branches between RFC 8058 one-click (mail-client driven, no nonce,
 	 * rate-limited) and two-step confirmation (form post with nonce).
+	 *
+	 * Public for test access — production callers only reach it via
+	 * `handle_unsubscribe_route()` on the `template_redirect` action.
 	 */
-	private static function handle_unsubscribe_post() {
+	public static function handle_unsubscribe_post() {
 		$token = isset( $_POST['token'] )
 			? sanitize_text_field( wp_unslash( $_POST['token'] ) )
 			: '';
@@ -432,46 +438,103 @@ class Orbit_Routes {
 	}
 
 	/**
-	 * RFC 8058 one-click handler.
+	 * RFC 8058 one-click handler — production wrapper that emits + exits.
 	 *
-	 * Rate-limit checks the source IP (30/min) before doing any auth or
-	 * DB work, then validates the HMAC token, then idempotently
-	 * unsubscribes. Returns a plain 200 to the mail client — mail UI
-	 * does not render a page.
+	 * Delegates the response computation to `one_click_unsubscribe_response()`
+	 * (pure: no echo, no exit) so tests can assert on the returned payload
+	 * without process isolation. The wrapper here is what production calls
+	 * via `handle_unsubscribe_post()`.
 	 *
 	 * @param string $token Token from POST body.
 	 */
 	private static function handle_one_click_unsubscribe( $token ) {
+		$response = self::one_click_unsubscribe_response( $token );
+		self::emit_response( $response['status'], $response['body'] );
+	}
+
+	/**
+	 * Compute the one-click unsubscribe response without emitting it.
+	 *
+	 * Rate-limits the source IP (30/min) — or falls back to a global
+	 * anon bucket with a tighter cap (5/min) when the client IP can't
+	 * be resolved — before doing any auth or DB work. Then validates
+	 * the HMAC token and idempotently unsubscribes. Returned shape is
+	 * always `array( 'status' => int, 'body' => string )` so tests can
+	 * assert on the exact wire-level response.
+	 *
+	 * @param string $token Token from POST body.
+	 * @return array{status:int,body:string}
+	 */
+	public static function one_click_unsubscribe_response( $token ) {
 		$ip = Orbit_Client_IP::get();
 
-		if ( '' !== $ip && ! Orbit_Rate_Limiter::attempt( 'unsubscribe_one_click', $ip, 30, MINUTE_IN_SECONDS ) ) {
-			status_header( 429 );
-			header( 'Content-Type: text/plain; charset=UTF-8' );
-			echo 'rate_limited';
-			exit;
+		if ( '' === $ip ) {
+			// Empty IP fails open without a fallback bucket — use a
+			// global anon bucket with a much tighter cap so a client
+			// that strips identifying headers can't replay forever.
+			if ( ! Orbit_Rate_Limiter::attempt( 'unsubscribe_one_click_anon', '_anon', 5, MINUTE_IN_SECONDS ) ) {
+				return array(
+					'status' => 429,
+					'body'   => 'rate_limited',
+				);
+			}
+		} elseif ( ! Orbit_Rate_Limiter::attempt( 'unsubscribe_one_click', $ip, 30, MINUTE_IN_SECONDS ) ) {
+			return array(
+				'status' => 429,
+				'body'   => 'rate_limited',
+			);
 		}
 
 		if ( ! $token ) {
-			status_header( 400 );
-			header( 'Content-Type: text/plain; charset=UTF-8' );
-			echo 'invalid_token';
-			exit;
+			return array(
+				'status' => 400,
+				'body'   => 'invalid_token',
+			);
 		}
 
 		$subscription = self::resolve_unsubscribe_subscription( $token );
 
 		if ( ! $subscription ) {
-			status_header( 400 );
-			header( 'Content-Type: text/plain; charset=UTF-8' );
-			echo 'invalid_token';
-			exit;
+			return array(
+				'status' => 400,
+				'body'   => 'invalid_token',
+			);
 		}
 
-		self::perform_unsubscribe( $subscription, 'email_unsubscribe_one_click' );
+		$perform_result = self::perform_unsubscribe( $subscription, 'email_unsubscribe_one_click' );
 
-		status_header( 200 );
+		if ( is_wp_error( $perform_result ) ) {
+			// Surface a 4xx so the mail client doesn't believe an
+			// unsubscribe succeeded when the subscription update
+			// actually failed (e.g., a status-machine reject).
+			return array(
+				'status' => 400,
+				'body'   => 'unsubscribe_failed',
+			);
+		}
+
+		return array(
+			'status' => 200,
+			'body'   => 'unsubscribed',
+		);
+	}
+
+	/**
+	 * Emit a plain-text response and terminate the request.
+	 *
+	 * Wraps the `status_header` + `Content-Type` + `echo` + `exit`
+	 * boilerplate so the testable response-shape functions don't have
+	 * to call `exit` directly. Production paths call this from the
+	 * thin handler wrappers; tests never reach it.
+	 *
+	 * @param int    $status HTTP status code.
+	 * @param string $body   Plain-text body.
+	 * @return void
+	 */
+	private static function emit_response( $status, $body ) {
+		status_header( (int) $status );
 		header( 'Content-Type: text/plain; charset=UTF-8' );
-		echo 'unsubscribed';
+		echo esc_html( (string) $body );
 		exit;
 	}
 
@@ -484,10 +547,17 @@ class Orbit_Routes {
 	 * sent before the cut-over so users who haven't read their inbox
 	 * in a while still get a working link.
 	 *
+	 * The legacy fallback is time-boxed via `ORBIT_LEGACY_UNSUB_TOKEN_SUNSET`.
+	 * After that date the resolver returns null for legacy-format tokens —
+	 * a leaked pre-cutover email spool is then no longer indefinitely
+	 * actionable. Every legacy-format hit is logged via `error_log()` so
+	 * ops can watch when legacy traffic actually drops to zero and
+	 * confirm the sunset is safe.
+	 *
 	 * @param string $token Token from query string or POST body.
 	 * @return object|null Subscription row, or null if invalid.
 	 */
-	private static function resolve_unsubscribe_subscription( $token ) {
+	public static function resolve_unsubscribe_subscription( $token ) {
 		// Try modern HMAC format first.
 		$subscription_id = Orbit_Token::extract_subscription_id( $token );
 		if ( $subscription_id ) {
@@ -498,27 +568,60 @@ class Orbit_Routes {
 		}
 
 		// Legacy fallback: token is the raw subscription_secret.
-		return Orbit_Subscription::get_by_secret( $token );
+		// Time-box the fallback so leaked pre-cutover spools have a
+		// bounded blast radius matching the new HMAC TTL.
+		if ( defined( 'ORBIT_LEGACY_UNSUB_TOKEN_SUNSET' )
+			&& time() >= strtotime( ORBIT_LEGACY_UNSUB_TOKEN_SUNSET . ' UTC' )
+		) {
+			return null;
+		}
+
+		$legacy = Orbit_Subscription::get_by_secret( $token );
+
+		if ( $legacy ) {
+			// Telemetry: surface every legacy hit so ops can watch the
+			// rate decay before flipping the sunset. Using error_log()
+			// (not the notification log) keeps this out of the user-
+			// facing audit surface and into ops dashboards.
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			error_log(
+				sprintf(
+					'orbit: legacy unsubscribe fallback hit (subscription_id=%d)',
+					(int) $legacy->id
+				)
+			);
+		}
+
+		return $legacy;
 	}
 
 	/**
 	 * Idempotent unsubscribe with consent ledger write.
 	 *
-	 * If the user's latest email consent state is already `opt_out`, the
-	 * call is a no-op — the subscription stays unsubscribed and no new
-	 * ledger row is appended (RFC 8058 allows replays; we don't want
-	 * duplicate audit events).
+	 * Idempotency is checked at the **subscription** level, not at the
+	 * channel-global ledger level. Reasoning: the consent ledger is
+	 * keyed on (user_id, channel) — but a user with multiple poster
+	 * subscriptions can correctly unsubscribe from each one independently.
+	 * Using the channel-global state as the short-circuit would silently
+	 * skip the subscription-row update for every subsequent unsubscribe
+	 * after the first, leaving the user still receiving emails from the
+	 * other posters.
+	 *
+	 * Multiple per-subscription opt_out rows in the ledger are the
+	 * correct shape: the channel is the right granularity for TCPA
+	 * evidence (was this user opted-in / opted-out at any point), and
+	 * the subscription is the right granularity for the operation
+	 * (which specific connection are we ending).
 	 *
 	 * @param object $subscription Subscription row.
 	 * @param string $source       Free-form source label written to the consent row.
 	 * @return true|WP_Error
 	 */
-	private static function perform_unsubscribe( $subscription, $source ) {
-		$user_id = (int) $subscription->user_id;
-
-		// Idempotent replay: if already opted out for email, skip the
-		// subscription update and ledger append.
-		if ( 'opt_out' === Orbit_Consent::latest_state( $user_id, 'email' ) ) {
+	public static function perform_unsubscribe( $subscription, $source ) {
+		if ( 'unsubscribed' === $subscription->status ) {
+			// Already unsubscribed at the subscription level —
+			// idempotent no-op. No ledger row appended; the prior
+			// opt_out is still the latest event for this subscription.
 			return true;
 		}
 
@@ -529,7 +632,7 @@ class Orbit_Routes {
 		}
 
 		Orbit_Consent::record(
-			$user_id,
+			(int) $subscription->user_id,
 			'email',
 			'opt_out',
 			array(
@@ -544,26 +647,30 @@ class Orbit_Routes {
 	 * Whether the current POST request is an RFC 8058 one-click unsubscribe.
 	 *
 	 * Per RFC 8058 §3.2, mail clients indicate one-click by POSTing the
-	 * exact body `List-Unsubscribe=One-Click`. We accept that body shape,
-	 * AND the equivalent `List-Unsubscribe` header (some clients pass it
-	 * as a header instead) as a permissive interpretation.
+	 * exact body `List-Unsubscribe=One-Click`. `List-Unsubscribe-Post` is
+	 * a **sender** header on the outbound email — it's NOT echoed back
+	 * by mail clients as a request header, so we don't (and shouldn't)
+	 * check for it on the way in. The strict RFC body-shape check is the
+	 * only signal we accept.
+	 *
+	 * The `is_string()` guard prevents a crash on the array shape
+	 * (`List-Unsubscribe[]=One-Click`) — which would also slip past a
+	 * naive `===` against the string `'One-Click'`.
 	 *
 	 * @return bool
 	 */
-	private static function is_one_click_unsubscribe_post() {
+	public static function is_one_click_unsubscribe_post() {
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- One-click POSTs are auth'd via HMAC token, not nonce.
-		if ( isset( $_POST['List-Unsubscribe'] ) && 'One-Click' === wp_unslash( $_POST['List-Unsubscribe'] ) ) {
-			return true;
+		if ( ! isset( $_POST['List-Unsubscribe'] ) ) {
+			return false;
 		}
+
+		if ( ! is_string( $_POST['List-Unsubscribe'] ) ) {
+			return false;
+		}
+
+		return 'One-Click' === wp_unslash( $_POST['List-Unsubscribe'] );
 		// phpcs:enable
-
-		if ( ! empty( $_SERVER['HTTP_LIST_UNSUBSCRIBE_POST'] )
-			&& false !== stripos( sanitize_text_field( wp_unslash( $_SERVER['HTTP_LIST_UNSUBSCRIBE_POST'] ) ), 'One-Click' )
-		) {
-			return true;
-		}
-
-		return false;
 	}
 
 	/**

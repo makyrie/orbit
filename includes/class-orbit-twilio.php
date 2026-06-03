@@ -73,11 +73,19 @@ class Orbit_Twilio {
 	 * couldn't reuse this method without bypassing validation. The URL
 	 * is therefore a parameter — each caller passes the route it serves.
 	 *
+	 * Important: callers MUST pass the full URL including any query string
+	 * exactly as registered with Twilio. Twilio computes the signature
+	 * over `URL + sorted(body_params)`, where query-string params are
+	 * embedded in the URL itself rather than appended as separate fields.
+	 * Future routes that register webhooks with query parameters must
+	 * therefore pass `rest_url( ... ) . '?foo=bar'` (or equivalent) here.
+	 *
 	 * @param WP_REST_Request $request      The incoming request.
 	 * @param string          $expected_url The exact URL Twilio used to
 	 *                                      compute the signature (must
 	 *                                      match the registered webhook
-	 *                                      URL on the Twilio console).
+	 *                                      URL on the Twilio console,
+	 *                                      including any query string).
 	 * @return bool True if valid.
 	 */
 	public static function validate_webhook( $request, $expected_url ) {
@@ -92,11 +100,26 @@ class Orbit_Twilio {
 
 		$params = $request->get_body_params();
 
+		// Fallback for JSON bodies — Twilio's standard webhook is
+		// form-encoded, but other tools (e.g. internal replay scripts)
+		// may submit application/json. get_body_params() returns empty
+		// for non-form content types; get_json_params() handles JSON.
+		if ( empty( $params ) ) {
+			$json_params = $request->get_json_params();
+			$params      = is_array( $json_params ) ? $json_params : array();
+		}
+
 		// Sort params by key.
 		ksort( $params );
 
 		$data = $expected_url;
 		foreach ( $params as $key => $value ) {
+			// Reject array-typed values (e.g. crafted `Body[]=foo&Body[]=bar`
+			// inputs) cleanly rather than triggering a "Array to string
+			// conversion" PHP notice on concatenation.
+			if ( is_array( $value ) ) {
+				return false;
+			}
 			$data .= $key . $value;
 		}
 
@@ -164,6 +187,32 @@ class Orbit_Twilio {
 		if ( self::is_stop_keyword( $body ) ) {
 			update_user_meta( $user_id, 'orbit_sms_opted_out', 1 );
 
+			// Append the TCPA audit-trail row for the SMS channel. The
+			// user_meta above is the operational flag (cheap to read on
+			// every send); the ledger row is the immutable evidence we
+			// need when Twilio or a court asks "when did this user opt
+			// out?". Inbound webhook POSTs originate from Twilio's IPs,
+			// so override IP/UA to avoid logging Twilio's infrastructure
+			// as if it were the user's.
+			$consent_recorded = Orbit_Consent::record(
+				$user_id,
+				'sms',
+				'opt_out',
+				array(
+					'source'       => 'sms_stop',
+					'cta_snapshot' => 'inbound SMS keyword: STOP',
+					'ip'           => '',
+					'user_agent'   => 'twilio-webhook',
+				)
+			);
+
+			if ( is_wp_error( $consent_recorded ) ) {
+				// Best-effort: the operational opt-out already succeeded
+				// above. Log so the missing audit row is observable in
+				// ops without breaking the CTIA STOP confirmation reply.
+				error_log( 'Orbit_Twilio: failed to record SMS opt_out ledger row for user ' . $user_id . ': ' . $consent_recorded->get_error_message() );
+			}
+
 			return array(
 				'status'      => 'opted_out',
 				'user_id'     => $user_id,
@@ -173,6 +222,22 @@ class Orbit_Twilio {
 
 		if ( self::is_start_keyword( $body ) ) {
 			delete_user_meta( $user_id, 'orbit_sms_opted_out' );
+
+			$consent_recorded = Orbit_Consent::record(
+				$user_id,
+				'sms',
+				're_opt_in',
+				array(
+					'source'       => 'sms_start',
+					'cta_snapshot' => 'inbound SMS keyword: START',
+					'ip'           => '',
+					'user_agent'   => 'twilio-webhook',
+				)
+			);
+
+			if ( is_wp_error( $consent_recorded ) ) {
+				error_log( 'Orbit_Twilio: failed to record SMS re_opt_in ledger row for user ' . $user_id . ': ' . $consent_recorded->get_error_message() );
+			}
 
 			return array(
 				'status'      => 'opted_in',

@@ -29,6 +29,23 @@ define( 'ORBIT_PLUGIN_FILE', __FILE__ );
 defined( 'ORBIT_MESSAGING_BRAND' ) || define( 'ORBIT_MESSAGING_BRAND', 'Perihelion' );
 
 /**
+ * Support contact returned by HELP TwiML replies. Pinned via constant so it
+ * matches the support address registered with TCR (sample-message drift
+ * triggers campaign suspension). Defaults to the WP admin email so fresh
+ * installs work out of the box; override in wp-config.php to the
+ * TCR-registered address (e.g. `support@perihelion.social`).
+ */
+defined( 'ORBIT_MESSAGING_SUPPORT' ) || define( 'ORBIT_MESSAGING_SUPPORT', get_option( 'admin_email' ) );
+
+/**
+ * Sunset date (UTC) for the legacy raw-secret unsubscribe fallback path.
+ * After this date, `Orbit_Routes::resolve_unsubscribe_subscription()` will
+ * stop honoring pre-HMAC unsubscribe tokens — bounding the leaked-mail-spool
+ * blast radius. 12 months matches the HMAC token's 1-year expiry.
+ */
+defined( 'ORBIT_LEGACY_UNSUB_TOKEN_SUNSET' ) || define( 'ORBIT_LEGACY_UNSUB_TOKEN_SUNSET', '2027-06-01' );
+
+/**
  * Table name constants (without $wpdb->prefix).
  *
  * Note: ORBIT_TABLE_CONSENT_LEDGER is network-scoped on multisite (uses

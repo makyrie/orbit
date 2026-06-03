@@ -65,15 +65,18 @@ class Orbit_Token {
 	 *
 	 * Format: {subscription_id}.{base64(expiry_timestamp)}:{hmac_hex}
 	 *
-	 * @param string   $subscription_secret The subscription's secret.
-	 * @param int      $activity_id         The activity ID.
-	 * @param int      $subscription_id     The subscription ID (embedded in token for O(1) lookup).
-	 * @param int|null $expiry_timestamp    Optional explicit expiry. Defaults based on activity date.
+	 * @param string      $subscription_secret The subscription's secret.
+	 * @param int         $activity_id         The activity ID.
+	 * @param int         $subscription_id     The subscription ID (embedded in token for O(1) lookup).
+	 * @param int|null    $expiry_timestamp    Optional explicit expiry. Defaults based on activity date.
+	 * @param string|null $activity_date_time  Optional MySQL UTC datetime string ('Y-m-d H:i:s') for the
+	 *                                         activity. When supplied along with a null $expiry_timestamp,
+	 *                                         avoids a re-query in compute_default_expiry().
 	 * @return string The composite action token.
 	 */
-	public static function generate_action_token( $subscription_secret, $activity_id, $subscription_id, $expiry_timestamp = null ) {
+	public static function generate_action_token( $subscription_secret, $activity_id, $subscription_id, $expiry_timestamp = null, $activity_date_time = null ) {
 		if ( null === $expiry_timestamp ) {
-			$expiry_timestamp = self::compute_default_expiry( $activity_id );
+			$expiry_timestamp = self::compute_default_expiry( $activity_id, $activity_date_time );
 		}
 
 		$hmac = self::compute_hmac( $subscription_secret, $activity_id, $expiry_timestamp );
@@ -238,22 +241,41 @@ class Orbit_Token {
 	 * - Dated activities: 7 days after the activity date_time.
 	 * - Dateless activities: 30 days from now.
 	 *
-	 * @param int $activity_id The activity ID.
+	 * The stored MySQL `date_time` column is always UTC ('Y-m-d H:i:s'). We
+	 * construct a DateTime with an explicit UTC timezone rather than calling
+	 * strtotime(), which would otherwise interpret the string in PHP's
+	 * default timezone and shift the expiry by the server's UTC offset.
+	 *
+	 * If the date_time cannot be parsed (corruption, NULL, etc.) we fall
+	 * back to the dateless expiry — safer than continuing with a
+	 * wrong-timezone interpretation.
+	 *
+	 * @param int         $activity_id        The activity ID.
+	 * @param string|null $activity_date_time Optional pre-fetched MySQL UTC datetime
+	 *                                        ('Y-m-d H:i:s'). When supplied, skips the
+	 *                                        per-call DB query for the same activity.
 	 * @return int Unix timestamp.
 	 */
-	private static function compute_default_expiry( $activity_id ) {
-		global $wpdb;
+	private static function compute_default_expiry( $activity_id, $activity_date_time = null ) {
+		if ( null === $activity_date_time ) {
+			global $wpdb;
 
-		$table     = $wpdb->prefix . ORBIT_TABLE_ACTIVITIES;
-		$date_time = $wpdb->get_var(
-			$wpdb->prepare(
-				"SELECT date_time FROM {$table} WHERE id = %d",
-				$activity_id
-			)
-		);
+			$table              = $wpdb->prefix . ORBIT_TABLE_ACTIVITIES;
+			$activity_date_time = $wpdb->get_var(
+				$wpdb->prepare(
+					"SELECT date_time FROM {$table} WHERE id = %d",
+					$activity_id
+				)
+			);
+		}
 
-		if ( $date_time ) {
-			return strtotime( $date_time ) + self::ACTION_TOKEN_EXPIRY_DATED;
+		if ( $activity_date_time ) {
+			$utc = new DateTimeZone( 'UTC' );
+			$dt  = DateTime::createFromFormat( 'Y-m-d H:i:s', $activity_date_time, $utc );
+
+			if ( $dt ) {
+				return $dt->getTimestamp() + self::ACTION_TOKEN_EXPIRY_DATED;
+			}
 		}
 
 		return time() + self::ACTION_TOKEN_EXPIRY_DATELESS;

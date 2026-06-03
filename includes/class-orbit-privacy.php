@@ -147,6 +147,9 @@ class Orbit_Privacy {
 	 *    verification records.
 	 * 5. Delete the profile record.
 	 * 6. Clean up usermeta.
+	 * 7. Redact PII from the consent ledger but preserve the row for
+	 *    TCPA evidence (user_id, channel, event, program, policy versions,
+	 *    and the hash chain are kept).
 	 *
 	 * @param int $user_id The WordPress user ID being deleted.
 	 */
@@ -243,6 +246,48 @@ class Orbit_Privacy {
 		delete_user_meta( $user_id, 'orbit_phone_verified' );
 		delete_user_meta( $user_id, 'orbit_timezone' );
 		delete_user_meta( $user_id, 'orbit_sms_opted_out' );
+
+		/*
+		 * Redact PII from the consent ledger while preserving the row for
+		 * TCPA evidence. This keeps user_id, channel, event, program,
+		 * policy versions, and the hash chain in place but clears the
+		 * hashed/PII-bearing columns and stamps redacted_at_utc.
+		 *
+		 * The redaction mutates hash inputs (cta_snapshot, ip_hash,
+		 * user_agent), so Orbit_Consent::verify_chain() will report these
+		 * rows as broken until v1.7's chain-versioning lands and teaches
+		 * verify_chain() to recognize rows where redacted_at_utc IS NOT
+		 * NULL as expected-redacted. This is a deliberate v1.6.0 trade-off
+		 * favouring GDPR Article 17 erasure over full hash-chain integrity
+		 * through redaction.
+		 *
+		 * The append-only query guard is relaxed via with_migration_mode()
+		 * because this UPDATE is legitimate maintenance, not a
+		 * back-dated ledger write.
+		 *
+		 * If the user has zero consent ledger rows the UPDATE simply
+		 * affects 0 rows and returns without error.
+		 */
+		Orbit_Consent::with_migration_mode(
+			function () use ( $user_id ) {
+				global $wpdb;
+				$table = Orbit_Consent::table_name();
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				$wpdb->query(
+					$wpdb->prepare(
+						"UPDATE {$table}
+						SET ip_hash = '',
+							user_agent = '',
+							cta_snapshot = %s,
+							redacted_at_utc = %s
+						WHERE user_id = %d AND redacted_at_utc IS NULL",
+						'[redacted per user deletion]',
+						gmdate( 'Y-m-d H:i:s' ),
+						$user_id
+					)
+				);
+			}
+		);
 	}
 
 	/**
