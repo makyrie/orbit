@@ -547,19 +547,31 @@ class Orbit_Consent {
 		$first_token = strtok( $stripped, " \t\n(" );
 		$first_word  = false === $first_token ? '' : strtoupper( $first_token );
 
-		// Allow-list: bare INSERT only. Everything else (UPDATE, DELETE,
-		// REPLACE, TRUNCATE, RENAME, CALL, etc.) gets no-oped.
-		$is_bare_insert = ( 'INSERT' === $first_word )
-			&& ( false === stripos( $stripped, 'ON DUPLICATE KEY UPDATE' ) );
+		// Deny-list: refuse any verb that could mutate EXISTING ledger
+		// rows. Reads (SELECT), introspection (SHOW, DESCRIBE, EXPLAIN),
+		// schema (CREATE, ALTER, DROP — needed during activation +
+		// migration), and bare INSERT all pass through.
+		$destructive = array( 'UPDATE', 'DELETE', 'REPLACE', 'TRUNCATE', 'RENAME' );
 
-		if ( $is_bare_insert ) {
+		$is_destructive = in_array( $first_word, $destructive, true );
+
+		// INSERT ... ON DUPLICATE KEY UPDATE is a functional UPDATE via
+		// the chain_pos UNIQUE — block it even though the leading verb
+		// is INSERT.
+		if ( 'INSERT' === $first_word
+			&& false !== stripos( $stripped, 'ON DUPLICATE KEY UPDATE' )
+		) {
+			$is_destructive = true;
+		}
+
+		if ( ! $is_destructive ) {
 			return $query;
 		}
 
 		// Don't use wp_die — that would crash the request. Just no-op the
 		// write and emit a warning so the source is findable in logs.
 		trigger_error(
-			'Orbit_Consent: refused non-INSERT write against append-only ledger. Query: ' . esc_html( substr( (string) $query, 0, 200 ) ),
+			'Orbit_Consent: refused destructive write against append-only ledger. Query: ' . esc_html( substr( (string) $query, 0, 200 ) ),
 			E_USER_WARNING
 		);
 
