@@ -11,7 +11,7 @@ defined( 'WP_UNINSTALL_PLUGIN' ) || exit;
 
 global $wpdb;
 
-// Drop custom tables.
+// Drop custom tables (per-site, $wpdb->prefix).
 $tables = array(
 	'orbit_responses',
 	'orbit_notification_log',
@@ -24,6 +24,18 @@ $tables = array(
 
 foreach ( $tables as $table ) {
 	$wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}{$table}" );
+}
+
+// Drop network-scoped tables ($wpdb->base_prefix). The consent ledger is
+// network-wide on multisite — it must use base_prefix, not prefix, otherwise
+// the DROP targets a table that was never created on subsites and leaves the
+// real (network) table behind with PII (ip_hash, user_agent, cta_snapshot).
+$base_prefix_tables = array(
+	'orbit_consent_ledger',
+);
+
+foreach ( $base_prefix_tables as $table ) {
+	$wpdb->query( "DROP TABLE IF EXISTS {$wpdb->base_prefix}{$table}" );
 }
 
 // Delete options.

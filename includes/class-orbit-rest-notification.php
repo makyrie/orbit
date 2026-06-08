@@ -76,19 +76,42 @@ class Orbit_REST_Notification {
 	/**
 	 * Handle incoming Twilio webhook.
 	 *
+	 * Validates the signature against the exact URL the route serves,
+	 * then dispatches keyword handling. Returns TwiML to Twilio — empty
+	 * `<Response>` for keywords with no reply, or a `<Message>` body for
+	 * HELP / STOP / START confirmations per CTIA.
+	 *
+	 * Invalid-signature requests return 204 No Content rather than 403.
+	 * Twilio's retry policy treats 4xx/5xx as "retry for up to 24h with
+	 * exponential backoff" — a misconfigured Messaging Service URL during
+	 * a routing change would otherwise flood this endpoint with hours of
+	 * bad-signature retries. 204 silently drops the request from Twilio's
+	 * perspective and avoids the retry storm. Ops still gets signal via
+	 * the internal error_log() entry below.
+	 *
 	 * @param WP_REST_Request $request Request object.
 	 * @return WP_REST_Response|WP_Error Response.
 	 */
 	public static function handle_twilio_incoming( $request ) {
-		if ( ! Orbit_Twilio::validate_webhook( $request ) ) {
-			return new WP_Error( 'invalid_signature', __( 'Invalid webhook signature.', 'orbit' ), array( 'status' => 403 ) );
+		$expected_url = rest_url( Orbit_REST_API::API_NAMESPACE . '/twilio/incoming' );
+
+		if ( ! Orbit_Twilio::validate_webhook( $request, $expected_url ) ) {
+			// Log so ops keeps visibility on bad-signature traffic without
+			// returning a status code that Twilio will retry.
+			error_log( 'Orbit_Twilio: rejected incoming webhook with invalid signature.' );
+			return new WP_REST_Response( null, 204 );
 		}
 
-		Orbit_Twilio::handle_incoming( $request );
+		$result = Orbit_Twilio::handle_incoming( $request );
 
 		// Twilio expects TwiML XML response.
+		$reply = isset( $result['twiml_reply'] ) && '' !== $result['twiml_reply']
+			? $result['twiml_reply']
+			: '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
+
+		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- TwiML XML is built internally via twiml_reply() with esc_html() on the body.
 		header( 'Content-Type: text/xml; charset=UTF-8' );
-		echo '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
+		echo $reply; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		exit;
 	}
 

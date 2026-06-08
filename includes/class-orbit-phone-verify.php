@@ -120,9 +120,15 @@ class Orbit_Phone_Verify {
 		// Send SMS FIRST. If Twilio fails, do not persist anything — this
 		// avoids accumulating phantom rows that count against the per-phone
 		// rate limit while delivering zero codes to the user.
+		//
+		// Brand is pinned via ORBIT_MESSAGING_BRAND constant (not bloginfo)
+		// so a Settings → General change can't desync production SMS bodies
+		// from the TCR-approved sample messages.
+		$brand   = defined( 'ORBIT_MESSAGING_BRAND' ) ? ORBIT_MESSAGING_BRAND : get_bloginfo( 'name' );
 		$message = sprintf(
-			/* translators: %s: verification code */
-			__( 'Your Orbit verification code is: %s', 'orbit' ),
+			/* translators: 1: brand name, 2: verification code */
+			__( 'Your %1$s verification code is: %2$s', 'orbit' ),
+			$brand,
 			$code
 		);
 
