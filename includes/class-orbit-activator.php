@@ -447,7 +447,13 @@ class Orbit_Activator {
 	}
 
 	/**
-	 * Privacy policy content. Mirrors docs/compliance/privacy-policy.md.
+	 * Privacy policy content.
+	 *
+	 * MUST byte-match the prose in docs/compliance/privacy-policy.md
+	 * (block markup excluded). When updating, edit both files and run
+	 * `composer policy-diff` (or `php bin/check-policy-sync.php`). The
+	 * Orbit_Consent ledger stamps ORBIT_VERSION on every policy
+	 * revision — bump it whenever this prose changes.
 	 *
 	 * @return string
 	 */
@@ -542,7 +548,13 @@ class Orbit_Activator {
 	}
 
 	/**
-	 * Terms of service content. Mirrors docs/compliance/terms-of-service.md.
+	 * Terms of service content.
+	 *
+	 * MUST byte-match the prose in docs/compliance/terms-of-service.md
+	 * (block markup excluded). When updating, edit both files and run
+	 * `composer policy-diff` (or `php bin/check-policy-sync.php`). The
+	 * Orbit_Consent ledger stamps ORBIT_VERSION on every policy
+	 * revision — bump it whenever this prose changes.
 	 *
 	 * @return string
 	 */

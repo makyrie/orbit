@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: "124"
 tags: [code-review, PR-26, testing, tcpa-evidence, i18n]
@@ -56,6 +56,24 @@ Option A. Pair with a docblock update on `compliance_disclosure_text()` clarifyi
 ## Work Log
 
 - 2026-06-08: Surfaced during PR #26 multi-agent code review.
+- 2026-06-09: Added `tests/OrbitConsentCtaSnapshotTest.php` enforcing
+  cta_snapshot byte-equality with `Orbit_Shortcodes::compliance_disclosure_text()`
+  for both /signup and /subscribe REST paths, across both SMS-dormant
+  (Wave A default, sunset clause prepended) and SMS-live (option flipped via
+  `Orbit_Features::OPTION_SMS_ENABLED='1'`) states. Each variant first
+  pins the precondition (sunset clause present / absent in the disclosure)
+  so the byte-equality assertions never pass vacuously against a
+  silently-broken disclosure. Email-only and email+SMS rows both checked;
+  SMS variants confirm BOTH ledger rows hold the same snapshot string.
+  Test count: 7 in new file (incl. dormancy precondition + deferred
+  locale-variant placeholder); 61 total under
+  `--filter "Orbit(Consent|RestSignup|RestSubscription)"`, all green.
+  Locale-switching variant (Option A second variant in the proposal)
+  intentionally deferred and documented in the test docblock — the project
+  ships no compiled .mo files yet, so `switch_to_locale()` would fall back
+  to en_US and the test would pass vacuously. Production source unchanged
+  per scope constraint (docblock-clarification subitem deferred until the
+  same constraint lifts).
 
 ## Resources
 

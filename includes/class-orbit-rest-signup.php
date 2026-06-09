@@ -264,7 +264,22 @@ class Orbit_REST_Signup {
 		wp_clear_auth_cookie();
 		wp_set_current_user( $user_id );
 		wp_set_auth_cookie( $user_id, true );
-		wp_send_new_user_notifications( $user_id, 'user' );
+
+		// Defer the welcome email so SMTP latency doesn't block the HTTP
+		// response (see todo 119). The job runs on the next AS tick; if
+		// ActionScheduler somehow isn't loaded, fall back to the sync
+		// path so users still get their password-set link.
+		if ( function_exists( 'as_schedule_single_action' ) ) {
+			as_schedule_single_action(
+				time(),
+				'orbit_send_new_user_notification',
+				array( 'user_id' => $user_id ),
+				'orbit'
+			);
+		} else {
+			// Fallback: AS not loaded — should not happen in production.
+			wp_send_new_user_notifications( $user_id, 'user' );
+		}
 
 		return new WP_REST_Response(
 			array(

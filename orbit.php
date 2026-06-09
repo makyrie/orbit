@@ -96,6 +96,7 @@ require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-routes.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-shortcodes.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-spam.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-signup.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-user-notifications.php';
 
 /**
  * Register WP-CLI commands.
@@ -143,6 +144,7 @@ function orbit_deactivate() {
 		as_unschedule_all_actions( 'orbit_mark_past_activities' );
 		as_unschedule_all_actions( 'orbit_cleanup_notification_log' );
 		as_unschedule_all_actions( 'orbit_dispatch_activity_notifications' );
+		as_unschedule_all_actions( 'orbit_send_new_user_notification' );
 	}
 
 	flush_rewrite_rules();
@@ -270,6 +272,16 @@ Orbit_Consent::register_query_guard();
  */
 Orbit_Notifier::register_hooks();
 add_action( 'init', array( 'Orbit_Notifier', 'schedule_recurring_jobs' ) );
+
+/**
+ * Register the deferred new-user-notification handler.
+ *
+ * Signup + subscribe enqueue an `orbit_send_new_user_notification` job
+ * after COMMIT so the REST response isn't blocked on SMTP latency. The
+ * job carries a single positional arg (`user_id`) and dispatches via
+ * `Orbit_User_Notifications::send_new_user_notification()`.
+ */
+add_action( 'orbit_send_new_user_notification', array( 'Orbit_User_Notifications', 'send_new_user_notification' ), 10, 1 );
 
 /**
  * Register REST API routes.

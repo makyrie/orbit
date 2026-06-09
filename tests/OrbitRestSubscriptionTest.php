@@ -424,4 +424,65 @@ class OrbitRestSubscriptionTest extends WP_UnitTestCase {
 			. 'are persisted, and no notifier prefs row exists.'
 		);
 	}
+
+	// ---------------------------------------------------------------- //
+	// Deferred new-user notification (todo 119)
+	// ---------------------------------------------------------------- //
+
+	/**
+	 * When subscribe creates a brand-new user, the welcome email must
+	 * NOT be sent synchronously from the REST handler. Hook the
+	 * `wp_new_user_notification_email` filter and assert it never fires
+	 * during the request — that's the behavior change todo 119 enforces.
+	 * If ActionScheduler is loaded, additionally confirm the deferred
+	 * job is enqueued.
+	 */
+	public function test_happy_path_defers_welcome_email_to_action_scheduler() {
+		$filter_fired = false;
+		$capture      = function ( $email ) use ( &$filter_fired ) {
+			$filter_fired = true;
+			return $email;
+		};
+		add_filter( 'wp_new_user_notification_email', $capture, 10, 1 );
+
+		try {
+			$email    = 'defer-sub-' . wp_rand( 100000, 999999 ) . '@example.test';
+			$response = $this->dispatch_subscribe(
+				$this->subscribe_params(
+					array(
+						'display_name' => 'Defer Subscriber',
+						'email'        => $email,
+					)
+				)
+			);
+
+			$this->assertSame( 201, $response->get_status() );
+
+			$sub     = Orbit_Subscription::get( (int) $response->get_data()['id'] );
+			$user_id = (int) $sub->user_id;
+			$this->assertGreaterThan( 0, $user_id );
+
+			// The synchronous mail path must NOT have fired during the
+			// REST request — that's the whole point of todo 119.
+			$this->assertFalse(
+				$filter_fired,
+				'wp_send_new_user_notifications fired synchronously from the subscribe REST handler; it should be deferred to ActionScheduler.'
+			);
+
+			// When AS is loaded (the real production path), the job
+			// should be on the schedule.
+			if ( function_exists( 'as_has_scheduled_action' ) ) {
+				$this->assertTrue(
+					as_has_scheduled_action(
+						'orbit_send_new_user_notification',
+						array( 'user_id' => $user_id ),
+						'orbit'
+					),
+					'Expected orbit_send_new_user_notification to be scheduled for the new user.'
+				);
+			}
+		} finally {
+			remove_filter( 'wp_new_user_notification_email', $capture, 10 );
+		}
+	}
 }

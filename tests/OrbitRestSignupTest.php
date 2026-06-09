@@ -464,4 +464,64 @@ class OrbitRestSignupTest extends WP_UnitTestCase {
 		// Current user remains the pre-existing user, not a freshly minted one.
 		$this->assertSame( $existing_user_id, get_current_user_id() );
 	}
+
+	// ---------------------------------------------------------------- //
+	// Deferred new-user notification (todo 119)
+	// ---------------------------------------------------------------- //
+
+	/**
+	 * The welcome email must NOT be sent synchronously from the REST
+	 * handler. We hook the user-facing filter `wp_new_user_notification_email`
+	 * and assert it never fires during the request — proving the
+	 * `wp_send_new_user_notifications()` call moved off the request hot
+	 * path. If ActionScheduler is loaded, we additionally confirm the
+	 * deferred job was enqueued; otherwise the absence of the sync call
+	 * still proves the swap landed (the fallback only kicks in when AS
+	 * is missing, which we don't simulate here).
+	 */
+	public function test_happy_path_defers_welcome_email_to_action_scheduler() {
+		$filter_fired = false;
+		$capture      = function ( $email ) use ( &$filter_fired ) {
+			$filter_fired = true;
+			return $email;
+		};
+		add_filter( 'wp_new_user_notification_email', $capture, 10, 1 );
+
+		try {
+			$email    = 'defer-' . wp_rand( 100000, 999999 ) . '@example.test';
+			$response = $this->dispatch_signup(
+				$this->signup_params(
+					array(
+						'display_name' => 'Defer User',
+						'email'        => $email,
+					)
+				)
+			);
+
+			$this->assertSame( 201, $response->get_status() );
+			$user_id = (int) $response->get_data()['user_id'];
+
+			// The synchronous mail path must NOT have fired during the
+			// REST request — that's the whole point of todo 119.
+			$this->assertFalse(
+				$filter_fired,
+				'wp_send_new_user_notifications fired synchronously from the signup REST handler; it should be deferred to ActionScheduler.'
+			);
+
+			// When AS is loaded (the real production path), the job
+			// should be on the schedule.
+			if ( function_exists( 'as_has_scheduled_action' ) ) {
+				$this->assertTrue(
+					as_has_scheduled_action(
+						'orbit_send_new_user_notification',
+						array( 'user_id' => $user_id ),
+						'orbit'
+					),
+					'Expected orbit_send_new_user_notification to be scheduled for the new user.'
+				);
+			}
+		} finally {
+			remove_filter( 'wp_new_user_notification_email', $capture, 10 );
+		}
+	}
 }

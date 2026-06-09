@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: "129"
 tags: [code-review, PR-26, content, drift-detection]
@@ -66,6 +66,22 @@ Option A. At minimum, change the activator docblock from passive "mirrors" wordi
 ## Work Log
 
 - 2026-06-08: Surfaced during PR #26 multi-agent code review.
+- 2026-06-09: Implemented Option A. Added `bin/check-policy-sync.php` — a
+  zero-dependency CLI that requires `includes/class-orbit-activator.php` with
+  only `ABSPATH` + `ORBIT_VERSION` defined, invokes the protected static
+  `privacy_policy_content()` / `terms_of_service_content()` helpers via
+  Reflection, strips Gutenberg block delimiters + HTML tags + entities from
+  the activator output, strips frontmatter + H1 title + heading/bullet/bold/
+  italic/link markers from the .md sources, normalizes whitespace, and diffs
+  each pair. Exits 0 on match, 1 on drift with a per-line unified diff capped
+  at 20 mismatched pairs. Added `composer policy-diff` script entry. Rewrote
+  the `privacy_policy_content()` / `terms_of_service_content()` docblocks
+  with the MUST-byte-match contract, the dual-edit instruction, and the
+  ORBIT_VERSION bump reminder. CI wiring skipped — no `.github/workflows/`
+  yet in this repo; the script and docblock notes carry the discipline until
+  one lands. AGENTS.md dual-edit doc deferred (out of the todo's strict
+  scope; can fold in alongside the future CI wiring). Smoke test: both
+  pairs report `[OK]`, exit 0.
 
 ## Resources
 

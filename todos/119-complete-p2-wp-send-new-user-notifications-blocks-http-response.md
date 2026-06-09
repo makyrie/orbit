@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: "119"
 tags: [code-review, PR-26, performance, async]
@@ -63,6 +63,24 @@ Option A. We already depend on ActionScheduler; this is a one-line change at the
 ## Work Log
 
 - 2026-06-08: Surfaced during PR #26 multi-agent code review.
+- 2026-06-09: Implemented Option A. New handler class `Orbit_User_Notifications`
+  in `includes/class-orbit-user-notifications.php` wraps
+  `wp_send_new_user_notifications( $user_id, 'user' )` behind a deleted-user
+  guard. Registered the `orbit_send_new_user_notification` AS hook in
+  `orbit.php` alongside `Orbit_Notifier::register_hooks()` and added it to
+  the deactivation unschedule list. Replaced the synchronous calls in
+  `Orbit_REST_Signup::handle_signup()` and
+  `Orbit_REST_Subscription::handle_subscribe()` with
+  `as_schedule_single_action( time(), 'orbit_send_new_user_notification',
+  array( 'user_id' => $user_id ), 'orbit' )`, with a `function_exists`
+  fallback to the synchronous call if AS is somehow not loaded. Added one
+  test per controller (`test_happy_path_defers_welcome_email_to_action_scheduler`)
+  that hooks `wp_new_user_notification_email` to assert the sync path did
+  NOT fire and, when AS is available, calls `as_has_scheduled_action` to
+  confirm the job was enqueued under the `orbit` group. Updated
+  `tests/bootstrap.php` to require AS's `action-scheduler.php` on
+  `muplugins_loaded` so the AS function family is declared during tests.
+  Full suite: 188 tests, 518 assertions, 1 pre-existing incomplete. Green.
 
 ## Resources
 
