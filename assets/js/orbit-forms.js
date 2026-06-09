@@ -624,6 +624,29 @@
 	} );
 
 	/**
+	 * Dashboard onboarding banner — dismiss button. POSTs to the user's
+	 * dismiss endpoint to set the orbit_dashboard_banner_dismissed
+	 * user_meta, then hides the banner. Silent on failure: the next
+	 * page load just shows the banner again.
+	 */
+	document.addEventListener( 'click', function ( e ) {
+		var dismissBtn = e.target.closest( '[data-orbit-onboarding-dismiss]' );
+		if ( ! dismissBtn ) {
+			return;
+		}
+
+		var banner = dismissBtn.closest( '[data-orbit-onboarding-banner]' );
+		if ( banner ) {
+			banner.style.display = 'none';
+		}
+
+		apiRequest( 'me/dismiss-onboarding-banner', 'POST', {} ).catch( function () {
+			// Silent — the next dashboard render shows the banner again
+			// if persistence failed, which is the right fallback.
+		} );
+	} );
+
+	/**
 	 * Phone-input → SMS-consent gate. The SMS opt-in checkbox is
 	 * disabled by default and becomes enabled only when the phone field
 	 * has non-empty content. Server-side, if `consent_sms=1` arrives

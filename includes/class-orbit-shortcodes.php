@@ -211,6 +211,32 @@ class Orbit_Shortcodes {
 
 		echo '<h1>' . esc_html__( 'Dashboard', 'orbit' ) . '</h1>';
 
+		// One-time onboarding banner for users who haven't verified a phone
+		// yet. Dismissable per-user via the `orbit_dashboard_banner_dismissed`
+		// user_meta. Shown when:
+		// - The user has no verified phone.
+		// - Settings page is reachable to act on the banner.
+		// During the dormant window this is the primary path that surfaces
+		// the SMS opt-in surface to new posters — without it /settings/ is
+		// unreachable via the post-signup redirect.
+		$has_verified_phone = (bool) get_user_meta( $user_id, 'orbit_phone_verified', true );
+		$dismissed          = (bool) get_user_meta( $user_id, 'orbit_dashboard_banner_dismissed', true );
+
+		if ( ! $has_verified_phone && ! $dismissed ) {
+			echo '<div class="orbit-onboarding-banner" data-orbit-onboarding-banner>';
+			echo '<p>';
+			echo esc_html__( "Set up SMS notifications: ", 'orbit' );
+			echo '<a href="' . esc_url( home_url( '/settings/' ) ) . '">';
+			echo esc_html__( 'verify your phone in Settings', 'orbit' );
+			echo '</a>';
+			echo esc_html__( ' to receive activity alerts as soon as our SMS program launches.', 'orbit' );
+			echo '</p>';
+			echo '<button type="button" class="orbit-btn-link" data-orbit-onboarding-dismiss aria-label="' . esc_attr__( 'Dismiss this banner', 'orbit' ) . '">';
+			echo esc_html_x( 'Dismiss', 'banner action', 'orbit' );
+			echo '</button>';
+			echo '</div>';
+		}
+
 		if ( ! empty( $activities ) ) {
 			echo '<p class="orbit-page-intro">' . esc_html__( 'Upcoming activities from you and the people you\'ve subscribed to, soonest first.', 'orbit' ) . '</p>';
 		}
@@ -452,19 +478,32 @@ class Orbit_Shortcodes {
 	 */
 	private static function render_phone_verification( $user_id ) {
 		$phone             = (string) get_user_meta( $user_id, 'orbit_phone', true );
+		$phone_pending     = (string) get_user_meta( $user_id, 'orbit_phone_pending', true );
 		$verified          = (bool) get_user_meta( $user_id, 'orbit_phone_verified', true );
 		$has_verified      = $verified && '' !== $phone;
 		$twilio_configured = defined( 'ORBIT_TWILIO_ACCOUNT_SID' ) && defined( 'ORBIT_TWILIO_AUTH_TOKEN' ) && defined( 'ORBIT_TWILIO_FROM_NUMBER' );
+		$sms_live          = Orbit_Features::sms_enabled();
 
 		ob_start();
 
 		echo '<div class="orbit-phone-verification">';
 		echo '<h2>' . esc_html__( 'Phone number', 'orbit' ) . ' <span class="orbit-section-tag">' . esc_html__( 'optional', 'orbit' ) . '</span></h2>';
-		echo '<p class="orbit-help">' . esc_html__( 'Only needed if you want SMS notifications for any of the tiers below. We use it only to send activity alerts you opt into.', 'orbit' ) . '</p>';
+
+		// Status banner — visible at the top of the block so the user knows
+		// what verifying their phone right now will (or won't) do.
+		if ( ! $sms_live ) {
+			echo '<div class="orbit-notice orbit-notice-info">';
+			echo esc_html__( "Verifying your phone now lets you receive SMS notifications as soon as the program launches. Until then, we'll send everything by email.", 'orbit' );
+			echo '</div>';
+		} else {
+			echo '<p class="orbit-help">' . esc_html__( 'Only needed if you want SMS notifications for any of the tiers below. We use it only to send activity alerts you opt into.', 'orbit' ) . '</p>';
+		}
 
 		if ( ! $twilio_configured ) {
+			// During the dormant phase Twilio creds may not be configured
+			// yet. The plan: don't hide the surface — explain the state.
 			echo '<div class="orbit-notice orbit-notice-warning">';
-			echo esc_html__( 'SMS is not currently available — Twilio is not configured on this site.', 'orbit' );
+			echo esc_html__( "Phone verification will be available once SMS is live. You'll be notified by email when that happens.", 'orbit' );
 			echo '</div>';
 			echo '</div>';
 			return ob_get_clean();
@@ -484,11 +523,18 @@ class Orbit_Shortcodes {
 		}
 
 		// Phone entry form — hidden when already verified (revealed by Change button).
+		// Pre-populate with orbit_phone_pending so a user who provided a
+		// phone at subscribe/signup-time doesn't have to re-type it.
+		$initial_phone_value = '' !== $phone_pending ? $phone_pending : '';
+
 		echo '<form method="post" class="orbit-phone-form" data-orbit-api="verify-phone" data-orbit-step="phone"' . ( $has_verified ? ' hidden' : '' ) . '>';
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-phone-input">' . esc_html__( 'Phone number', 'orbit' ) . '</label>';
-		echo '<input type="tel" id="orbit-phone-input" name="phone" placeholder="+15551234567" required>';
+		echo '<input type="tel" id="orbit-phone-input" name="phone" placeholder="+15551234567" value="' . esc_attr( $initial_phone_value ) . '" required>';
 		echo '<p class="orbit-help">' . esc_html__( 'Use E.164 format with country code (e.g., +15551234567).', 'orbit' ) . '</p>';
+		if ( '' !== $phone_pending && ! $has_verified ) {
+			echo '<p class="orbit-help">' . esc_html__( 'We have this number on file from your sign-up but it\'s not verified yet. Verify it now to enable SMS notifications when SMS goes live.', 'orbit' ) . '</p>';
+		}
 		echo '</div>';
 		echo '<button type="submit" class="orbit-btn">' . esc_html__( 'Send verification code', 'orbit' ) . '</button>';
 		echo '</form>';
