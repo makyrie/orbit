@@ -1414,6 +1414,20 @@ class Orbit_Shortcodes {
 		) ) . '</p>';
 		echo '</div>';
 
+		// Phone field, compliance disclosure, and per-channel consent
+		// checkboxes — grouped so the disclosure reads adjacent to the
+		// phone capture rather than as a footer afterthought (Twilio
+		// reviewer guidance).
+		if ( ! is_user_logged_in() ) {
+			// Anonymous-flow subscribers may provide a phone for SMS at
+			// account-creation time. Logged-in users already have an
+			// account; they can verify their phone from /settings/ if
+			// they want SMS.
+			echo self::render_phone_field( 'orbit-subscribe' );
+		}
+		echo self::render_compliance_block();
+		echo self::render_consent_checkboxes( 'orbit-subscribe' );
+
 		echo '<div class="orbit-form-actions">';
 		echo '<button type="submit" class="orbit-btn">' . esc_html__( 'Subscribe', 'orbit' ) . '</button>';
 		echo ' <a class="orbit-btn-link" href="' . esc_url( home_url( '/@' . $profile->slug ) ) . '">' . esc_html__( '← Back to profile', 'orbit' ) . '</a>';
@@ -1618,6 +1632,155 @@ class Orbit_Shortcodes {
 				),
 			)
 		) . '</p>';
+	}
+
+	/**
+	 * Canonical compliance-disclosure text shown adjacent to phone-capture
+	 * fields on every opt-in surface.
+	 *
+	 * Used in TWO places that must agree byte-for-byte:
+	 *
+	 * 1. As the rendered HTML in the subscribe + signup forms (via
+	 *    {@see self::render_compliance_block()}).
+	 * 2. As the cta_snapshot string stored on every consent ledger row at
+	 *    opt-in time (via {@see Orbit_REST_Subscription::handle_subscribe}
+	 *    and {@see Orbit_REST_Signup::handle_signup} when they call
+	 *    Orbit_Consent::record).
+	 *
+	 * Storing the exact phrasing the user agreed to is the TCPA evidence
+	 * the consent ledger exists to preserve.
+	 *
+	 * When this text changes, bump ORBIT_VERSION so the orbit_policy_version
+	 * post_meta on /privacy/ + /terms/ tracks the change. Every consent
+	 * row captures the version it agreed to.
+	 *
+	 * @return string Plain text, safe to esc_html() into HTML or store
+	 *                verbatim in the ledger.
+	 */
+	public static function compliance_disclosure_text() {
+		return sprintf(
+			/* translators: 1: brand name. */
+			__( 'Get notified when posters you follow share new activities. Email is required; phone is optional and used only for SMS notifications. Initially we deliver everything by email — SMS goes live once %1$s\'s messaging service is approved. Up to 10 msgs/week. Msg & data rates may apply. Reply STOP to opt out, HELP for help. See our Privacy Policy and Terms.', 'orbit' ),
+			defined( 'ORBIT_MESSAGING_BRAND' ) ? ORBIT_MESSAGING_BRAND : get_bloginfo( 'name' )
+		);
+	}
+
+	/**
+	 * Render the compliance-disclosure block.
+	 *
+	 * Visually distinct from surrounding form fields so it reads as a
+	 * disclosure, not body copy. Twilio reviewer guidance: the
+	 * disclosures must be adjacent to the phone field, not buried in
+	 * the form footer. Includes inline links to /privacy/ and /terms/.
+	 *
+	 * @return string Block-level HTML.
+	 */
+	public static function render_compliance_block() {
+		$privacy_url = esc_url( home_url( '/privacy/' ) );
+		$terms_url   = esc_url( home_url( '/terms/' ) );
+		$disclosure  = self::compliance_disclosure_text();
+
+		// Render with inline link substitutions. We embed the canonical
+		// disclosure text but render "Privacy Policy" and "Terms" as
+		// clickable links. The ledger captures the canonical (link-free)
+		// text via compliance_disclosure_text().
+		$rendered = esc_html( $disclosure );
+
+		// Swap the visible phrases for anchor tags. esc_html() above means
+		// the swap happens against escaped text; the anchor tags we splice
+		// in are trusted-static.
+		$rendered = str_replace(
+			esc_html__( 'Privacy Policy', 'orbit' ),
+			'<a href="' . $privacy_url . '">' . esc_html__( 'Privacy Policy', 'orbit' ) . '</a>',
+			$rendered
+		);
+		$rendered = str_replace(
+			esc_html__( 'Terms', 'orbit' ),
+			'<a href="' . $terms_url . '">' . esc_html__( 'Terms', 'orbit' ) . '</a>',
+			$rendered
+		);
+
+		return '<div class="orbit-compliance-block" role="note">' . $rendered . '</div>';
+	}
+
+	/**
+	 * Render the optional phone field. Visually grouped with the
+	 * compliance block.
+	 *
+	 * @param string $id_prefix Form ID prefix so multiple forms on a
+	 *                          single page don't collide (e.g. 'orbit-subscribe').
+	 * @return string Block-level HTML.
+	 */
+	public static function render_phone_field( $id_prefix ) {
+		$id = $id_prefix . '-phone';
+
+		ob_start();
+		?>
+		<div class="orbit-form-group orbit-phone-group">
+			<label for="<?php echo esc_attr( $id ); ?>"><?php esc_html_e( 'Phone (optional)', 'orbit' ); ?></label>
+			<input
+				type="tel"
+				id="<?php echo esc_attr( $id ); ?>"
+				name="phone"
+				autocomplete="tel"
+				inputmode="tel"
+				placeholder="+1 555 555 0123"
+				data-orbit-phone-input
+			>
+			<p class="orbit-help"><?php esc_html_e( 'Include country code (e.g. +1 for US/Canada).', 'orbit' ); ?></p>
+		</div>
+		<?php
+		return ob_get_clean();
+	}
+
+	/**
+	 * Render the consent checkboxes.
+	 *
+	 * Two checkboxes per Twilio's "explicit consent per channel" pattern:
+	 * - Email consent is required (the form can't submit without it).
+	 * - SMS consent is optional and only meaningful when the phone field
+	 *   has a value. JS toggles its `disabled` attribute based on phone
+	 *   input; server-side, if `consent_sms=1` arrives without a phone
+	 *   the handler returns a validation error.
+	 *
+	 * @param string $id_prefix Form ID prefix.
+	 * @return string Block-level HTML.
+	 */
+	public static function render_consent_checkboxes( $id_prefix ) {
+		$email_id = $id_prefix . '-consent-email';
+		$sms_id   = $id_prefix . '-consent-sms';
+
+		ob_start();
+		?>
+		<div class="orbit-form-group orbit-consent-group">
+			<label class="orbit-checkbox-label" for="<?php echo esc_attr( $email_id ); ?>">
+				<input type="checkbox" id="<?php echo esc_attr( $email_id ); ?>" name="consent_email" value="1" required>
+				<?php
+				echo esc_html(
+					sprintf(
+						/* translators: %s: brand name */
+						__( 'I agree to receive activity notifications from %s at the email address above.', 'orbit' ),
+						defined( 'ORBIT_MESSAGING_BRAND' ) ? ORBIT_MESSAGING_BRAND : get_bloginfo( 'name' )
+					)
+				);
+				?>
+				<span class="orbit-required-mark" aria-hidden="true">*</span>
+			</label>
+			<label class="orbit-checkbox-label" for="<?php echo esc_attr( $sms_id ); ?>">
+				<input
+					type="checkbox"
+					id="<?php echo esc_attr( $sms_id ); ?>"
+					name="consent_sms"
+					value="1"
+					disabled
+					data-orbit-sms-consent
+				>
+				<?php esc_html_e( "Also send me SMS notifications at the phone above (once SMS is live).", 'orbit' ); ?>
+				<span class="orbit-help"><?php esc_html_e( '(Optional — only available when you provide a phone number.)', 'orbit' ); ?></span>
+			</label>
+		</div>
+		<?php
+		return ob_get_clean();
 	}
 
 	/**

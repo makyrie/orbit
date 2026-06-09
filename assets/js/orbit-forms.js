@@ -624,6 +624,37 @@
 	} );
 
 	/**
+	 * Phone-input → SMS-consent gate. The SMS opt-in checkbox is
+	 * disabled by default and becomes enabled only when the phone field
+	 * has non-empty content. Server-side, if `consent_sms=1` arrives
+	 * without a phone the handler rejects with a validation error — the
+	 * UX gate here is just so users don't see (and check) a checkbox
+	 * they can't act on.
+	 */
+	document.addEventListener( 'input', function ( e ) {
+		var phoneInput = e.target.closest( '[data-orbit-phone-input]' );
+		if ( ! phoneInput ) {
+			return;
+		}
+
+		var form = phoneInput.closest( 'form' );
+		if ( ! form ) {
+			return;
+		}
+
+		var smsConsent = form.querySelector( '[data-orbit-sms-consent]' );
+		if ( ! smsConsent ) {
+			return;
+		}
+
+		var hasPhone = phoneInput.value.trim().length > 0;
+		smsConsent.disabled = ! hasPhone;
+		if ( ! hasPhone ) {
+			smsConsent.checked = false;
+		}
+	} );
+
+	/**
 	 * Copy-to-clipboard button. Reads the target input via
 	 * `data-orbit-copy-target` (an ID selector, e.g. `#orbit-share-link`),
 	 * copies its value to the clipboard, and briefly swaps the button label
