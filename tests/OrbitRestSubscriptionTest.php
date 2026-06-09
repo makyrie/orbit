@@ -7,9 +7,8 @@
  * email (required) and optionally SMS, stashes a pending phone number on the
  * user, and creates the subscription row.
  *
- * Mirrors the structure and conventions of OrbitRestSignupTest. Where the
- * subscribe endpoint lags signup (notably honeypot / "too fast" traps —
- * see todo 113), affected tests use markTestIncomplete().
+ * Mirrors the structure and conventions of OrbitRestSignupTest. The
+ * transaction-rollback canary remains markTestIncomplete pending todo 118.
  *
  * @package Orbit
  */
@@ -123,18 +122,25 @@ class OrbitRestSubscriptionTest extends WP_UnitTestCase {
 
 	/**
 	 * Build a request body for /subscribe. Sensible defaults for the happy
-	 * path — tests override fields they want to exercise.
+	 * path — tests override fields they want to exercise. By default the
+	 * timestamp is set far enough in the past to clear Orbit_Spam's "too
+	 * fast" check.
 	 *
 	 * @param array $overrides Field overrides.
 	 * @return array Request parameters ready for set_param().
 	 */
 	private function subscribe_params( array $overrides = array() ) {
+		// 2 seconds ago — comfortably over the 1500ms MIN_FILL_MS threshold.
+		$default_init_ms = (int) round( microtime( true ) * 1000 ) - 2000;
+
 		return array_merge(
 			array(
-				'share_token'   => $this->profile->share_token,
-				'display_name'  => 'New Subscriber',
-				'email'         => 'new-sub-' . wp_rand( 100000, 999999 ) . '@example.test',
-				'consent_email' => true,
+				'share_token'     => $this->profile->share_token,
+				'display_name'    => 'New Subscriber',
+				'email'           => 'new-sub-' . wp_rand( 100000, 999999 ) . '@example.test',
+				'consent_email'   => true,
+				'orbit_url'       => '',
+				'orbit_form_init' => $default_init_ms,
 			),
 			$overrides
 		);
@@ -267,25 +273,34 @@ class OrbitRestSubscriptionTest extends WP_UnitTestCase {
 	}
 
 	// ---------------------------------------------------------------- //
-	// Honeypot / timestamp traps (deferred to todo 113)
+	// Honeypot / timestamp traps
 	// ---------------------------------------------------------------- //
 
 	public function test_honeypot_field_filled_returns_400() {
-		$this->markTestIncomplete(
-			'Subscribe endpoint does not yet implement honeypot/timestamp '
-			. 'traps — see todo 113. Re-enable this assertion when that '
-			. 'lands. Expected: orbit_url populated should return 400 with '
-			. 'code orbit_spam_detected.'
+		$response = $this->dispatch_subscribe(
+			$this->subscribe_params(
+				array(
+					'orbit_url' => 'https://spammer.test/',
+				)
+			)
 		);
+
+		$this->assertSame( 400, $response->get_status() );
+		$this->assertSame( 'orbit_spam_detected', $response->as_error()->get_error_code() );
 	}
 
 	public function test_too_fast_submission_returns_400() {
-		$this->markTestIncomplete(
-			'Subscribe endpoint does not yet read orbit_form_init / enforce '
-			. 'MIN_FILL_MS — see todo 113. Re-enable this assertion when '
-			. 'that lands. Expected: form posted < 1500ms after render '
-			. 'should return 400 with code orbit_spam_detected.'
+		// init_ms ~ now means elapsed < MIN_FILL_MS (1500ms).
+		$response = $this->dispatch_subscribe(
+			$this->subscribe_params(
+				array(
+					'orbit_form_init' => (int) round( microtime( true ) * 1000 ),
+				)
+			)
 		);
+
+		$this->assertSame( 400, $response->get_status() );
+		$this->assertSame( 'orbit_spam_detected', $response->as_error()->get_error_code() );
 	}
 
 	// ---------------------------------------------------------------- //

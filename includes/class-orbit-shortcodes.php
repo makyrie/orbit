@@ -1483,6 +1483,12 @@ class Orbit_Shortcodes {
 		echo self::render_compliance_block();
 		echo self::render_consent_checkboxes( 'orbit-subscribe' );
 
+		// Honeypot + timestamp traps — same defense the signup form uses,
+		// rendered just before the submit button so it sits inside the
+		// <form> envelope. Orbit_Spam::check_traps() in the REST handler
+		// reads orbit_url + orbit_form_init off the request payload.
+		Orbit_Spam::render_traps();
+
 		echo '<div class="orbit-form-actions">';
 		echo '<button type="submit" class="orbit-btn">' . esc_html__( 'Subscribe', 'orbit' ) . '</button>';
 		echo ' <a class="orbit-btn-link" href="' . esc_url( home_url( '/@' . $profile->slug ) ) . '">' . esc_html__( '← Back to profile', 'orbit' ) . '</a>';

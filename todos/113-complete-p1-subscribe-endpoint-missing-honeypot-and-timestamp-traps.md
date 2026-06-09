@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p1
 issue_id: "113"
 tags: [code-review, PR-26, security, anti-spam]
@@ -84,6 +84,7 @@ Ship Option 1 before merge. There's no reason subscribe should have weaker bot d
 ## Work Log
 
 - 2026-06-08: Surfaced during PR #26 multi-agent code review.
+- 2026-06-09: Shipped Option 1. `Orbit_Shortcodes::subscribe_form()` now renders `Orbit_Spam::render_traps()` inside the `<form>` just before the submit row — same relative position as `signup_form()`. `Orbit_REST_Subscription::handle_subscribe()` now calls `Orbit_Spam::check_traps( $request->get_params() )` at the very top of the handler, before the rate-limit check, so trap-tripped requests don't burn the legitimate 5/hr/IP budget. On trap fail returns a 400 with the trap's error code (`orbit_spam_detected` for bot hits, `orbit_form_expired` for stale forms) — message kept generic to avoid telegraphing which trap fired. `OrbitRestSubscriptionTest::subscribe_params()` now defaults `orbit_url=''` and `orbit_form_init = now-2000ms` (mirrors `signup_params`). `test_honeypot_field_filled_returns_400` and `test_too_fast_submission_returns_400` converted from `markTestIncomplete` to active assertions checking 400 + `orbit_spam_detected`. File-header docblock updated — todo 113 deferral note removed; transaction-rollback canary still references todo 118.
 
 ## Resources
 

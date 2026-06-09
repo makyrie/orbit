@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p1
 issue_id: "112"
 tags: [code-review, PR-26, wp-php, activation, tcpa-evidence]
@@ -91,6 +91,7 @@ Ship Option 1 before merge. The activator must keep the post_meta version in syn
 ## Work Log
 
 - 2026-06-08: Surfaced during PR #26 multi-agent code review.
+- 2026-06-09: Shipped Option 1 in `Orbit_Activator::create_pages()`. Replaced the coarse `if ( $existing ) { continue; }` with a split: when the page already exists, capture `$page_id = $existing->ID`; otherwise build the post args and call `wp_insert_post()` to get `$page_id`. After the branch, guard on `$page_id` being truthy and not a `WP_Error`, then iterate `$page_data['meta']` and `update_post_meta()` for each declared key. Net effect: `orbit_policy_version` (and any future declared meta) is upserted to `ORBIT_VERSION` on every activation for /privacy/ and /terms/, regardless of whether the page already existed. Post content is still preserved on existing pages — the `wp_insert_post()` call only runs in the `! $existing` branch. Staged but not committed.
 
 ## Resources
 

@@ -321,33 +321,48 @@ class Orbit_Activator {
 			$existing = get_page_by_path( $slug );
 
 			if ( $existing ) {
+				$page_id = $existing->ID;
+			} else {
+				$post_args = array(
+					'post_title'   => $page_data['title'],
+					'post_name'    => $slug,
+					'post_content' => $page_data['content'],
+					'post_status'  => 'publish',
+					'post_type'    => 'page',
+					'post_author'  => 1,
+				);
+
+				$meta_input = array();
+
+				if ( ! empty( $page_data['template'] ) ) {
+					$meta_input['_wp_page_template'] = $page_data['template'];
+				}
+
+				if ( ! empty( $page_data['meta'] ) ) {
+					$meta_input = array_merge( $meta_input, $page_data['meta'] );
+				}
+
+				if ( ! empty( $meta_input ) ) {
+					$post_args['meta_input'] = $meta_input;
+				}
+
+				$page_id = wp_insert_post( $post_args );
+			}
+
+			if ( ! $page_id || is_wp_error( $page_id ) ) {
 				continue;
 			}
 
-			$post_args = array(
-				'post_title'   => $page_data['title'],
-				'post_name'    => $slug,
-				'post_content' => $page_data['content'],
-				'post_status'  => 'publish',
-				'post_type'    => 'page',
-				'post_author'  => 1,
-			);
-
-			$meta_input = array();
-
-			if ( ! empty( $page_data['template'] ) ) {
-				$meta_input['_wp_page_template'] = $page_data['template'];
-			}
-
+			// Always upsert declared meta on every activation so values like
+			// `orbit_policy_version` stay in sync with the plugin even when the
+			// page itself already exists (e.g. on upgrade). The content/template
+			// insert above is what's gated on `! $existing`; the meta-write is
+			// not.
 			if ( ! empty( $page_data['meta'] ) ) {
-				$meta_input = array_merge( $meta_input, $page_data['meta'] );
+				foreach ( $page_data['meta'] as $meta_key => $meta_value ) {
+					update_post_meta( $page_id, $meta_key, $meta_value );
+				}
 			}
-
-			if ( ! empty( $meta_input ) ) {
-				$post_args['meta_input'] = $meta_input;
-			}
-
-			wp_insert_post( $post_args );
 		}
 	}
 

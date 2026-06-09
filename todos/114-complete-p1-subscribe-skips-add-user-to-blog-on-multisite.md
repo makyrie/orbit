@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p1
 issue_id: "114"
 tags: [code-review, PR-26, multisite, wp-php]
@@ -104,6 +104,7 @@ Ship Option 1 before merge for the smallest correct fix. Open a follow-up todo t
 ## Work Log
 
 - 2026-06-08: Surfaced during PR #26 multi-agent code review.
+- 2026-06-09: Shipped Option 1. `Orbit_REST_Subscription::handle_subscribe()` now branches on `is_multisite()` for role assignment — on multisite it calls `add_user_to_blog( get_current_blog_id(), $user_id, 'orbit_subscriber' )` so the canonical `add_user_to_blog` action fires and third-party integrations (Stream, WP Activity Log, multisite role managers) can hook membership changes; on single-site it keeps the existing `WP_User::add_role( 'orbit_subscriber' )` path since `add_user_to_blog()` isn't loaded outside multisite. Preserves the `orbit_subscriber` role slug the subscribe handler has always used (signup uses `subscriber` because that's the role it assigns at `wp_insert_user` time — the two handlers assign different roles, so the slug stays divergent). Branch sits inside the existing try/catch envelope so any thrown error still rolls back the transaction. Option 2 helper extraction deferred — open a follow-up todo if drift becomes a concern. Tests not extended in this pass: the multisite assertion called for in the acceptance criteria requires a multisite-aware test bootstrap, which the current PHPUnit harness doesn't run in CI — flagged for the test-infra wave.
 
 ## Resources
 

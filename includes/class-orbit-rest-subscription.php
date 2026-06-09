@@ -160,6 +160,19 @@ class Orbit_REST_Subscription {
 	public static function handle_subscribe( $request ) {
 		global $wpdb;
 
+		// Honeypot + timestamp check. Mirrors signup's first line of defense
+		// so both account-creation endpoints share the same bot-rejection
+		// envelope. Runs BEFORE the rate-limit check so trap-tripped requests
+		// don't consume the legitimate 5/hr/IP budget.
+		$trap_error = Orbit_Spam::check_traps( $request->get_params() );
+		if ( is_wp_error( $trap_error ) ) {
+			return new WP_Error(
+				$trap_error->get_error_code(),
+				$trap_error->get_error_message(),
+				array( 'status' => 400 )
+			);
+		}
+
 		// Rate limit: 5 subscription attempts per hour per IP.
 		$ip = Orbit_Client_IP::get();
 		if ( $ip && ! Orbit_Rate_Limiter::attempt( 'subscribe', $ip, 5, HOUR_IN_SECONDS ) ) {
@@ -264,8 +277,19 @@ class Orbit_REST_Subscription {
 					)
 				);
 
-				$user = get_userdata( $user_id );
-				$user->add_role( 'orbit_subscriber' );
+				// On multisite, route role assignment through
+				// add_user_to_blog() so the canonical `add_user_to_blog`
+				// action fires — third-party integrations (Stream, WP
+				// Activity Log, multisite role managers) hook that action
+				// to track membership changes. On single-site the function
+				// isn't loaded (ms-functions.php is multisite-only) and
+				// WP_User::add_role() is the only path.
+				if ( is_multisite() ) {
+					add_user_to_blog( get_current_blog_id(), $user_id, 'orbit_subscriber' );
+				} else {
+					$user = get_userdata( $user_id );
+					$user->add_role( 'orbit_subscriber' );
+				}
 
 				update_user_meta( $user_id, 'orbit_timezone', wp_timezone_string() );
 
