@@ -161,6 +161,98 @@ class OrbitRestSignupTest extends WP_UnitTestCase {
 	}
 
 	// ---------------------------------------------------------------- //
+	// Consent capture (Phase 2c)
+	// ---------------------------------------------------------------- //
+
+	public function test_missing_consent_email_returns_400() {
+		$response = $this->dispatch_signup(
+			$this->signup_params(
+				array(
+					'consent_email' => false,
+				)
+			)
+		);
+
+		$this->assertSame( 400, $response->get_status() );
+		$this->assertSame( 'consent_required', $response->as_error()->get_error_code() );
+	}
+
+	public function test_consent_sms_without_phone_returns_400() {
+		$response = $this->dispatch_signup(
+			$this->signup_params(
+				array(
+					'consent_sms' => true,
+				)
+			)
+		);
+
+		$this->assertSame( 400, $response->get_status() );
+		$this->assertSame( 'consent_sms_without_phone', $response->as_error()->get_error_code() );
+	}
+
+	public function test_invalid_phone_format_returns_400() {
+		$response = $this->dispatch_signup(
+			$this->signup_params(
+				array(
+					'phone' => '555-555-1234',
+				)
+			)
+		);
+
+		$this->assertSame( 400, $response->get_status() );
+		$this->assertSame( 'invalid_phone', $response->as_error()->get_error_code() );
+	}
+
+	public function test_happy_path_writes_email_consent_row() {
+		$response = $this->dispatch_signup( $this->signup_params() );
+		$this->assertSame( 201, $response->get_status() );
+		$user_id = $response->get_data()['user_id'];
+
+		$this->assertSame( 'opt_in', Orbit_Consent::latest_state( $user_id, 'email' ) );
+		$this->assertNull( Orbit_Consent::latest_state( $user_id, 'sms' ) );
+	}
+
+	public function test_phone_plus_sms_consent_writes_both_rows_and_pending_meta() {
+		$response = $this->dispatch_signup(
+			$this->signup_params(
+				array(
+					'phone'       => '+12025550199',
+					'consent_sms' => true,
+				)
+			)
+		);
+
+		$this->assertSame( 201, $response->get_status() );
+		$user_id = $response->get_data()['user_id'];
+
+		$this->assertSame( 'opt_in', Orbit_Consent::latest_state( $user_id, 'email' ) );
+		$this->assertSame( 'opt_in', Orbit_Consent::latest_state( $user_id, 'sms' ) );
+		$this->assertSame( '+12025550199', get_user_meta( $user_id, 'orbit_phone_pending', true ) );
+		// orbit_phone (the verified slot) stays empty until Orbit_Phone_Verify
+		// confirms.
+		$this->assertSame( '', get_user_meta( $user_id, 'orbit_phone', true ) );
+	}
+
+	public function test_phone_without_sms_consent_writes_only_email_row() {
+		$response = $this->dispatch_signup(
+			$this->signup_params(
+				array(
+					'phone'       => '+12025550199',
+					'consent_sms' => false,
+				)
+			)
+		);
+
+		$this->assertSame( 201, $response->get_status() );
+		$user_id = $response->get_data()['user_id'];
+
+		$this->assertSame( 'opt_in', Orbit_Consent::latest_state( $user_id, 'email' ) );
+		$this->assertNull( Orbit_Consent::latest_state( $user_id, 'sms' ) );
+		// Phone is still stashed for /settings/ to pre-fill.
+		$this->assertSame( '+12025550199', get_user_meta( $user_id, 'orbit_phone_pending', true ) );
+	}
+
+	// ---------------------------------------------------------------- //
 	// Honeypot / timestamp traps
 	// ---------------------------------------------------------------- //
 
