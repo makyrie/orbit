@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p1
 issue_id: "110"
 tags: [code-review, PR-26, privacy, data-integrity, gdpr]
@@ -79,6 +79,14 @@ Ship Option 1 before merge. Fix all three sites and add the GC cron. The GC cron
 ## Work Log
 
 - 2026-06-08: Surfaced during PR #26 multi-agent code review.
+- 2026-06-09: Implemented Option 1 — closed the pending-phone leak end-to-end across four sites.
+  - **`includes/class-orbit-phone-verify.php` (verify success path)** — after the existing `update_user_meta()` writes for `orbit_phone` + `orbit_phone_verified` in `verify_code()`, added `delete_user_meta()` calls for `orbit_phone_pending` AND its companion `orbit_phone_pending_at`. This removes the stale-notice bug on `/settings/` and prevents the daily GC from racing the user's just-completed verification.
+  - **`includes/class-orbit-privacy.php` (`cleanup_user_data()`)** — extended the usermeta-cleanup block with `delete_user_meta()` calls for `orbit_phone_pending` and `orbit_phone_pending_at`. GDPR Article 17 erasure no longer leaks an unverified candidate phone.
+  - **`includes/class-orbit-rest-subscription.php` and `includes/class-orbit-rest-signup.php` (pending-write sites)** — both now write a companion `orbit_phone_pending_at = time()` alongside `orbit_phone_pending`. usermeta has no native updated_at so this is the GC cron's age signal.
+  - **`includes/class-orbit-notifier.php` (daily GC cron)** — added `HOOK_CLEANUP_PENDING_PHONE` constant (`orbit_cleanup_pending_phones`), registered against `register_hooks()`, scheduled daily in `schedule_recurring_jobs()` to mirror `HOOK_CLEANUP_VERIFY`'s cadence. New method `cleanup_pending_phones()` runs `$wpdb->get_col` against `usermeta` for `orbit_phone_pending_at` rows older than the filtered max age (default 30 days, `orbit_pending_phone_max_age` filter), iterates the user IDs, and `delete_user_meta`s both pending keys per user. Returns the reaped count.
+  - **Tests** — added `tests/OrbitPhoneVerifyTest.php` (two tests: success clears pending pair; failure preserves pending pair), `tests/OrbitPrivacyTest.php` (one test: `cleanup_user_data` clears all six Orbit usermeta keys including the pending pair), and two new tests in `tests/OrbitNotifierTest.php` (`cleanup_pending_phones_purges_only_stale_rows`; `cleanup_pending_phones_honors_max_age_filter`).
+  - **Out of scope (per todo):** `includes/class-orbit-shortcodes.php` (settings UI render) — untouched; the data layer fixes make the rendered notice correct without any view edit. Backfill of legacy `orbit_phone_pending` rows missing the `_at` companion is a separate one-off migration task.
+  - **Parallel-agent note:** Todo 109 ran concurrently against `class-orbit-notifier.php` and `class-orbit-rest-subscription.php`. Edits were sited to distinct regions of each file (109 added `forget_preferences()` near the cache property and modified the subscribe-handler catch block; 110 added the constant/hook/scheduler/GC method and the pending-write companion). Both sets of changes coexist in the working tree without conflict.
 
 ## Resources
 

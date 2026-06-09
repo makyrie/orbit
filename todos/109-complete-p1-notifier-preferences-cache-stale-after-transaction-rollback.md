@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p1
 issue_id: "109"
 tags: [code-review, PR-26, data-integrity, notifier, cache, transactions]
@@ -70,3 +70,23 @@ Ship Option 2 before merge. Add `Orbit_Notifier::forget_preferences_cache( int $
 - PR #26: feat/compliance-ui-and-consent-capture
 - Surfaced by: data-integrity-guardian PR #26 review
 - Related code: `includes/class-orbit-notifier.php::get_or_create_preferences()`
+
+## Work Log
+
+### 2026-06-09 — Shipped Option 2 (minimal-diff cache eviction)
+
+- `includes/class-orbit-notifier.php`
+  - Added `Orbit_Notifier::forget_preferences( int $user_id )` static — single-line `unset()` against the `$preferences_cache` static property, with a docblock framing it as the rollback-safety counterpart to `get_or_create_preferences()`.
+  - Extended the `get_or_create_preferences()` docblock with the cache invariant: callers wrapping the call in a transaction MUST call `forget_preferences()` on rollback because the cache is populated immediately after the row INSERT, not after COMMIT.
+- `includes/class-orbit-rest-subscription.php::handle_subscribe()`
+  - Hoisted `$user_id = 0;` into the outer scope (above `START TRANSACTION`) so the catch block can reference it safely.
+  - In the catch, after `ROLLBACK`, the handler now calls `Orbit_Notifier::forget_preferences( $user_id )` guarded by `is_int( $user_id ) && $user_id > 0` — protects against the `wp_create_user()` WP_Error path where `$user_id` is not yet a positive integer.
+- `tests/OrbitNotifierTest.php`
+  - Added `test_forget_preferences_evicts_cache_so_next_read_requeries_db()`: primes cache, deletes the underlying row to simulate rollback, calls `forget_preferences()`, asserts the next `get_or_create_preferences()` call returns a new object instance (not the cached one) and re-creates the row in the DB.
+
+Acceptance criteria satisfied:
+- `Orbit_Notifier::forget_preferences()` exists and removes the static entry.
+- Subscribe handler's catch path evicts the cache for the user_id after ROLLBACK.
+- PHPUnit test exercises the prime → rollback → eviction → re-read cycle.
+
+Note: the public API method name landed as `forget_preferences()` rather than `forget_preferences_cache()` per the implementation brief; the docblock keeps the rollback-safety contract explicit so the shorter name doesn't obscure the intent.

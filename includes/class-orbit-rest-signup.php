@@ -218,7 +218,12 @@ class Orbit_REST_Signup {
 			update_user_meta( $user_id, 'orbit_timezone', wp_timezone_string() );
 
 			if ( '' !== $phone ) {
+				// Pair the pending phone with an explicit timestamp so the
+				// daily GC cron (Orbit_Notifier::cleanup_pending_phones())
+				// can reap abandoned signups — usermeta has no native
+				// updated_at, so this companion key is required.
 				update_user_meta( $user_id, 'orbit_phone_pending', $phone );
+				update_user_meta( $user_id, 'orbit_phone_pending_at', time() );
 			}
 
 			$email_consent = Orbit_Consent::record(

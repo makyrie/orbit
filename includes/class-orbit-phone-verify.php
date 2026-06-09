@@ -213,6 +213,15 @@ class Orbit_Phone_Verify {
 		}
 		update_user_meta( $user_id, 'orbit_phone_verified', 1 );
 
+		// Drop the pending-phone signal (and its companion timestamp) now
+		// that the candidate has been confirmed. Otherwise the settings UI
+		// keeps rendering the "we have this number on file from your
+		// sign-up but it's not verified yet" notice indefinitely and the
+		// daily GC cron would eventually delete data that no longer
+		// represents an abandoned signup.
+		delete_user_meta( $user_id, 'orbit_phone_pending' );
+		delete_user_meta( $user_id, 'orbit_phone_pending_at' );
+
 		// Clean up verification records for this user.
 		$wpdb->delete( $table, array( 'user_id' => $user_id ), array( '%d' ) );
 

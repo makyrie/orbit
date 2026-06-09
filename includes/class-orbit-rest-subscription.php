@@ -235,6 +235,11 @@ class Orbit_REST_Subscription {
 		$pending_auth_user_id      = 0;
 		$pending_password_set_send = false;
 
+		// Declared in the outer scope so the catch block can evict the
+		// Orbit_Notifier preferences cache on rollback. See cache-invariant
+		// note on Orbit_Notifier::get_or_create_preferences().
+		$user_id = 0;
+
 		// All DB writes (wp_users + wp_orbit_subscriptions + wp_orbit_
 		// notification_preferences + wp_orbit_consent_ledger rows) are
 		// wrapped in a single transaction. InnoDB supports this across
@@ -301,8 +306,13 @@ class Orbit_REST_Subscription {
 			if ( '' !== $phone ) {
 				// `orbit_phone_pending` (not `orbit_phone`) — promotion
 				// to the verified meta happens in Orbit_Phone_Verify on
-				// successful code entry.
+				// successful code entry. The companion `_at` timestamp
+				// is the daily GC cron's age signal — usermeta has no
+				// native updated_at, so an explicit unix timestamp is
+				// the only way Orbit_Notifier::cleanup_pending_phones()
+				// can reap abandoned signups.
 				update_user_meta( $user_id, 'orbit_phone_pending', $phone );
+				update_user_meta( $user_id, 'orbit_phone_pending_at', time() );
 			}
 
 			// Subscription row.
@@ -352,6 +362,18 @@ class Orbit_REST_Subscription {
 			$wpdb->query( 'COMMIT' );
 		} catch ( Throwable $e ) {
 			$wpdb->query( 'ROLLBACK' );
+
+			// Evict the Orbit_Notifier preferences cache if a row was
+			// inserted before the throw. get_or_create_preferences()
+			// populates the static cache immediately after the INSERT —
+			// after ROLLBACK the row is gone but the cache entry would
+			// otherwise survive the request and serve a phantom hit on
+			// any retry. Guarded so we don't pass a WP_Error from a
+			// failed wp_create_user() through the int cast.
+			if ( is_int( $user_id ) && $user_id > 0 ) {
+				Orbit_Notifier::forget_preferences( $user_id );
+			}
+
 			return new WP_Error( 'subscribe_failed', $e->getMessage(), array( 'status' => 500 ) );
 		}
 

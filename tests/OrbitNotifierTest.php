@@ -76,6 +76,58 @@ class OrbitNotifierTest extends WP_UnitTestCase {
 	}
 
 	/**
+	 * forget_preferences() evicts the static cache entry so the next
+	 * get_or_create_preferences() call re-queries the database.
+	 *
+	 * Rollback-safety contract for callers that wrap the get-or-create
+	 * call in a transaction: after ROLLBACK the in-memory cache entry
+	 * still points at the now-vanished row, so the catch path must
+	 * evict it to keep cache and DB consistent. This test simulates
+	 * that workflow: prime the cache, drop the underlying DB row
+	 * (standing in for the rollback), then assert that the next read
+	 * either re-queries the DB (creating a new row) or returns the
+	 * fresh row rather than the stale cached one.
+	 */
+	public function test_forget_preferences_evicts_cache_so_next_read_requeries_db() {
+		global $wpdb;
+
+		$table = $wpdb->prefix . ORBIT_TABLE_NOTIFICATION_PREFERENCES;
+
+		// Prime cache via first call (also inserts the default row).
+		$prefs1 = Orbit_Notifier::get_or_create_preferences( self::$user_id );
+		$this->assertIsObject( $prefs1 );
+
+		// Second call hits cache — same instance.
+		$prefs2 = Orbit_Notifier::get_or_create_preferences( self::$user_id );
+		$this->assertSame( $prefs1, $prefs2, 'Sanity: cache should be primed before eviction.' );
+
+		// Simulate a transaction rollback by deleting the underlying row
+		// directly. The cache entry still points at $prefs1 until we
+		// explicitly evict.
+		$wpdb->delete( $table, array( 'user_id' => self::$user_id ), array( '%d' ) );
+
+		// Without eviction, get_or_create_preferences() would still
+		// return the cached (now-phantom) object referencing a missing
+		// row. After forget_preferences(), the next call must re-query
+		// the DB — finding no row, it re-creates the default row.
+		Orbit_Notifier::forget_preferences( self::$user_id );
+
+		$prefs3 = Orbit_Notifier::get_or_create_preferences( self::$user_id );
+		$this->assertIsObject( $prefs3 );
+		$this->assertNotSame( $prefs1, $prefs3, 'Eviction must force a DB requery — new object instance expected.' );
+
+		// And the row exists again (re-created from defaults), confirming
+		// the eviction-then-reread path went through the INSERT branch.
+		$row_count = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM {$table} WHERE user_id = %d",
+				self::$user_id
+			)
+		);
+		$this->assertSame( 1, $row_count );
+	}
+
+	/**
 	 * Test resolve_notification_method returns correct method per tier.
 	 *
 	 * With Orbit_Features::sms_enabled() === true (option flipped on),
@@ -402,5 +454,65 @@ class OrbitNotifierTest extends WP_UnitTestCase {
 			$captured[0]['key'],
 			'Idempotency key must be "{user_id}|{activity_id}|{method}".'
 		);
+	}
+
+	/**
+	 * cleanup_pending_phones() reaps unverified pending-phone meta older
+	 * than the configured max age and leaves fresh rows in place.
+	 *
+	 * Default max age is 30 days; we seed one stale row (35 days old) and
+	 * one fresh row (1 day old) and assert only the stale pair is gone
+	 * after the GC runs.
+	 */
+	public function test_cleanup_pending_phones_purges_only_stale_rows() {
+		$stale_user_id = self::factory()->user->create();
+		$fresh_user_id = self::factory()->user->create();
+
+		// Stale: 35 days old — beyond the 30-day default.
+		update_user_meta( $stale_user_id, 'orbit_phone_pending', '+15550000001' );
+		update_user_meta( $stale_user_id, 'orbit_phone_pending_at', time() - ( 35 * DAY_IN_SECONDS ) );
+
+		// Fresh: 1 day old.
+		update_user_meta( $fresh_user_id, 'orbit_phone_pending', '+15550000002' );
+		update_user_meta( $fresh_user_id, 'orbit_phone_pending_at', time() - DAY_IN_SECONDS );
+
+		$reaped = Orbit_Notifier::cleanup_pending_phones();
+
+		$this->assertSame( 1, $reaped, 'Exactly one stale row should be reaped.' );
+
+		// Stale user: both keys gone.
+		$this->assertSame( '', (string) get_user_meta( $stale_user_id, 'orbit_phone_pending', true ) );
+		$this->assertSame( '', (string) get_user_meta( $stale_user_id, 'orbit_phone_pending_at', true ) );
+
+		// Fresh user: both keys preserved.
+		$this->assertSame( '+15550000002', get_user_meta( $fresh_user_id, 'orbit_phone_pending', true ) );
+		$this->assertNotSame( '', (string) get_user_meta( $fresh_user_id, 'orbit_phone_pending_at', true ) );
+	}
+
+	/**
+	 * The `orbit_pending_phone_max_age` filter overrides the 30-day
+	 * default — a 1-second max age should reap a row that's only an
+	 * hour old.
+	 */
+	public function test_cleanup_pending_phones_honors_max_age_filter() {
+		$user_id = self::factory()->user->create();
+
+		update_user_meta( $user_id, 'orbit_phone_pending', '+15550000003' );
+		update_user_meta( $user_id, 'orbit_phone_pending_at', time() - HOUR_IN_SECONDS );
+
+		add_filter(
+			'orbit_pending_phone_max_age',
+			static function () {
+				return 1;
+			}
+		);
+
+		$reaped = Orbit_Notifier::cleanup_pending_phones();
+
+		remove_all_filters( 'orbit_pending_phone_max_age' );
+
+		$this->assertSame( 1, $reaped );
+		$this->assertSame( '', (string) get_user_meta( $user_id, 'orbit_phone_pending', true ) );
+		$this->assertSame( '', (string) get_user_meta( $user_id, 'orbit_phone_pending_at', true ) );
 	}
 }

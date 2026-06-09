@@ -15,12 +15,13 @@ class Orbit_Notifier {
 	/**
 	 * ActionScheduler hook names.
 	 */
-	const HOOK_IMMEDIATE      = 'orbit_send_immediate_notification';
-	const HOOK_DIGEST         = 'orbit_send_daily_digest';
-	const HOOK_MARK_PAST      = 'orbit_mark_past_activities';
-	const HOOK_CLEANUP        = 'orbit_cleanup_notification_log';
-	const HOOK_CLEANUP_VERIFY = 'orbit_cleanup_phone_verification';
-	const HOOK_DISPATCH       = 'orbit_dispatch_activity_notifications';
+	const HOOK_IMMEDIATE             = 'orbit_send_immediate_notification';
+	const HOOK_DIGEST                = 'orbit_send_daily_digest';
+	const HOOK_MARK_PAST             = 'orbit_mark_past_activities';
+	const HOOK_CLEANUP               = 'orbit_cleanup_notification_log';
+	const HOOK_CLEANUP_VERIFY        = 'orbit_cleanup_phone_verification';
+	const HOOK_CLEANUP_PENDING_PHONE = 'orbit_cleanup_pending_phones';
+	const HOOK_DISPATCH              = 'orbit_dispatch_activity_notifications';
 
 	/**
 	 * Public-API hook names.
@@ -54,6 +55,7 @@ class Orbit_Notifier {
 		add_action( self::HOOK_MARK_PAST, array( __CLASS__, 'process_mark_past' ) );
 		add_action( self::HOOK_CLEANUP, array( __CLASS__, 'process_cleanup' ) );
 		add_action( self::HOOK_CLEANUP_VERIFY, array( __CLASS__, 'process_cleanup_verify' ) );
+		add_action( self::HOOK_CLEANUP_PENDING_PHONE, array( __CLASS__, 'cleanup_pending_phones' ) );
 		add_action( self::HOOK_DISPATCH, array( __CLASS__, 'process_dispatch' ), 10, 1 );
 	}
 
@@ -80,6 +82,15 @@ class Orbit_Notifier {
 		// indefinitely (verify_code() only deletes on success).
 		if ( ! as_has_scheduled_action( self::HOOK_CLEANUP_VERIFY ) ) {
 			as_schedule_recurring_action( strtotime( 'tomorrow midnight' ), DAY_IN_SECONDS, self::HOOK_CLEANUP_VERIFY, array(), 'orbit' );
+		}
+
+		// Cleanup abandoned pending-phone usermeta — daily. Sign-up /
+		// subscribe writes `orbit_phone_pending` for users who never
+		// complete SMS verification; without this GC, that PII row lives
+		// forever. Threshold is filterable via
+		// `orbit_pending_phone_max_age` (default: 30 days).
+		if ( ! as_has_scheduled_action( self::HOOK_CLEANUP_PENDING_PHONE ) ) {
+			as_schedule_recurring_action( strtotime( 'tomorrow midnight' ), DAY_IN_SECONDS, self::HOOK_CLEANUP_PENDING_PHONE, array(), 'orbit' );
 		}
 	}
 
@@ -595,6 +606,66 @@ class Orbit_Notifier {
 	}
 
 	/**
+	 * Garbage-collect abandoned `orbit_phone_pending` usermeta rows.
+	 *
+	 * Sign-up and subscribe write `orbit_phone_pending` (the unverified
+	 * candidate phone number) plus a companion `orbit_phone_pending_at`
+	 * unix timestamp. Successful SMS verification deletes both keys in
+	 * `Orbit_Phone_Verify::verify_code()`. Users who never verify leave
+	 * the pair in place indefinitely — a PII leak and a source of the
+	 * misleading "we have this number on file but it's not verified yet"
+	 * notice on /settings/.
+	 *
+	 * This ActionScheduler callback runs daily and deletes both keys for
+	 * any user whose `_at` timestamp is older than the filterable max
+	 * age (default 30 days). Rows missing the companion `_at` key (i.e.,
+	 * legacy pre-fix writes from PR #26 before todo 110 landed) are NOT
+	 * touched by this query — they have no age signal — and need a
+	 * one-off backfill migration if they exist in production.
+	 *
+	 * @return int Number of users whose pending-phone meta was deleted.
+	 */
+	public static function cleanup_pending_phones() {
+		global $wpdb;
+
+		/**
+		 * Filter the maximum age of an unverified pending-phone row
+		 * before the daily GC removes it. Default 30 days.
+		 *
+		 * @param int $max_age Seconds. Default 30 * DAY_IN_SECONDS.
+		 */
+		$max_age = (int) apply_filters( 'orbit_pending_phone_max_age', 30 * DAY_IN_SECONDS );
+		if ( $max_age < 1 ) {
+			$max_age = 30 * DAY_IN_SECONDS;
+		}
+
+		$cutoff = time() - $max_age;
+
+		$user_ids = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT user_id FROM {$wpdb->usermeta}
+				WHERE meta_key = %s
+					AND CAST(meta_value AS UNSIGNED) > 0
+					AND CAST(meta_value AS UNSIGNED) < %d",
+				'orbit_phone_pending_at',
+				$cutoff
+			)
+		);
+
+		if ( empty( $user_ids ) ) {
+			return 0;
+		}
+
+		foreach ( $user_ids as $user_id ) {
+			$user_id = (int) $user_id;
+			delete_user_meta( $user_id, 'orbit_phone_pending' );
+			delete_user_meta( $user_id, 'orbit_phone_pending_at' );
+		}
+
+		return count( $user_ids );
+	}
+
+	/**
 	 * Resolve the notification method for a user based on tier.
 	 *
 	 * Applies the SMS kill-switch as an inline invariant: when
@@ -747,7 +818,33 @@ class Orbit_Notifier {
 	}
 
 	/**
+	 * Evict a user's preferences entry from the request-level cache.
+	 *
+	 * Rollback-safety counterpart to `get_or_create_preferences()`: that
+	 * method primes the static `$preferences_cache` immediately after the
+	 * INSERT, so when the caller's enclosing transaction is rolled back,
+	 * the cache holds a phantom row. Calling this method in the catch
+	 * block (alongside `ROLLBACK`) keeps the cache consistent with the
+	 * committed database state.
+	 *
+	 * @param int $user_id User ID whose cache entry should be dropped.
+	 */
+	public static function forget_preferences( $user_id ) {
+		unset( self::$preferences_cache[ (int) $user_id ] );
+	}
+
+	/**
 	 * Get or create notification preferences for a user.
+	 *
+	 * Cache invariant: the static `$preferences_cache` entry is populated
+	 * immediately after the row INSERT, BEFORE any enclosing transaction
+	 * has committed. Callers that wrap this call in a `START TRANSACTION`
+	 * / `ROLLBACK` envelope MUST call `Orbit_Notifier::forget_preferences(
+	 * $user_id )` on rollback — otherwise the cache holds a phantom row
+	 * pointing at a record that no longer exists in the database, and any
+	 * subsequent read for the same user within the request returns stale
+	 * data. See `Orbit_REST_Subscription::handle_subscribe()` for the
+	 * canonical pattern.
 	 *
 	 * @param int $user_id User ID.
 	 * @return object Preferences row.
