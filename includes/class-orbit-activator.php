@@ -300,25 +300,29 @@ class Orbit_Activator {
 			// Orbit_Consent::record() can capture the version each user
 			// agreed to at consent time.
 			'privacy'       => array(
-				'title'    => 'Privacy Policy',
-				'content'  => self::compliance_page_content( 'privacy' ),
-				'template' => '',
-				'meta'     => array(
+				'title'                => 'Privacy Policy',
+				'content'              => self::compliance_page_content( 'privacy' ),
+				'template'             => '',
+				'meta'                 => array(
 					'orbit_policy_version' => ORBIT_VERSION,
 				),
+				'compliance_canonical' => 'privacy',
 			),
 			'terms'         => array(
-				'title'    => 'Terms of Service',
-				'content'  => self::compliance_page_content( 'terms' ),
-				'template' => '',
-				'meta'     => array(
+				'title'                => 'Terms of Service',
+				'content'              => self::compliance_page_content( 'terms' ),
+				'template'             => '',
+				'meta'                 => array(
 					'orbit_policy_version' => ORBIT_VERSION,
 				),
+				'compliance_canonical' => 'terms',
 			),
 		);
 
 		foreach ( $pages as $slug => $page_data ) {
-			$existing = get_page_by_path( $slug );
+			$existing       = get_page_by_path( $slug );
+			$is_canonical   = ! empty( $page_data['compliance_canonical'] );
+			$canonical_kind = $is_canonical ? (string) $page_data['compliance_canonical'] : '';
 
 			if ( $existing ) {
 				$page_id = $existing->ID;
@@ -342,6 +346,13 @@ class Orbit_Activator {
 					$meta_input = array_merge( $meta_input, $page_data['meta'] );
 				}
 
+				// Stamp the canonical-compliance ownership marker at insert
+				// time so newly-minted /privacy/ and /terms/ pages are
+				// identifiable as Orbit-owned from the very first row.
+				if ( $is_canonical ) {
+					$meta_input['_orbit_canonical_compliance'] = $canonical_kind;
+				}
+
 				if ( ! empty( $meta_input ) ) {
 					$post_args['meta_input'] = $meta_input;
 				}
@@ -361,6 +372,52 @@ class Orbit_Activator {
 			if ( ! empty( $page_data['meta'] ) ) {
 				foreach ( $page_data['meta'] as $meta_key => $meta_value ) {
 					update_post_meta( $page_id, $meta_key, $meta_value );
+				}
+			}
+
+			// Canonical compliance pages (/privacy/, /terms/) store their
+			// page_id in an option so the consent ledger and any downstream
+			// URL/version lookups can dereference the canonical post directly
+			// instead of going through get_page_by_path() — which lets any
+			// user with edit_pages capability silently win the slug by
+			// pre-creating a draft. See todo 117.
+			//
+			// Slug-collision guard: if the page at the slug is already
+			// stamped `_orbit_canonical_compliance` but with a marker value
+			// for a DIFFERENT canonical kind (e.g. the /privacy/ page is
+			// somehow stamped 'terms'), refuse to overwrite the option — the
+			// data is inconsistent and the operator needs to reconcile. The
+			// policy-version meta upsert above still runs, preserving todo
+			// 112 behavior.
+			if ( $is_canonical ) {
+				$option_key = 'privacy' === $canonical_kind
+					? 'orbit_privacy_page_id'
+					: 'orbit_terms_page_id';
+
+				$existing_marker = get_post_meta( $page_id, '_orbit_canonical_compliance', true );
+
+				$collision_detected = ! empty( $existing_marker )
+					&& (string) $existing_marker !== $canonical_kind;
+
+				if ( $collision_detected ) {
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log(
+						sprintf(
+							'Orbit_Activator: slug-collision detected for canonical compliance page "/%s/" (page_id=%d, existing marker="%s"). Skipping orbit_%s_page_id option write — reconcile manually.',
+							$slug,
+							$page_id,
+							(string) $existing_marker,
+							$canonical_kind
+						)
+					);
+				} else {
+					// Stamp the ownership marker on existing pages too —
+					// newly inserted pages already received it via
+					// meta_input, but re-activation paths and pages that
+					// pre-existed the canonical-id system need backfill.
+					update_post_meta( $page_id, '_orbit_canonical_compliance', $canonical_kind );
+
+					update_option( $option_key, (int) $page_id, false );
 				}
 			}
 		}

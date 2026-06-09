@@ -222,15 +222,36 @@ class Orbit_Shortcodes {
 		$has_verified_phone = (bool) get_user_meta( $user_id, 'orbit_phone_verified', true );
 		$dismissed          = (bool) get_user_meta( $user_id, 'orbit_dashboard_banner_dismissed', true );
 
-		if ( ! $has_verified_phone && ! $dismissed ) {
+		// Gate on Orbit_Features::sms_enabled() so the "as soon as our SMS
+		// program launches" copy doesn't keep rendering after SMS goes
+		// live. Post-launch the banner disappears for unverified users
+		// entirely; a verify-your-phone CTA can land elsewhere later (per
+		// todo 128). The banner body itself comes from
+		// Orbit_Messaging_Copy so the dormancy copy stays a one-flag flip.
+		if ( ! Orbit_Features::sms_enabled() && ! $has_verified_phone && ! $dismissed ) {
+			$settings_link = '<a href="' . esc_url( home_url( '/settings/' ) ) . '">'
+				. esc_html__( 'verify your phone in Settings', 'orbit' )
+				. '</a>';
+
+			$banner_body = Orbit_Messaging_Copy::dashboard_onboarding_banner_copy();
+			// The body comes back with an `{settings_link}` placeholder
+			// so the helper itself stays HTML-free; we substitute the
+			// anchor here after escaping the surrounding sentence.
+			$banner_html = str_replace(
+				'{settings_link}',
+				$settings_link,
+				esc_html( $banner_body )
+			);
+
 			echo '<div class="orbit-onboarding-banner" data-orbit-onboarding-banner>';
-			echo '<p>';
-			echo esc_html__( "Set up SMS notifications: ", 'orbit' );
-			echo '<a href="' . esc_url( home_url( '/settings/' ) ) . '">';
-			echo esc_html__( 'verify your phone in Settings', 'orbit' );
-			echo '</a>';
-			echo esc_html__( ' to receive activity alerts as soon as our SMS program launches.', 'orbit' );
-			echo '</p>';
+			echo '<p>' . wp_kses(
+				$banner_html,
+				array(
+					'a' => array(
+						'href' => array(),
+					),
+				)
+			) . '</p>';
 			echo '<button type="button" class="orbit-btn-link" data-orbit-onboarding-dismiss aria-label="' . esc_attr__( 'Dismiss this banner', 'orbit' ) . '">';
 			echo esc_html_x( 'Dismiss', 'banner action', 'orbit' );
 			echo '</button>';
@@ -533,7 +554,10 @@ class Orbit_Shortcodes {
 		echo '<input type="tel" id="orbit-phone-input" name="phone" placeholder="+15551234567" value="' . esc_attr( $initial_phone_value ) . '" required>';
 		echo '<p class="orbit-help">' . esc_html__( 'Use E.164 format with country code (e.g., +15551234567).', 'orbit' ) . '</p>';
 		if ( '' !== $phone_pending && ! $has_verified ) {
-			echo '<p class="orbit-help">' . esc_html__( 'We have this number on file from your sign-up but it\'s not verified yet. Verify it now to enable SMS notifications when SMS goes live.', 'orbit' ) . '</p>';
+			// Copy lives in Orbit_Messaging_Copy so the "when SMS goes live"
+			// promise flips to a launch-appropriate sentence the moment
+			// Orbit_Features::sms_enabled() returns true.
+			echo '<p class="orbit-help">' . esc_html( Orbit_Messaging_Copy::settings_phone_help_note() ) . '</p>';
 		}
 		echo '</div>';
 		echo '<button type="submit" class="orbit-btn">' . esc_html__( 'Send verification code', 'orbit' ) . '</button>';
@@ -1734,15 +1758,26 @@ class Orbit_Shortcodes {
 			$terms_label = __( 'Terms', 'orbit' );
 		}
 
-		$brand = defined( 'ORBIT_MESSAGING_BRAND' ) ? ORBIT_MESSAGING_BRAND : get_bloginfo( 'name' );
-
-		return sprintf(
-			/* translators: 1: Privacy Policy link or label, 2: Terms link or label, 3: brand name. */
-			__( 'Get notified when posters you follow share new activities. Email is required; phone is optional and used only for SMS notifications. Initially we deliver everything by email — SMS goes live once %3$s\'s messaging service is approved. Up to 10 msgs/week. Msg & data rates may apply. Reply STOP to opt out, HELP for help. See our %1$s and %2$s.', 'orbit' ),
+		$baseline = sprintf(
+			/* translators: 1: Privacy Policy link or label, 2: Terms link or label. */
+			__( 'Get notified when posters you follow share new activities. Email is required; phone is optional and used only for SMS notifications. Up to 10 msgs/week. Msg & data rates may apply. Reply STOP to opt out, HELP for help. See our %1$s and %2$s.', 'orbit' ),
 			$privacy_label,
-			$terms_label,
-			$brand
+			$terms_label
 		);
+
+		// SMS dormancy clause comes from the central gate so the dashboard
+		// banner, settings help note, this disclosure, and the ledger
+		// snapshot all flip together on the SMS-launch day. The clause is
+		// PREPENDED — keep this position stable across the rendered HTML
+		// path and the ledger snapshot path or the cta_snapshot byte-match
+		// invariant breaks. When SMS is live the helper returns an empty
+		// string and the disclosure reads as the baseline alone.
+		$sms_clause = Orbit_Messaging_Copy::sms_status_clause();
+		if ( '' === $sms_clause ) {
+			return $baseline;
+		}
+
+		return $sms_clause . ' ' . $baseline;
 	}
 
 	/**

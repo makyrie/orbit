@@ -74,6 +74,7 @@ if ( file_exists( ORBIT_PLUGIN_DIR . 'vendor/autoload.php' ) ) {
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-activator.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-roles.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-features.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-messaging-copy.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-consent.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-token.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-profile.php';

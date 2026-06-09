@@ -626,8 +626,12 @@
 	/**
 	 * Dashboard onboarding banner — dismiss button. POSTs to the user's
 	 * dismiss endpoint to set the orbit_dashboard_banner_dismissed
-	 * user_meta, then hides the banner. Silent on failure: the next
-	 * page load just shows the banner again.
+	 * user_meta. Uses optimistic visual acknowledgement (aria-busy +
+	 * faded opacity) but defers DOM removal until the POST resolves so
+	 * a failed request can be surfaced and the banner restored. On
+	 * success, keyboard focus is moved to a stable fallback target
+	 * before the banner is removed so screen readers and keyboard
+	 * users don't land on <body>.
 	 */
 	document.addEventListener( 'click', function ( e ) {
 		var dismissBtn = e.target.closest( '[data-orbit-onboarding-dismiss]' );
@@ -636,13 +640,86 @@
 		}
 
 		var banner = dismissBtn.closest( '[data-orbit-onboarding-banner]' );
-		if ( banner ) {
-			banner.style.display = 'none';
+		if ( ! banner ) {
+			return;
 		}
 
-		apiRequest( 'me/dismiss-onboarding-banner', 'POST', {} ).catch( function () {
-			// Silent — the next dashboard render shows the banner again
-			// if persistence failed, which is the right fallback.
+		// Optimistic acknowledgement: keep the banner in the DOM but
+		// mark it as dismissing so users see immediate feedback. The
+		// element stays available for rollback if the POST fails.
+		banner.classList.add( 'orbit-onboarding-banner--dismissing' );
+		banner.setAttribute( 'aria-busy', 'true' );
+		banner.style.opacity = '0.5';
+		dismissBtn.disabled = true;
+
+		// Clear any previous inline error from an earlier failed attempt.
+		var prevError = banner.querySelector( '.orbit-onboarding-banner__error' );
+		if ( prevError && prevError.parentNode ) {
+			prevError.parentNode.removeChild( prevError );
+		}
+
+		apiRequest( 'me/dismiss-onboarding-banner', 'POST', {} ).then( function () {
+			// Move focus to a stable target before removing the banner
+			// so keyboard / screen-reader users don't land on <body>.
+			// Preference order: theme-provided hook, then main heading,
+			// then <main>, then #main, then body.
+			var focusTarget = document.querySelector( '[data-orbit-banner-after]' );
+			if ( ! focusTarget ) {
+				focusTarget = document.querySelector( 'main h1' );
+			}
+			if ( ! focusTarget ) {
+				focusTarget = document.querySelector( 'main' );
+			}
+			if ( ! focusTarget ) {
+				focusTarget = document.getElementById( 'main' );
+			}
+			if ( ! focusTarget ) {
+				focusTarget = document.body;
+			}
+
+			if ( focusTarget ) {
+				// Shim tabindex if the target isn't natively focusable
+				// so .focus() actually lands somewhere meaningful.
+				if ( ! focusTarget.hasAttribute( 'tabindex' ) ) {
+					focusTarget.setAttribute( 'tabindex', '-1' );
+				}
+				// rAF lets the browser settle the DOM mutation that
+				// follows; focusing before removal keeps focus stable.
+				window.requestAnimationFrame( function () {
+					focusTarget.focus();
+					if ( banner.parentNode ) {
+						banner.parentNode.removeChild( banner );
+					}
+				} );
+			} else if ( banner.parentNode ) {
+				banner.parentNode.removeChild( banner );
+			}
+		} ).catch( function ( err ) {
+			// Rollback optimistic state so the banner reappears intact.
+			banner.classList.remove( 'orbit-onboarding-banner--dismissing' );
+			banner.removeAttribute( 'aria-busy' );
+			banner.style.opacity = '';
+			dismissBtn.disabled = false;
+
+			// Surface an inline error so the user knows the dismiss
+			// didn't persist. Falls back to a literal English string
+			// because orbitForms.strings doesn't currently expose a
+			// dedicated banner-dismiss error.
+			// TODO: i18n — add an `orbit_banner_dismiss_failed` entry
+			// to wp_localize_script in orbit.php and prefer it here.
+			var message = ( err && err.message )
+				? err.message
+				: "We couldn't save your preference — please try again.";
+
+			var errorEl = document.createElement( 'span' );
+			errorEl.className = 'orbit-onboarding-banner__error';
+			errorEl.setAttribute( 'role', 'alert' );
+			errorEl.textContent = message;
+			banner.appendChild( errorEl );
+
+			// Restore focus to the dismiss button so keyboard users
+			// can retry without hunting for it.
+			dismissBtn.focus();
 		} );
 	} );
 
