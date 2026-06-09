@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: "121"
 tags: [code-review, PR-26, agent-native, cli, compliance]
@@ -50,6 +50,20 @@ Option A *now* — add the flags and wire them through the existing `Orbit_Conse
 ## Work Log
 
 - 2026-06-08: Surfaced during PR #26 multi-agent code review.
+- 2026-06-09: Added `--phone`, `--consent_email`, `--consent_sms` to `wp orbit
+  subscription create` (`cli/class-orbit-cli-subscription.php`). E.164
+  validation + `consent_sms_without_phone` error mirror the REST handler
+  byte-for-byte. CLI-stamped ledger rows carry `source=cli` and
+  `user_agent=wp-cli` so ops-initiated provisioning is distinguishable from
+  end-user opt-in. Writes wrapped in `START TRANSACTION`/`COMMIT`/`ROLLBACK`
+  with notifier-preferences cache eviction on failure, mirroring REST shape.
+  Existing positional args + happy-path response untouched (purely additive).
+  Added `tests/OrbitCliSubscriptionTest.php` (8 tests, 24 assertions) that
+  stubs `WP_CLI` + `WP_CLI_Command` and invokes `Orbit_CLI_Subscription::
+  create()` directly with constructed assoc_args; asserts pending-phone
+  meta, both consent rows, source/user_agent provenance, and the two
+  validation error paths. All 8 pass. Refactor to `Orbit_User_Provisioning`
+  (todo 130) is deferred per recommendation.
 
 ## Resources
 

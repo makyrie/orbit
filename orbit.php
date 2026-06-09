@@ -85,6 +85,7 @@ require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-privacy.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-twilio.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-phone-verify.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-notifier.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rolled-back-exception.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-api.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-subscription.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-activity.php';
@@ -110,6 +111,8 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 	require_once ORBIT_PLUGIN_DIR . 'cli/class-orbit-cli-response.php';
 	require_once ORBIT_PLUGIN_DIR . 'cli/class-orbit-cli-notification.php';
 	require_once ORBIT_PLUGIN_DIR . 'cli/class-orbit-cli-status.php';
+	require_once ORBIT_PLUGIN_DIR . 'cli/class-orbit-cli-signup.php';
+	require_once ORBIT_PLUGIN_DIR . 'cli/class-orbit-cli-consent.php';
 
 	WP_CLI::add_command( 'orbit profile', 'Orbit_CLI_Profile' );
 	WP_CLI::add_command( 'orbit activity', 'Orbit_CLI_Activity' );
@@ -118,6 +121,8 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 	WP_CLI::add_command( 'orbit response', 'Orbit_CLI_Response' );
 	WP_CLI::add_command( 'orbit notification', 'Orbit_CLI_Notification' );
 	WP_CLI::add_command( 'orbit status', 'Orbit_CLI_Status' );
+	WP_CLI::add_command( 'orbit signup', 'Orbit_CLI_Signup' );
+	WP_CLI::add_command( 'orbit consent', 'Orbit_CLI_Consent' );
 }
 
 /**

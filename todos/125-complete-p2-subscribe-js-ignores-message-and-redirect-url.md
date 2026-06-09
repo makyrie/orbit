@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: "125"
 tags: [code-review, PR-26, ux, javascript]
@@ -56,6 +56,21 @@ Option A. The signup branch already demonstrates the correct shape; subscribe sh
 ## Work Log
 
 - 2026-06-08: Surfaced during PR #26 multi-agent code review.
+- 2026-06-09: Server side: added a `redirect_url` field to the
+  `/orbit/v1/subscribe` 201 response. New-account branch returns
+  `home_url('/dashboard/')`; the existing-logged-in branch returns the
+  profile permalink (`home_url('/@' . $profile->slug . '/')`, matching
+  the rewrite in `Orbit_Routes::add_rewrite_rules()`). Value is
+  sanitized with `esc_url_raw`. Client side: collapsed the signup and
+  subscribe branches in `assets/js/orbit-forms.js` (around 280-310)
+  into a single shared block that honours `result.redirect_url`, parses
+  it with the `URL` constructor, and rejects cross-origin destinations
+  before navigating. Falls back to `window.location.reload()` when no
+  `redirect_url` is present (or fails to parse). PHPUnit coverage in
+  `OrbitRestSubscriptionTest`: `test_new_account_response_includes_
+  dashboard_redirect_url` and `test_existing_logged_in_response_redirects
+  _to_profile_permalink`. (The 600ms success-message flash before
+  redirect is tracked separately in todo 077.)
 
 ## Resources
 

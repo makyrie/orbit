@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: "126"
 tags: [code-review, PR-26, ux, data-integrity]
@@ -50,6 +50,21 @@ Option A plus the Option B guard as a belt-and-braces safeguard. The combined ef
 ## Work Log
 
 - 2026-06-08: Surfaced during PR #26 multi-agent code review.
+- 2026-06-09: Implemented Option A (gate on branch). Moved the
+  `orbit_phone_pending` / `orbit_phone_pending_at` writes inside the
+  `! $existing_user` block in
+  `includes/class-orbit-rest-subscription.php`, so the
+  existing-logged-in branch never mutates phone state regardless of
+  what the request body contains. The simpler defense was sufficient
+  — Option B's verified-phone guard adds no extra protection given
+  the branch gate. Added two PHPUnit cases in
+  `OrbitRestSubscriptionTest`: `test_logged_in_subscribe_does_not_
+  overwrite_existing_pending_phone` (pre-seeds a known
+  `orbit_phone_pending` on a logged-in user, dispatches a subscribe
+  POST with a *different* phone in the body, asserts the pre-seeded
+  value survives unchanged) and `test_new_account_subscribe_writes_
+  pending_phone` (sanity check that the new-account branch still
+  stashes the pending phone — the legitimate use case).
 
 ## Resources
 

@@ -189,7 +189,11 @@ class Orbit_REST_Signup {
 				}
 
 				if ( 'existing_user_login' !== $user_id->get_error_code() ) {
-					throw new RuntimeException( $user_id->get_error_message() );
+					// Forward the structured WP_Error through the carrier
+					// exception so the catch can branch on the original
+					// code (e.g. surface `existing_user_email` race losers
+					// as 409 login_required — see todo 127).
+					throw new Orbit_Rolled_Back_Exception( $user_id );
 				}
 
 				$username = $base . wp_rand( 10000, 99999 );
@@ -236,7 +240,7 @@ class Orbit_REST_Signup {
 				)
 			);
 			if ( is_wp_error( $email_consent ) ) {
-				throw new RuntimeException( 'consent_email: ' . $email_consent->get_error_message() );
+				throw new Orbit_Rolled_Back_Exception( $email_consent );
 			}
 
 			if ( $consent_sms ) {
@@ -250,14 +254,65 @@ class Orbit_REST_Signup {
 					)
 				);
 				if ( is_wp_error( $sms_consent ) ) {
-					throw new RuntimeException( 'consent_sms: ' . $sms_consent->get_error_message() );
+					throw new Orbit_Rolled_Back_Exception( $sms_consent );
 				}
 			}
 
 			$wpdb->query( 'COMMIT' );
-		} catch ( Throwable $e ) {
+		} catch ( Orbit_Rolled_Back_Exception $e ) {
 			$wpdb->query( 'ROLLBACK' );
-			return new WP_Error( 'signup_failed', $e->getMessage(), array( 'status' => 500 ) );
+
+			$inner_error = $e->wp_error;
+			$inner_code  = (string) $inner_error->get_error_code();
+
+			// Log the full inner error server-side so operators can still
+			// see the raw failure (MySQL fragment, third-party hook string,
+			// etc.) without exposing it to the anonymous caller.
+			error_log(
+				sprintf(
+					'[orbit] signup rolled back: code=%s message=%s data=%s',
+					$inner_code,
+					$inner_error->get_error_message(),
+					wp_json_encode( $inner_error->get_error_data() )
+				)
+			);
+
+			// Email race: a concurrent signup grabbed the same email
+			// between the upfront `get_user_by('email')` check and
+			// `wp_insert_user`. Surface the same 409 login_required UX
+			// as the steady-state duplicate path (see todo 127).
+			if ( 'existing_user_email' === $inner_code ) {
+				return new WP_Error(
+					'login_required',
+					__( 'An account with this email already exists. Try logging in instead.', 'orbit' ),
+					array(
+						'status'    => 409,
+						'login_url' => wp_login_url( home_url( '/edit-profile/' ) ),
+					)
+				);
+			}
+
+			// Anything else: preserve the original failure code so the
+			// client can branch on it, but substitute a generic, translated
+			// user-facing message — raw MySQL / hook strings must not
+			// reach an anonymous REST response (see todo 116).
+			return new WP_Error(
+				$inner_code,
+				__( "We couldn't complete your sign-up. Please try again in a moment.", 'orbit' ),
+				array( 'status' => 500 )
+			);
+		} catch ( Throwable $e ) {
+			// Defensive: a non-Orbit exception escaped from a helper
+			// (unlikely in steady state). Same response shape but with
+			// a generic code since we have no structured WP_Error to
+			// preserve.
+			$wpdb->query( 'ROLLBACK' );
+			error_log( '[orbit] signup unexpected throwable: ' . $e->getMessage() );
+			return new WP_Error(
+				'signup_failed',
+				__( "We couldn't complete your sign-up. Please try again in a moment.", 'orbit' ),
+				array( 'status' => 500 )
+			);
 		}
 
 		// Side effects below run after COMMIT — they can't be rolled back.

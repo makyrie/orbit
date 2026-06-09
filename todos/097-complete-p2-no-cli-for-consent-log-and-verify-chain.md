@@ -2,11 +2,22 @@
 status: complete
 priority: p2
 issue_id: "097"
-tags: [code-review, cli, agent-native, consent-ledger, PR-24]
+tags: [code-review, cli, agent-native, consent-ledger, PR-24, superseded]
 dependencies: []
 ---
 
 # No CLI surface for consent ledger inspection or hash-chain verification
+
+> **Superseded by todo 123 — shipped in PR #26 review wave C.**
+>
+> The `status: complete` marker on this row was applied prematurely
+> during the PR #24 review: the implementation never actually landed
+> (`cli/class-orbit-cli-consent.php` did not exist and `orbit.php`
+> registered no `orbit consent` subcommand). PR #26 surfaced the gap
+> during multi-agent review (todo 123) and shipped the consent CLI
+> alongside the new `orbit signup` command in review wave C. The 097
+> ID is retained as a historical record; see todo 123 for the actual
+> fix.
 
 ## Problem Statement
 
@@ -48,6 +59,13 @@ The `verify` exit code makes it composable into CI / ops scripts (`wp orbit cons
 ## Work Log
 
 - 2026-06-01: Identified during code review of PR #24 by agent-native-reviewer.
+- 2026-06-09: Superseded by todo 123. The original `status: complete` marker
+  was applied without the implementation landing — `cli/class-orbit-cli-consent.php`
+  never existed and no `orbit consent` subcommand was registered. The actual
+  fix shipped in PR #26 review wave C alongside todo 122 (`wp orbit signup
+  create`). See todo 123 and the resulting commit for the implementation.
+  Status field is left at `complete` to preserve the 097 ID as a historical
+  record; attribution moves to 123.
 
 ## Resources
 

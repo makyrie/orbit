@@ -285,17 +285,30 @@
 					} else {
 						window.location.href = orbitForms.manageUrl;
 					}
-				} else if ( endpoint === 'signup' ) {
-					// Server response carries a `redirect_url` pointing
-					// at the next step (/edit-profile/). Use it so the
-					// new user lands on the profile editor instead of
-					// re-rendering the now-stale sign-up page.
-					if ( result && result.redirect_url ) {
-						window.location.href = result.redirect_url;
-					} else {
-						window.location.reload();
+				} else if ( endpoint === 'signup' || endpoint === 'subscribe' ) {
+					// Both endpoints carry a `redirect_url` in the
+					// success body — signup points to /edit-profile/,
+					// subscribe points to /dashboard/ (new account) or
+					// the profile permalink (returning logged-in user).
+					// Reject cross-origin destinations defensively:
+					// the server already sanitizes with esc_url_raw, but
+					// a misconfigured filter could in principle let one
+					// through and we don't want a same-origin form to
+					// navigate off-site.
+					var nextUrl = result && result.redirect_url;
+					if ( nextUrl ) {
+						try {
+							var parsed = new URL( nextUrl, window.location.href );
+							if ( parsed.origin === window.location.origin ) {
+								window.location.href = nextUrl;
+								return;
+							}
+						} catch ( e ) {
+							// Fall through to reload on parse error.
+						}
 					}
-				} else if ( endpoint === 'subscribe' || endpoint === 'profiles/me' ) {
+					window.location.reload();
+				} else if ( endpoint === 'profiles/me' ) {
 					window.location.reload();
 				}
 			} )

@@ -466,6 +466,112 @@ class OrbitRestSignupTest extends WP_UnitTestCase {
 	}
 
 	// ---------------------------------------------------------------- //
+	// Error-code preservation through the rollback catch (todo 116/127)
+	// ---------------------------------------------------------------- //
+
+	/**
+	 * A failure injected below the controller layer must come back to
+	 * the client with the *original* code preserved, and with a generic
+	 * translated user-facing message — never the raw inner error string.
+	 *
+	 * Inject by hooking `pre_user_login` (runs inside `wp_insert_user`)
+	 * to return an empty string, which produces a deterministic
+	 * `empty_user_login` WP_Error from core (see WP user.php at the
+	 * `'empty_user_login'` branch). That's a "below the controller"
+	 * code we don't special-case, so the catch should preserve the
+	 * code and substitute the generic message.
+	 */
+	public function test_below_controller_failure_preserves_code_and_returns_generic_message() {
+		$swap_login = function ( $login ) {
+			return '';
+		};
+		add_filter( 'pre_user_login', $swap_login, 10, 1 );
+
+		try {
+			$response = $this->dispatch_signup(
+				$this->signup_params(
+					array(
+						'display_name' => 'Forced Failure',
+						'email'        => 'forced-' . wp_rand( 100000, 999999 ) . '@example.test',
+					)
+				)
+			);
+		} finally {
+			remove_filter( 'pre_user_login', $swap_login, 10 );
+		}
+
+		$this->assertSame( 500, $response->get_status() );
+
+		$data = $response->get_data();
+		// Code preserved from the inner WP_Error, NOT the legacy generic
+		// `signup_failed`.
+		$this->assertSame( 'empty_user_login', $data['code'] );
+		// Message is the controller's translated, generic copy — no MySQL
+		// fragments, no internal vocabulary.
+		$this->assertStringContainsString( 'sign-up', $data['message'] );
+		$this->assertStringNotContainsString( 'database', strtolower( $data['message'] ) );
+		$this->assertStringNotContainsString( 'mysql', strtolower( $data['message'] ) );
+	}
+
+	/**
+	 * If a race lets the upfront `get_user_by('email')` check pass but
+	 * `wp_insert_user` then fails with `existing_user_email` (because a
+	 * concurrent request grabbed the same email), the catch should map
+	 * the failure to the same 409 `login_required` + `login_url` shape
+	 * the steady-state duplicate path produces. See todo 127.
+	 *
+	 * We simulate the race by pre-creating a user with a "taken" email,
+	 * then hooking `pre_user_email` so the email that `wp_insert_user`
+	 * actually checks against `email_exists()` resolves to the taken
+	 * value — but the controller's upfront `get_user_by()` check uses
+	 * the original posted email and passes. Core's email_exists check
+	 * inside wp_insert_user (which runs against the post-filter email)
+	 * then returns `existing_user_email`.
+	 */
+	public function test_email_race_returns_409_with_login_url() {
+		$taken_email = 'race-taken-' . wp_rand( 100000, 999999 ) . '@example.test';
+		$this->factory->user->create(
+			array(
+				'user_email' => $taken_email,
+				'user_login' => 'race-taken-' . wp_rand( 100000, 999999 ),
+			)
+		);
+
+		// Posted email is unique; the upfront get_user_by() controller
+		// check passes.
+		$posted_email = 'race-poster-' . wp_rand( 100000, 999999 ) . '@example.test';
+
+		// pre_user_email runs inside wp_insert_user, before the inner
+		// email_exists check. Swap in the already-taken value so the
+		// insert collides.
+		$swap_email = function ( $email ) use ( $taken_email ) {
+			return $taken_email;
+		};
+		add_filter( 'pre_user_email', $swap_email, 10, 1 );
+
+		try {
+			$response = $this->dispatch_signup(
+				$this->signup_params(
+					array(
+						'display_name' => 'Race Loser',
+						'email'        => $posted_email,
+					)
+				)
+			);
+		} finally {
+			remove_filter( 'pre_user_email', $swap_email, 10 );
+		}
+
+		$this->assertSame( 409, $response->get_status() );
+
+		$data = $response->get_data();
+		$this->assertSame( 'login_required', $data['code'] );
+		$this->assertArrayHasKey( 'data', $data );
+		$this->assertArrayHasKey( 'login_url', $data['data'] );
+		$this->assertNotEmpty( $data['data']['login_url'] );
+	}
+
+	// ---------------------------------------------------------------- //
 	// Deferred new-user notification (todo 119)
 	// ---------------------------------------------------------------- //
 

@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: "127"
 tags: [code-review, PR-26, error-handling, race-conditions]
@@ -53,6 +53,24 @@ Option A. Coupled with todo 116, this becomes a small switch statement in the ca
 ## Work Log
 
 - 2026-06-08: Surfaced during PR #26 multi-agent code review.
+- 2026-06-09: Implemented Option A on top of todo 116's
+  `Orbit_Rolled_Back_Exception`. The signup catch block now inspects
+  `$e->wp_error->get_error_code()` and, when it equals
+  `existing_user_email`, returns a 409 `login_required` WP_Error with
+  the same `login_url` shape as the steady-state duplicate path
+  (`wp_login_url( home_url( '/edit-profile/' ) )`). All other inner
+  codes fall through to the generic 500 with the original code
+  preserved (todo 116's mechanism). Race-loser vs steady-state
+  duplicates are now distinguishable via the per-rollback
+  `error_log()` line emitted by the catch (todo 116) — operators can
+  grep for `[orbit] signup rolled back: code=existing_user_email`.
+  PHPUnit coverage: `OrbitRestSignupTest::test_email_race_returns_
+  409_with_login_url` pre-creates a user with email X, dispatches a
+  signup POST with a fresh email, and hooks `pre_user_email` to swap
+  in X — that way the upfront `get_user_by('email')` controller
+  check passes but core's inner `email_exists()` (which runs against
+  the post-filter value) fires `existing_user_email`, exercising
+  exactly the race path the production code now handles.
 
 ## Resources
 

@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: "116"
 tags: [code-review, PR-26, security, error-handling]
@@ -79,6 +79,25 @@ Option A. The custom-exception pattern is the standard PHP idiom for carrying a 
 ## Work Log
 
 - 2026-06-08: Surfaced during PR #26 multi-agent code review.
+- 2026-06-09: Implemented Option A. Added `Orbit_Rolled_Back_Exception` in
+  `includes/class-orbit-rolled-back-exception.php` carrying a public
+  `WP_Error $wp_error`. Replaced every `throw new RuntimeException(
+  $wp_error->get_error_message() )` in `class-orbit-rest-signup.php`
+  and `class-orbit-rest-subscription.php` with
+  `throw new Orbit_Rolled_Back_Exception( $wp_error )`. Each catch
+  block now (1) issues ROLLBACK, (2) logs the inner WP_Error code +
+  message + data via `error_log()` for operators, (3) returns a
+  `WP_Error` whose code is the **original** inner code (no longer
+  collapsed to `signup_failed` / `subscribe_failed`) and whose
+  message is a controller-translated, generic "couldn't complete"
+  sentence — raw MySQL fragments and third-party hook strings stay
+  server-side. A defensive secondary `catch ( Throwable )` keeps the
+  legacy generic shape for non-Orbit throwables. Added a PHPUnit case
+  in both `OrbitRestSignupTest` and `OrbitRestSubscriptionTest`
+  (`test_below_controller_failure_preserves_code_and_returns_generic_message`)
+  that injects a deterministic `empty_user_login` via the
+  `pre_user_login` filter and asserts the original code lands in the
+  response with a generic message.
 
 ## Resources
 

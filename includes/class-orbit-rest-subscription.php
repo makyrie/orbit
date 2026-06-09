@@ -272,7 +272,7 @@ class Orbit_REST_Subscription {
 				$user_id  = wp_create_user( $username, $password, $email );
 
 				if ( is_wp_error( $user_id ) ) {
-					throw new RuntimeException( $user_id->get_error_message() );
+					throw new Orbit_Rolled_Back_Exception( $user_id );
 				}
 
 				wp_update_user(
@@ -298,21 +298,27 @@ class Orbit_REST_Subscription {
 
 				update_user_meta( $user_id, 'orbit_timezone', wp_timezone_string() );
 
+				// Stash a pending phone ONLY in the new-account branch.
+				// The existing-logged-in branch never renders a phone
+				// field in the form, but a hand-crafted REST POST could
+				// otherwise overwrite a returning user's pending number
+				// (or pollute state for someone who already has a verified
+				// `orbit_phone`). See todo 126.
+				if ( '' !== $phone ) {
+					// `orbit_phone_pending` (not `orbit_phone`) — promotion
+					// to the verified meta happens in Orbit_Phone_Verify on
+					// successful code entry. The companion `_at` timestamp
+					// is the daily GC cron's age signal — usermeta has no
+					// native updated_at, so an explicit unix timestamp is
+					// the only way Orbit_Notifier::cleanup_pending_phones()
+					// can reap abandoned signups.
+					update_user_meta( $user_id, 'orbit_phone_pending', $phone );
+					update_user_meta( $user_id, 'orbit_phone_pending_at', time() );
+				}
+
 				$is_new_account            = true;
 				$pending_auth_user_id      = (int) $user_id;
 				$pending_password_set_send = true;
-			}
-
-			if ( '' !== $phone ) {
-				// `orbit_phone_pending` (not `orbit_phone`) — promotion
-				// to the verified meta happens in Orbit_Phone_Verify on
-				// successful code entry. The companion `_at` timestamp
-				// is the daily GC cron's age signal — usermeta has no
-				// native updated_at, so an explicit unix timestamp is
-				// the only way Orbit_Notifier::cleanup_pending_phones()
-				// can reap abandoned signups.
-				update_user_meta( $user_id, 'orbit_phone_pending', $phone );
-				update_user_meta( $user_id, 'orbit_phone_pending_at', time() );
 			}
 
 			// Subscription row.
@@ -325,7 +331,7 @@ class Orbit_REST_Subscription {
 			);
 
 			if ( is_wp_error( $subscription_id ) ) {
-				throw new RuntimeException( $subscription_id->get_error_message() );
+				throw new Orbit_Rolled_Back_Exception( $subscription_id );
 			}
 
 			Orbit_Notifier::get_or_create_preferences( $user_id );
@@ -341,7 +347,7 @@ class Orbit_REST_Subscription {
 				)
 			);
 			if ( is_wp_error( $email_result ) ) {
-				throw new RuntimeException( 'consent_email: ' . $email_result->get_error_message() );
+				throw new Orbit_Rolled_Back_Exception( $email_result );
 			}
 
 			if ( $consent_sms ) {
@@ -355,12 +361,12 @@ class Orbit_REST_Subscription {
 					)
 				);
 				if ( is_wp_error( $sms_result ) ) {
-					throw new RuntimeException( 'consent_sms: ' . $sms_result->get_error_message() );
+					throw new Orbit_Rolled_Back_Exception( $sms_result );
 				}
 			}
 
 			$wpdb->query( 'COMMIT' );
-		} catch ( Throwable $e ) {
+		} catch ( Orbit_Rolled_Back_Exception $e ) {
 			$wpdb->query( 'ROLLBACK' );
 
 			// Evict the Orbit_Notifier preferences cache if a row was
@@ -374,7 +380,42 @@ class Orbit_REST_Subscription {
 				Orbit_Notifier::forget_preferences( $user_id );
 			}
 
-			return new WP_Error( 'subscribe_failed', $e->getMessage(), array( 'status' => 500 ) );
+			$inner_error = $e->wp_error;
+			$inner_code  = (string) $inner_error->get_error_code();
+
+			// Log the full inner error server-side. Raw MySQL fragments
+			// and third-party hook debug strings stay out of the anonymous
+			// REST response but remain available to operators (see todo 116).
+			error_log(
+				sprintf(
+					'[orbit] subscribe rolled back: code=%s message=%s data=%s',
+					$inner_code,
+					$inner_error->get_error_message(),
+					wp_json_encode( $inner_error->get_error_data() )
+				)
+			);
+
+			// Preserve the original code so the client can branch, but
+			// substitute a generic, translated user-facing message.
+			return new WP_Error(
+				$inner_code,
+				__( "We couldn't complete your subscription. Please try again in a moment.", 'orbit' ),
+				array( 'status' => 500 )
+			);
+		} catch ( Throwable $e ) {
+			$wpdb->query( 'ROLLBACK' );
+
+			if ( is_int( $user_id ) && $user_id > 0 ) {
+				Orbit_Notifier::forget_preferences( $user_id );
+			}
+
+			error_log( '[orbit] subscribe unexpected throwable: ' . $e->getMessage() );
+
+			return new WP_Error(
+				'subscribe_failed',
+				__( "We couldn't complete your subscription. Please try again in a moment.", 'orbit' ),
+				array( 'status' => 500 )
+			);
 		}
 
 		// Side effects below run after COMMIT — they can't be rolled
@@ -405,13 +446,27 @@ class Orbit_REST_Subscription {
 
 		$subscription = Orbit_Subscription::get( $subscription_id );
 
+		// Where the JS should forward the user after the success flash.
+		// New accounts land on /dashboard/ (their profile editor / first
+		// step). Existing logged-in subscribers go to the profile they
+		// just subscribed to so they immediately see the content they
+		// signed up for. There's no `Orbit_Profile::get_permalink()` helper
+		// yet — the canonical front-end URL is `/@<slug>/`, see
+		// Orbit_Routes for the rewrite that resolves it.
+		if ( $is_new_account ) {
+			$redirect_url = home_url( '/dashboard/' );
+		} else {
+			$redirect_url = home_url( '/@' . $profile->slug . '/' );
+		}
+
 		return new WP_REST_Response(
 			array(
-				'id'      => $subscription_id,
-				'status'  => $subscription->status,
-				'message' => 'approved' === $subscription->status
+				'id'           => $subscription_id,
+				'status'       => $subscription->status,
+				'message'      => 'approved' === $subscription->status
 					? __( 'You are now subscribed!', 'orbit' )
 					: __( 'Your subscription request has been sent for approval.', 'orbit' ),
+				'redirect_url' => esc_url_raw( $redirect_url ),
 			),
 			201
 		);

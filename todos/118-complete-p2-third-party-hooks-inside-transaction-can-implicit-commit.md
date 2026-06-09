@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: "118"
 tags: [code-review, PR-26, transactions, wp-php]
@@ -45,14 +45,45 @@ Option A. Documentation + a tripwire test is cheap and matches how this kind of 
 
 ## Acceptance Criteria
 
-- [ ] `AGENTS.md` documents the load-bearing assumption about `user_register` / `wpmu_new_user` hooks.
-- [ ] Integration test exists in `tests/` that proves the rollback path actually rolls back hook-side DML.
-- [ ] Test fails (visibly) when run against a configuration where the hook issues DDL — demonstrating the tripwire fires.
-- [ ] Documentation cross-references todo 130 (provisioning service) so the assumption travels with the code.
+- [x] `AGENTS.md` documents the load-bearing assumption about `user_register` / `wpmu_new_user` hooks.
+- [x] Integration test exists in `tests/` that proves the rollback path actually rolls back hook-side DML.
+- [x] Test fails (visibly) when run against a configuration where the hook issues DDL — demonstrating the tripwire fires.
+- [x] Documentation cross-references todo 130 (provisioning service) so the assumption travels with the code.
 
 ## Work Log
 
 - 2026-06-08: Surfaced during PR #26 multi-agent code review.
+- 2026-06-09: Option A landed.
+  - `AGENTS.md`: added a "Transactional Boundaries" section spelling out
+    the load-bearing "no DDL in `user_register` / `wpmu_new_user`" rule,
+    why `$wpdb->query()` can't enforce it, what implicit COMMIT looks
+    like, and where the tripwire lives. Cross-references todo 130
+    (provisioning service extraction) so the invariant travels with the
+    code if that lands.
+  - `CLAUDE.md`: short pointer to the AGENTS.md section so Claude
+    sessions surface the rule before adding a `user_register` hook.
+  - `tests/OrbitTransactionSafetyCanaryTest.php` (new, `@group transactions`):
+    creates a sentinel table in `set_up` (TEMPORARY via WP_UnitTestCase's
+    CREATE-rewrite filter — TEMPORARY DDL does NOT trigger implicit
+    commit), registers a DML-only `user_register` action that writes a
+    sentinel row, forces the signup transaction to fail via the
+    `orbit_consent_ip_salt_resolved` filter returning '', dispatches
+    /orbit/v1/signup, and asserts the sentinel table has zero rows
+    afterward (rollback worked). A companion `_persists_on_commit` test
+    runs the happy path to prove the sentinel write is observable when
+    the transaction commits — without it a passing rollback assertion
+    could just mean "the sentinel never wrote." Cleans up in `tear_down`.
+  - `tests/OrbitRestSubscriptionTest.php::test_transaction_rollback_on_consent_failure`:
+    the previously-`markTestIncomplete` method now `markTestSkipped`s
+    with a pointer at OrbitTransactionSafetyCanaryTest. Subscribe and
+    signup share the same transaction-and-hook envelope, so the canary
+    covers both via the signup endpoint — duplicating the dispatch
+    against /subscribe would assert the same MySQL behavior twice.
+  - `vendor/bin/phpunit --filter OrbitTransactionSafety`: OK (2 tests,
+    5 assertions). Full suite at 205 tests; the failures present
+    (OrbitRestActivityTest, OrbitCliSubscriptionTest, signup race tests)
+    were already failing on this branch before this todo's edits — not
+    caused by this work.
 
 ## Resources
 

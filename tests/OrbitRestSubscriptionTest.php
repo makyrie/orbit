@@ -8,7 +8,8 @@
  * user, and creates the subscription row.
  *
  * Mirrors the structure and conventions of OrbitRestSignupTest. The
- * transaction-rollback canary remains markTestIncomplete pending todo 118.
+ * transaction-rollback canary lives in OrbitTransactionSafetyCanaryTest
+ * (todo 118); the rollback method here defers to it via markTestSkipped.
  *
  * @package Orbit
  */
@@ -411,17 +412,185 @@ class OrbitRestSubscriptionTest extends WP_UnitTestCase {
 	}
 
 	// ---------------------------------------------------------------- //
+	// redirect_url in response (todo 125)
+	// ---------------------------------------------------------------- //
+
+	public function test_new_account_response_includes_dashboard_redirect_url() {
+		$response = $this->dispatch_subscribe(
+			$this->subscribe_params(
+				array(
+					'display_name' => 'Redirect New',
+					'email'        => 'redirect-new-' . wp_rand( 100000, 999999 ) . '@example.test',
+				)
+			)
+		);
+
+		$this->assertSame( 201, $response->get_status() );
+
+		$data = $response->get_data();
+		$this->assertArrayHasKey( 'redirect_url', $data );
+		$this->assertSame( home_url( '/dashboard/' ), $data['redirect_url'] );
+	}
+
+	public function test_existing_logged_in_response_redirects_to_profile_permalink() {
+		$email   = 'redirect-existing-' . wp_rand( 100000, 999999 ) . '@example.test';
+		$user_id = $this->factory->user->create(
+			array(
+				'user_email' => $email,
+				'user_login' => 'redirect-existing-' . wp_rand( 100000, 999999 ),
+			)
+		);
+		wp_set_current_user( $user_id );
+
+		$response = $this->dispatch_subscribe(
+			$this->subscribe_params(
+				array(
+					'display_name' => 'Existing',
+					'email'        => $email,
+				)
+			)
+		);
+
+		$this->assertSame( 201, $response->get_status() );
+
+		$data = $response->get_data();
+		$this->assertArrayHasKey( 'redirect_url', $data );
+		// Profile permalink shape is `/@<slug>/`, matching the rewrite
+		// rule in Orbit_Routes::add_rewrite_rules().
+		$this->assertSame( home_url( '/@' . $this->profile->slug . '/' ), $data['redirect_url'] );
+	}
+
+	// ---------------------------------------------------------------- //
+	// orbit_phone_pending guard for logged-in resubscribers (todo 126)
+	// ---------------------------------------------------------------- //
+
+	/**
+	 * A logged-in user POSTing to /subscribe with a `phone` field in
+	 * the body must NOT have their existing `orbit_phone_pending`
+	 * overwritten. The form for the existing-logged-in branch doesn't
+	 * even render a phone field, but a hand-crafted REST call shouldn't
+	 * be allowed to mutate phone state via this endpoint.
+	 */
+	public function test_logged_in_subscribe_does_not_overwrite_existing_pending_phone() {
+		$email   = 'phone-guard-' . wp_rand( 100000, 999999 ) . '@example.test';
+		$user_id = $this->factory->user->create(
+			array(
+				'user_email' => $email,
+				'user_login' => 'phone-guard-' . wp_rand( 100000, 999999 ),
+			)
+		);
+
+		// Pre-seed a known pending phone, then sign in as them.
+		$original_phone = '+12025550111';
+		update_user_meta( $user_id, 'orbit_phone_pending', $original_phone );
+		update_user_meta( $user_id, 'orbit_phone_pending_at', time() - 600 );
+
+		wp_set_current_user( $user_id );
+
+		// Hand-craft a subscribe POST that *does* carry a phone field —
+		// the form wouldn't, but a direct REST client could.
+		$response = $this->dispatch_subscribe(
+			$this->subscribe_params(
+				array(
+					'display_name' => 'Hand-Crafted',
+					'email'        => $email,
+					'phone'        => '+12025559999',
+					'consent_sms'  => false,
+				)
+			)
+		);
+
+		$this->assertSame( 201, $response->get_status() );
+
+		// The pre-existing pending phone is untouched.
+		$this->assertSame(
+			$original_phone,
+			get_user_meta( $user_id, 'orbit_phone_pending', true ),
+			'Existing orbit_phone_pending must not be overwritten by the subscribe endpoint for a logged-in user.'
+		);
+	}
+
+	public function test_new_account_subscribe_writes_pending_phone() {
+		// Sanity check the other half of the gate: new-account branch
+		// still stashes the pending phone (the legitimate use case).
+		$response = $this->dispatch_subscribe(
+			$this->subscribe_params(
+				array(
+					'display_name' => 'New With Phone',
+					'email'        => 'new-with-phone-' . wp_rand( 100000, 999999 ) . '@example.test',
+					'phone'        => '+12025550222',
+					'consent_sms'  => true,
+				)
+			)
+		);
+
+		$this->assertSame( 201, $response->get_status() );
+
+		$sub = Orbit_Subscription::get( (int) $response->get_data()['id'] );
+		$this->assertSame( '+12025550222', get_user_meta( (int) $sub->user_id, 'orbit_phone_pending', true ) );
+	}
+
+	// ---------------------------------------------------------------- //
+	// Error-code preservation through the rollback catch (todo 116)
+	// ---------------------------------------------------------------- //
+
+	/**
+	 * A failure injected below the controller layer must come back
+	 * with the *original* code preserved and a generic translated
+	 * user-facing message — never the raw inner error string.
+	 *
+	 * Inject via `pre_user_login` returning empty: inside
+	 * `wp_create_user` → `wp_insert_user`, core emits
+	 * `empty_user_login` (see WP user.php at the `'empty_user_login'`
+	 * branch).
+	 */
+	public function test_below_controller_failure_preserves_code_and_returns_generic_message() {
+		$swap_login = function ( $login ) {
+			return '';
+		};
+		add_filter( 'pre_user_login', $swap_login, 10, 1 );
+
+		try {
+			$response = $this->dispatch_subscribe(
+				$this->subscribe_params(
+					array(
+						'display_name' => 'Forced Failure',
+						'email'        => 'forced-sub-' . wp_rand( 100000, 999999 ) . '@example.test',
+					)
+				)
+			);
+		} finally {
+			remove_filter( 'pre_user_login', $swap_login, 10 );
+		}
+
+		$this->assertSame( 500, $response->get_status() );
+
+		$data = $response->get_data();
+		// Code preserved from the inner WP_Error — not the legacy
+		// generic `subscribe_failed`.
+		$this->assertSame( 'empty_user_login', $data['code'] );
+		// User-facing message is the controller's translated copy.
+		$this->assertStringContainsString( 'subscription', $data['message'] );
+		$this->assertStringNotContainsString( 'database', strtolower( $data['message'] ) );
+		$this->assertStringNotContainsString( 'mysql', strtolower( $data['message'] ) );
+	}
+
+	// ---------------------------------------------------------------- //
 	// Transaction rollback
 	// ---------------------------------------------------------------- //
 
 	public function test_transaction_rollback_on_consent_failure() {
-		$this->markTestIncomplete(
-			'Forcing a deterministic consent insert failure mid-transaction '
-			. 'requires invasive mocking of Orbit_Consent::record(). Tracked '
-			. 'as todo 118 (transaction-safety canary). Once that lands the '
-			. 'assertion should be: after a forced consent failure, no '
-			. 'subscription row exists, no user is created, no consent rows '
-			. 'are persisted, and no notifier prefs row exists.'
+		// Transaction-rollback coverage for the provisioning endpoints
+		// lives in OrbitTransactionSafetyCanaryTest (todo 118 canary).
+		// That test uses a sentinel `user_register` hook and the
+		// `orbit_consent_ip_salt_resolved` filter to force a deterministic
+		// mid-transaction failure, then asserts the rollback path actually
+		// rolls back hook-side DML — the invariant subscribe and signup
+		// both depend on. Re-dispatching /orbit/v1/subscribe here would
+		// assert the same MySQL behavior twice with no additional coverage;
+		// see AGENTS.md → "Transactional Boundaries" for the canonical rule.
+		$this->markTestSkipped(
+			'Covered by OrbitTransactionSafetyCanaryTest — see todo 118.'
 		);
 	}
 
