@@ -62,6 +62,15 @@ class OrbitRestSubscriptionTest extends WP_UnitTestCase {
 
 		$this->clear_rate_limit_transient();
 
+		// Clear orbit-side state that WP_UnitTestCase's transactional rollback
+		// doesn't catch (custom tables persist between PHPUnit runs and across
+		// tests within the same run since WP rolls back wp_* but not the
+		// orbit prefix). Without this, user IDs that the factory reuses
+		// can collide with profiles created in prior test invocations.
+		global $wpdb;
+		$wpdb->query( 'TRUNCATE TABLE ' . $wpdb->prefix . ORBIT_TABLE_SUBSCRIPTIONS );
+		$wpdb->query( 'TRUNCATE TABLE ' . $wpdb->prefix . ORBIT_TABLE_PROFILES );
+
 		// Create a poster + profile to subscribe to. require_approval=false
 		// so the happy-path response status is the more useful "approved".
 		$this->poster_id = $this->factory->user->create( array( 'role' => 'administrator' ) );
