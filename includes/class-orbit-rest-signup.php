@@ -148,9 +148,9 @@ class Orbit_REST_Signup {
 		global $wpdb;
 
 		// Cache the disclosure the user agreed to. Stored verbatim on
-		// each consent ledger row — see Orbit_Shortcodes::compliance_
+		// each consent ledger row — see Orbit_Compliance_UI::compliance_
 		// disclosure_text() for the canonical source.
-		$cta_snapshot = Orbit_Shortcodes::compliance_disclosure_text();
+		$cta_snapshot = Orbit_Compliance_UI::compliance_disclosure_text();
 
 		// Build a unique username from the display name. Same shape as
 		// the subscribe flow: lowercased, spaces stripped, then a random

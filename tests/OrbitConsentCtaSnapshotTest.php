@@ -5,7 +5,7 @@
  * The core TCPA-defense invariant for the consent ledger is that the
  * `cta_snapshot` column stored on every opt-in row is the EXACT text the
  * user saw at consent time — byte-identical to what
- * {@see Orbit_Shortcodes::compliance_disclosure_text()} returns when the
+ * {@see Orbit_Compliance_UI::compliance_disclosure_text()} returns when the
  * REST handler renders the form copy. If the snapshot ever drifts from the
  * disclosure helper output (e.g. a translator update, a developer rewording
  * one path but not the other, or — most subtly — Wave A's SMS-dormancy
@@ -288,7 +288,7 @@ class OrbitConsentCtaSnapshotTest extends WP_UnitTestCase {
 	public function test_dormant_state_precondition() {
 		$this->assertFalse( Orbit_Features::sms_enabled(), 'Expected SMS dormant default for this suite.' );
 
-		$disclosure = Orbit_Shortcodes::compliance_disclosure_text();
+		$disclosure = Orbit_Compliance_UI::compliance_disclosure_text();
 		// The Wave A sunset clause must be present in the dormant disclosure;
 		// if it isn't, the byte-match assertions below are testing nothing.
 		$this->assertStringContainsString( 'SMS goes live once', $disclosure );
@@ -298,7 +298,7 @@ class OrbitConsentCtaSnapshotTest extends WP_UnitTestCase {
 	 * Round-trip equality, /signup, email-only consent, SMS dormant.
 	 */
 	public function test_signup_cta_snapshot_byte_matches_disclosure_when_sms_dormant() {
-		$expected = Orbit_Shortcodes::compliance_disclosure_text();
+		$expected = Orbit_Compliance_UI::compliance_disclosure_text();
 
 		$response = $this->dispatch_signup( $this->signup_params() );
 		$this->assertSame( 201, $response->get_status() );
@@ -316,7 +316,7 @@ class OrbitConsentCtaSnapshotTest extends WP_UnitTestCase {
 	 * two rows would itself be a TCPA-evidence bug.
 	 */
 	public function test_signup_cta_snapshot_byte_matches_disclosure_for_sms_row_when_dormant() {
-		$expected = Orbit_Shortcodes::compliance_disclosure_text();
+		$expected = Orbit_Compliance_UI::compliance_disclosure_text();
 
 		$response = $this->dispatch_signup(
 			$this->signup_params(
@@ -342,7 +342,7 @@ class OrbitConsentCtaSnapshotTest extends WP_UnitTestCase {
 	 * created user.
 	 */
 	public function test_subscribe_cta_snapshot_byte_matches_disclosure_when_sms_dormant() {
-		$expected = Orbit_Shortcodes::compliance_disclosure_text();
+		$expected = Orbit_Compliance_UI::compliance_disclosure_text();
 
 		$response = $this->dispatch_subscribe(
 			$this->subscribe_params(
@@ -384,7 +384,7 @@ class OrbitConsentCtaSnapshotTest extends WP_UnitTestCase {
 		try {
 			$this->assertTrue( Orbit_Features::sms_enabled(), 'Expected SMS live for this test.' );
 
-			$expected = Orbit_Shortcodes::compliance_disclosure_text();
+			$expected = Orbit_Compliance_UI::compliance_disclosure_text();
 			// Sanity: the sunset clause must NOT be present in the live-state
 			// disclosure, otherwise we'd be re-testing the dormant branch.
 			$this->assertStringNotContainsString( 'SMS goes live once', $expected );
@@ -417,7 +417,7 @@ class OrbitConsentCtaSnapshotTest extends WP_UnitTestCase {
 		try {
 			$this->assertTrue( Orbit_Features::sms_enabled(), 'Expected SMS live for this test.' );
 
-			$expected = Orbit_Shortcodes::compliance_disclosure_text();
+			$expected = Orbit_Compliance_UI::compliance_disclosure_text();
 			$this->assertStringNotContainsString( 'SMS goes live once', $expected );
 
 			$response = $this->dispatch_subscribe(

@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: "131"
 tags: [code-review, PR-26, refactor, architecture]
@@ -59,6 +59,7 @@ Option A. Pair with todo 130 — both touch the same hot files, and `Orbit_User_
 ## Work Log
 
 - 2026-06-08: Surfaced during PR #26 multi-agent code review.
+- 2026-06-09: Extracted the four compliance helpers (`compliance_disclosure_text`, `render_compliance_block`, `render_phone_field`, `render_consent_checkboxes`) verbatim from `Orbit_Shortcodes` to a new class `Orbit_Compliance_UI` in `includes/class-orbit-compliance-ui.php`. Updated docblocks to reference the new class. Cleanly removed the old methods from `Orbit_Shortcodes` (no back-compat shims — none of the four had external callers); left a one-line note in the class docblock pointing to the new home. Updated all internal + cross-class call sites: the two shortcode render paths (signup_form + subscribe_form), both REST handlers (`Orbit_REST_Signup::handle_signup`, `Orbit_REST_Subscription::handle_subscribe`), both CLI commands (`Orbit_CLI_Signup::create`, `Orbit_CLI_Subscription::create`), and both PHPUnit consumers (`OrbitConsentCtaSnapshotTest`, `OrbitMessagingCopyTest`). Loader order: `class-orbit-compliance-ui.php` requires after `Orbit_Features` and `Orbit_Messaging_Copy` (its two dependencies). Acceptance greps for `Orbit_Shortcodes::compliance_disclosure_text|render_compliance_block|render_phone_field|render_consent_checkboxes` across `includes/`, `cli/`, `tests/`, and `orbit.php` return zero matches. Full PHPUnit run: 224/224 green (1 skipped) — byte-equality invariant (todo 124) and SMS-dormancy composition (todo 128) tests all pass unchanged.
 
 ## Resources
 

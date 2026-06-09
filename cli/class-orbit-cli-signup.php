@@ -126,7 +126,7 @@ class Orbit_CLI_Signup extends Orbit_CLI {
 		// Cache the disclosure the user agreed to — same source as the
 		// REST handler so the ledger snapshot is byte-identical across
 		// surfaces.
-		$cta_snapshot = Orbit_Shortcodes::compliance_disclosure_text();
+		$cta_snapshot = Orbit_Compliance_UI::compliance_disclosure_text();
 
 		// Build a unique username from the display name — same shape as
 		// the REST handler, including the post-check retry loop that

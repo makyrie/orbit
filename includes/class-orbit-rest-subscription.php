@@ -223,11 +223,11 @@ class Orbit_REST_Subscription {
 
 		// Cache the disclosure shown to the user so the consent ledger
 		// captures the exact wording they agreed to. The shortcode AND
-		// this handler both call Orbit_Shortcodes::compliance_disclosure_text()
+		// this handler both call Orbit_Compliance_UI::compliance_disclosure_text()
 		// so they always agree byte-for-byte. The version is taken from
 		// the published /privacy/ page's orbit_policy_version meta inside
 		// Orbit_Consent::record() so we don't need to pass it here.
-		$cta_snapshot = Orbit_Shortcodes::compliance_disclosure_text();
+		$cta_snapshot = Orbit_Compliance_UI::compliance_disclosure_text();
 
 		// Defer non-DB side effects (auth cookies, password-set email)
 		// until after the transaction commits — those can't be rolled back.

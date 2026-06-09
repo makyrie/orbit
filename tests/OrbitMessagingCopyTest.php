@@ -131,7 +131,7 @@ class OrbitMessagingCopyTest extends WP_UnitTestCase {
 	public function test_compliance_disclosure_includes_sms_clause_when_dormant() {
 		$this->set_sms_enabled( false );
 
-		$text = Orbit_Shortcodes::compliance_disclosure_text();
+		$text = Orbit_Compliance_UI::compliance_disclosure_text();
 
 		$this->assertStringContainsString( 'SMS goes live', $text, 'Disclosure must carry the dormancy clause when SMS is off.' );
 	}
@@ -139,7 +139,7 @@ class OrbitMessagingCopyTest extends WP_UnitTestCase {
 	public function test_compliance_disclosure_drops_sms_clause_when_live() {
 		$this->set_sms_enabled( true );
 
-		$text = Orbit_Shortcodes::compliance_disclosure_text();
+		$text = Orbit_Compliance_UI::compliance_disclosure_text();
 
 		$this->assertStringNotContainsString( 'SMS goes live', $text, 'Disclosure must drop the dormancy clause once SMS is live.' );
 	}

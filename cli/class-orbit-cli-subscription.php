@@ -213,7 +213,7 @@ class Orbit_CLI_Subscription extends Orbit_CLI {
 		// Snapshot the disclosure text BEFORE opening the transaction so any
 		// throw inside the wrap doesn't have to redo the work on rollback.
 		// Matches the REST handler's byte-for-byte capture.
-		$cta_snapshot = Orbit_Shortcodes::compliance_disclosure_text();
+		$cta_snapshot = Orbit_Compliance_UI::compliance_disclosure_text();
 
 		$subscription_id = 0;
 		$ledger_rows     = 0;
