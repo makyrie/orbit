@@ -20,6 +20,39 @@ class Orbit_Activator {
 	public static function activate() {
 		self::create_tables();
 		self::create_pages();
+		self::seed_consent_ip_salt();
+	}
+
+	/**
+	 * Seed the consent IP salt option on fresh installs.
+	 *
+	 * Orbit_Consent::record() refuses to write a ledger row when no salt
+	 * resolves — and every signup / subscribe write runs through it. Without
+	 * an activator-side fallback, a fresh install on a host where the
+	 * operator hasn't added ORBIT_CONSENT_IP_SALT to wp-config.php would 500
+	 * every signup. We mint a per-site fallback so zero-config installs work.
+	 *
+	 * Guards:
+	 * - If the constant is defined, do nothing — the documented best practice
+	 *   wins and we leave the option absent so deleting it does not silently
+	 *   shadow the constant later.
+	 * - If the option already exists (re-activation, restored backup), do
+	 *   nothing — rewriting the salt would invalidate every previously
+	 *   recorded ip_hash.
+	 *
+	 * Autoload is off because record() is the only consumer and it runs
+	 * outside the page-load hot path.
+	 */
+	public static function seed_consent_ip_salt() {
+		if ( defined( 'ORBIT_CONSENT_IP_SALT' ) ) {
+			return;
+		}
+
+		if ( false !== get_option( 'orbit_consent_ip_salt', false ) ) {
+			return;
+		}
+
+		add_option( 'orbit_consent_ip_salt', wp_generate_password( 64, false ), '', false );
 	}
 
 	/**

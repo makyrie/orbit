@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p1
 issue_id: "115"
 tags: [code-review, PR-26, testing, wp-test]
@@ -92,6 +92,35 @@ Ship Option 1 before merge. Subscribe and signup are mirror endpoints in PR #26 
 ## Work Log
 
 - 2026-06-08: Surfaced during PR #26 multi-agent code review.
+- 2026-06-09: Created `tests/OrbitRestSubscriptionTest.php` mirroring
+  `OrbitRestSignupTest` (REST server reset + REMOTE_ADDR fixture +
+  rate-limit transient clear in set_up/tear_down, per-test profile
+  fixture via `Orbit_Profile::create`, `subscribe_params()` body
+  helper, `dispatch_subscribe()` request helper). Added the following
+  test methods:
+  - `test_happy_path_creates_subscription`
+  - `test_missing_consent_email_returns_400`
+  - `test_consent_sms_without_phone_returns_400`
+  - `test_invalid_phone_format_returns_400`
+  - `test_phone_without_sms_consent_writes_only_email_row`
+  - `test_honeypot_field_filled_returns_400` —
+    `markTestIncomplete` pending todo 113 (subscribe lacks
+    honeypot/timestamp traps today).
+  - `test_too_fast_submission_returns_400` —
+    `markTestIncomplete` pending todo 113.
+  - `test_logged_in_user_subscribes_to_profile_existing_account`
+  - `test_invalid_email_returns_400`
+  - `test_rate_limit_kicks_in_after_threshold`
+  - `test_transaction_rollback_on_consent_failure` —
+    `markTestIncomplete` pending todo 118 (transaction-safety canary);
+    forcing a deterministic mid-transaction consent failure requires
+    invasive mocking that this PR's scope doesn't justify.
+  PHPUnit run via `vendor/bin/phpunit --filter
+  OrbitRestSubscriptionTest` exited at WordPress bootstrap with
+  `db_connect_fail` — the Local site's MySQL socket
+  (`.../run/NZ_MOyrML/mysql/mysqld.sock`) is not present (Local app
+  not running). Tests were not executed against the DB in this
+  session; suite still needs a live Local socket to verify.
 
 ## Resources
 

@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p1
 issue_id: "111"
 tags: [code-review, PR-26, i18n, wp-php]
@@ -95,6 +95,31 @@ Ship Option 1 before merge. sprintf with `%1$s` / `%2$s` is the canonical WordPr
 ## Work Log
 
 - 2026-06-08: Surfaced during PR #26 multi-agent code review.
+- 2026-06-09: Implemented Option 1 (sprintf with numbered placeholders).
+  - `includes/class-orbit-shortcodes.php` — `compliance_disclosure_text()` rewritten
+    to accept `($privacy_label = null, $terms_label = null)`. Defaults resolve to
+    `__('Privacy Policy', 'orbit')` and `__('Terms', 'orbit')` so the no-arg call
+    from the REST handlers still returns the plain-text disclosure verbatim. The
+    sentence template now uses `%1$s` (Privacy), `%2$s` (Terms), and `%3$s` (brand
+    name) with a translator comment naming all three.
+  - `render_compliance_block()` — removed both `str_replace` calls. Builds anchor
+    HTML locally with `esc_url(home_url('/privacy/'))` + `esc_html__('Privacy
+    Policy', 'orbit')` (and the same for Terms), passes those as the two label
+    args, then runs the result through `wp_kses()` with `<a href>` allowlist to
+    neutralize any HTML-special characters in the brand name (which is interpolated
+    inside `compliance_disclosure_text()` without pre-escaping so the byte-match
+    invariant with the ledger snapshot holds).
+  - `class-orbit-rest-subscription.php:217` + `class-orbit-rest-signup.php:153` —
+    unchanged. Both still call `Orbit_Shortcodes::compliance_disclosure_text()`
+    with no args; backward-compatible by design.
+  - PHPUnit: `vendor/bin/phpunit --filter OrbitRestSignupTest` could not run —
+    Local site `NZ_MOyrML` is stopped and no MySQL socket is available. PHP
+    syntax check (`php -l`) on the edited file passes cleanly. Tests should be
+    re-run once Local is started; signature change is backward-compatible so the
+    REST handlers' no-arg call site continues to work.
+  - `.pot` regeneration: deferred — translation source string changed; needs
+    `wp i18n make-pot` once Local is back up. Not blocking; no translations have
+    shipped yet.
 
 ## Resources
 

@@ -1709,14 +1709,33 @@ class Orbit_Shortcodes {
 	 * post_meta on /privacy/ + /terms/ tracks the change. Every consent
 	 * row captures the version it agreed to.
 	 *
-	 * @return string Plain text, safe to esc_html() into HTML or store
-	 *                verbatim in the ledger.
+	 * @param string|null $privacy_label Optional label to interpolate for the
+	 *                                   "Privacy Policy" placeholder. Pass plain
+	 *                                   text (default) for the ledger snapshot;
+	 *                                   pass anchor HTML for the rendered form.
+	 * @param string|null $terms_label   Optional label to interpolate for the
+	 *                                   "Terms" placeholder. Same semantics as
+	 *                                   $privacy_label.
+	 * @return string Plain text (default) safe to esc_html() into HTML or store
+	 *                verbatim in the ledger; or HTML when callers pass anchor
+	 *                strings.
 	 */
-	public static function compliance_disclosure_text() {
+	public static function compliance_disclosure_text( $privacy_label = null, $terms_label = null ) {
+		if ( null === $privacy_label ) {
+			$privacy_label = __( 'Privacy Policy', 'orbit' );
+		}
+		if ( null === $terms_label ) {
+			$terms_label = __( 'Terms', 'orbit' );
+		}
+
+		$brand = defined( 'ORBIT_MESSAGING_BRAND' ) ? ORBIT_MESSAGING_BRAND : get_bloginfo( 'name' );
+
 		return sprintf(
-			/* translators: 1: brand name. */
-			__( 'Get notified when posters you follow share new activities. Email is required; phone is optional and used only for SMS notifications. Initially we deliver everything by email — SMS goes live once %1$s\'s messaging service is approved. Up to 10 msgs/week. Msg & data rates may apply. Reply STOP to opt out, HELP for help. See our Privacy Policy and Terms.', 'orbit' ),
-			defined( 'ORBIT_MESSAGING_BRAND' ) ? ORBIT_MESSAGING_BRAND : get_bloginfo( 'name' )
+			/* translators: 1: Privacy Policy link or label, 2: Terms link or label, 3: brand name. */
+			__( 'Get notified when posters you follow share new activities. Email is required; phone is optional and used only for SMS notifications. Initially we deliver everything by email — SMS goes live once %3$s\'s messaging service is approved. Up to 10 msgs/week. Msg & data rates may apply. Reply STOP to opt out, HELP for help. See our %1$s and %2$s.', 'orbit' ),
+			$privacy_label,
+			$terms_label,
+			$brand
 		);
 	}
 
@@ -1733,26 +1752,31 @@ class Orbit_Shortcodes {
 	public static function render_compliance_block() {
 		$privacy_url = esc_url( home_url( '/privacy/' ) );
 		$terms_url   = esc_url( home_url( '/terms/' ) );
-		$disclosure  = self::compliance_disclosure_text();
 
-		// Render with inline link substitutions. We embed the canonical
-		// disclosure text but render "Privacy Policy" and "Terms" as
-		// clickable links. The ledger captures the canonical (link-free)
-		// text via compliance_disclosure_text().
-		$rendered = esc_html( $disclosure );
+		// Build the anchor labels locally so the sprintf template only ever
+		// interpolates trusted strings. Each label escapes its own translated
+		// text; the rest of the sentence is locale-controlled but contains
+		// no untrusted input. This replaces an earlier str_replace approach
+		// that broke i18n because translators don't necessarily render the
+		// substring "Privacy Policy" / "Terms" identically in two independent
+		// translation strings — see todo 111.
+		$privacy_label = '<a href="' . $privacy_url . '">' . esc_html__( 'Privacy Policy', 'orbit' ) . '</a>';
+		$terms_label   = '<a href="' . $terms_url . '">' . esc_html__( 'Terms', 'orbit' ) . '</a>';
 
-		// Swap the visible phrases for anchor tags. esc_html() above means
-		// the swap happens against escaped text; the anchor tags we splice
-		// in are trusted-static.
-		$rendered = str_replace(
-			esc_html__( 'Privacy Policy', 'orbit' ),
-			'<a href="' . $privacy_url . '">' . esc_html__( 'Privacy Policy', 'orbit' ) . '</a>',
-			$rendered
-		);
-		$rendered = str_replace(
-			esc_html__( 'Terms', 'orbit' ),
-			'<a href="' . $terms_url . '">' . esc_html__( 'Terms', 'orbit' ) . '</a>',
-			$rendered
+		// The sentence template is interpolated with anchor HTML, so we
+		// can't esc_html() the whole result. Run the rendered string through
+		// wp_kses() with a tight allowlist (only the <a> tags we inject) so
+		// any HTML-special chars in the brand name (interpolated inside
+		// compliance_disclosure_text() and not pre-escaped, to preserve the
+		// byte-match invariant with the ledger snapshot) are neutralized.
+		$rendered = self::compliance_disclosure_text( $privacy_label, $terms_label );
+		$rendered = wp_kses(
+			$rendered,
+			array(
+				'a' => array(
+					'href' => array(),
+				),
+			)
 		);
 
 		return '<div class="orbit-compliance-block" role="note">' . $rendered . '</div>';

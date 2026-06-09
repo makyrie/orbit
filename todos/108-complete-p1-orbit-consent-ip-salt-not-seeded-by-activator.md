@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p1
 issue_id: "108"
 tags: [code-review, PR-26, data-integrity, consent, activator]
@@ -89,3 +89,37 @@ Ship Option 1 before merge. The activator-seeded option preserves zero-config in
 - PR #26: feat/compliance-ui-and-consent-capture
 - Surfaced by: data-integrity-guardian PR #26 review
 - Related: PR #24 introduced the salt requirement.
+
+## Work Log
+
+### 2026-06-09
+
+Implemented Option 1 (auto-mint per-site salt option on activation).
+
+- `includes/class-orbit-activator.php`: added `seed_consent_ip_salt()` and
+  wired it into `activate()`. Guards: no-op when `ORBIT_CONSENT_IP_SALT` is
+  defined (constant wins, leaves option absent so deleting it can't shadow
+  the constant later), and no-op when the option already exists
+  (re-activation must not rotate the salt — that would invalidate every
+  prior `ip_hash` in the ledger). Autoload off.
+- `includes/class-orbit-consent.php`: no change needed. The existing
+  `resolve_ip_salt()` helper already prefers `ORBIT_CONSENT_IP_SALT` and
+  falls back to `(string) get_option( 'orbit_consent_ip_salt', '' )`, with
+  the `orbit_consent_ip_salt_resolved` filter as a last-mile override for
+  HSM-backed installs and tests.
+- `tests/OrbitActivatorConsentSaltTest.php`: new test file covering
+  (a) fallback resolves via option when the constant is absent (simulated
+  via the `orbit_consent_ip_salt_resolved` filter, since the bootstrap
+  pre-defines the constant and PHP can't undefine it at runtime),
+  (b) constant takes precedence when both exist (asserted by comparing
+  `hash_ip()` output against the constant-salted vs. option-salted hashes),
+  and (c) idempotent on re-activation (three back-to-back
+  `seed_consent_ip_salt()` calls preserve the original option value).
+
+PHPUnit could not be run locally: Local by Flywheel's MySQL socket was not
+present at `~/Library/Application Support/Local/run/NZ_MOyrML/mysql/mysqld.sock`
+when this work landed (the orbit site wasn't started), so
+`vendor/bin/phpunit --filter OrbitConsentTest` failed with
+`Error establishing a database connection`. The PHP for all touched files
+lints clean. The wave runner / CI will execute the suite against a live
+DB.
