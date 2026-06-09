@@ -145,8 +145,6 @@ class Orbit_REST_Signup {
 			);
 		}
 
-		global $wpdb;
-
 		// Cache the disclosure the user agreed to. Stored verbatim on
 		// each consent ledger row — see Orbit_Compliance_UI::compliance_
 		// disclosure_text() for the canonical source.
@@ -155,115 +153,56 @@ class Orbit_REST_Signup {
 		// Build a unique username from the display name. Same shape as
 		// the subscribe flow: lowercased, spaces stripped, then a random
 		// 5-digit suffix. Username collisions are likely on multisite
-		// where usernames are network-wide; the post-check retry loop
-		// below also closes the race between username_exists() and
+		// where usernames are network-wide; the provisioning service's
+		// retry loop closes the race between username_exists() and
 		// wp_insert_user() when two requests share a base.
 		$base     = sanitize_user( strtolower( str_replace( ' ', '', $display_name ) ), true );
 		$base     = '' !== $base ? $base : 'orbit-user';
 		$username = $base . wp_rand( 10000, 99999 );
 
-		// Wrap user creation + ms-attach + meta + consent rows in a
-		// transaction so a partial failure can't leave a half-created
-		// account with no audit trail (or vice versa). Auth-cookie setup
-		// and the password-set email are deferred until after COMMIT —
-		// they can't be rolled back and we only want them on the happy
-		// path.
-		$wpdb->query( 'START TRANSACTION' );
-
-		try {
-			$attempts = 0;
-			$user_id  = null;
-			do {
-				$user_id = wp_insert_user(
-					array(
-						'user_login'   => $username,
-						'user_pass'    => wp_generate_password(),
-						'user_email'   => $email,
-						'display_name' => $display_name,
-						'role'         => 'subscriber',
-					)
-				);
-
-				if ( ! is_wp_error( $user_id ) ) {
-					break;
-				}
-
-				if ( 'existing_user_login' !== $user_id->get_error_code() ) {
-					// Forward the structured WP_Error through the carrier
-					// exception so the catch can branch on the original
-					// code (e.g. surface `existing_user_email` race losers
-					// as 409 login_required — see todo 127).
-					throw new Orbit_Rolled_Back_Exception( $user_id );
-				}
-
-				$username = $base . wp_rand( 10000, 99999 );
-				++$attempts;
-			} while ( $attempts < 5 );
-
-			if ( is_wp_error( $user_id ) ) {
-				$wpdb->query( 'ROLLBACK' );
-				return new WP_Error(
-					'user_creation_failed',
-					__( "We couldn't create your account right now. Please try again in a moment.", 'orbit' ),
-					array( 'status' => 503 )
-				);
-			}
-
-			// On multisite, wp_insert_user creates a network user with no
-			// role on the current sub-site — add_user_to_blog() attaches
-			// the subscriber role here. On single-site the function isn't
-			// loaded (ms-functions.php is multisite-only), and
-			// wp_insert_user has already set the role globally, so the
-			// call is unnecessary.
-			if ( is_multisite() ) {
-				add_user_to_blog( get_current_blog_id(), $user_id, 'subscriber' );
-			}
-
-			update_user_meta( $user_id, 'orbit_timezone', wp_timezone_string() );
-
-			if ( '' !== $phone ) {
-				// Pair the pending phone with an explicit timestamp so the
-				// daily GC cron (Orbit_Notifier::cleanup_pending_phones())
-				// can reap abandoned signups — usermeta has no native
-				// updated_at, so this companion key is required.
-				update_user_meta( $user_id, 'orbit_phone_pending', $phone );
-				update_user_meta( $user_id, 'orbit_phone_pending_at', time() );
-			}
-
-			$email_consent = Orbit_Consent::record(
-				$user_id,
-				'email',
-				'opt_in',
-				array(
-					'source'       => 'signup',
-					'cta_snapshot' => $cta_snapshot,
-				)
+		// Hand off the full transactional envelope to the provisioning
+		// service: wp_insert_user (with retry-on-collision), multisite
+		// role attach, timezone + optional pending-phone meta, email +
+		// optional sms consent rows, all inside one START TRANSACTION
+		// / COMMIT — or ROLLBACK with the original WP_Error preserved.
+		// The service does NOT touch the auth cookie or the welcome
+		// email synchronization; both are the controller's job below.
+		$consents = array(
+			'email' => array(
+				'state'        => 'opt_in',
+				'source'       => 'signup',
+				'cta_snapshot' => $cta_snapshot,
+			),
+		);
+		if ( $consent_sms ) {
+			$consents['sms'] = array(
+				'state'        => 'opt_in',
+				'source'       => 'signup',
+				'cta_snapshot' => $cta_snapshot,
 			);
-			if ( is_wp_error( $email_consent ) ) {
-				throw new Orbit_Rolled_Back_Exception( $email_consent );
-			}
+		}
 
-			if ( $consent_sms ) {
-				$sms_consent = Orbit_Consent::record(
-					$user_id,
-					'sms',
-					'opt_in',
-					array(
-						'source'       => 'signup',
-						'cta_snapshot' => $cta_snapshot,
-					)
-				);
-				if ( is_wp_error( $sms_consent ) ) {
-					throw new Orbit_Rolled_Back_Exception( $sms_consent );
-				}
-			}
+		$user_id = Orbit_User_Provisioning::create_user_with_consent(
+			array(
+				'user_login'              => $username,
+				'user_email'              => $email,
+				'display_name'            => $display_name,
+				'role'                    => 'subscriber',
+				'phone_pending'           => $phone,
+				'username_retry_attempts' => 5,
+			),
+			$consents,
+			array(
+				// REST handler defers the welcome email via ActionScheduler
+				// after we return — keep the service quiet here so the
+				// auth-cookie write happens FIRST and we keep the same
+				// observable ordering as the legacy handler.
+				'send_welcome_email' => false,
+			)
+		);
 
-			$wpdb->query( 'COMMIT' );
-		} catch ( Orbit_Rolled_Back_Exception $e ) {
-			$wpdb->query( 'ROLLBACK' );
-
-			$inner_error = $e->wp_error;
-			$inner_code  = (string) $inner_error->get_error_code();
+		if ( is_wp_error( $user_id ) ) {
+			$inner_code = (string) $user_id->get_error_code();
 
 			// Log the full inner error server-side so operators can still
 			// see the raw failure (MySQL fragment, third-party hook string,
@@ -272,10 +211,17 @@ class Orbit_REST_Signup {
 				sprintf(
 					'[orbit] signup rolled back: code=%s message=%s data=%s',
 					$inner_code,
-					$inner_error->get_error_message(),
-					wp_json_encode( $inner_error->get_error_data() )
+					$user_id->get_error_message(),
+					wp_json_encode( $user_id->get_error_data() )
 				)
 			);
+
+			// Retry-loop exhaustion: the service returns a 503-tagged
+			// WP_Error with code `user_creation_failed`. Forward as-is.
+			$data = $user_id->get_error_data();
+			if ( 'user_creation_failed' === $inner_code && is_array( $data ) && isset( $data['status'] ) ) {
+				return $user_id;
+			}
 
 			// Email race: a concurrent signup grabbed the same email
 			// between the upfront `get_user_by('email')` check and
@@ -298,18 +244,6 @@ class Orbit_REST_Signup {
 			// reach an anonymous REST response (see todo 116).
 			return new WP_Error(
 				$inner_code,
-				__( "We couldn't complete your sign-up. Please try again in a moment.", 'orbit' ),
-				array( 'status' => 500 )
-			);
-		} catch ( Throwable $e ) {
-			// Defensive: a non-Orbit exception escaped from a helper
-			// (unlikely in steady state). Same response shape but with
-			// a generic code since we have no structured WP_Error to
-			// preserve.
-			$wpdb->query( 'ROLLBACK' );
-			error_log( '[orbit] signup unexpected throwable: ' . $e->getMessage() );
-			return new WP_Error(
-				'signup_failed',
 				__( "We couldn't complete your sign-up. Please try again in a moment.", 'orbit' ),
 				array( 'status' => 500 )
 			);

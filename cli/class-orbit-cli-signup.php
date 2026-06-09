@@ -121,124 +121,93 @@ class Orbit_CLI_Signup extends Orbit_CLI {
 			WP_CLI::error( sprintf( 'login_required: An account with email %s already exists.', $email ) );
 		}
 
-		global $wpdb;
-
 		// Cache the disclosure the user agreed to — same source as the
 		// REST handler so the ledger snapshot is byte-identical across
 		// surfaces.
 		$cta_snapshot = Orbit_Compliance_UI::compliance_disclosure_text();
 
 		// Build a unique username from the display name — same shape as
-		// the REST handler, including the post-check retry loop that
-		// closes the race between username_exists() and wp_insert_user()
-		// when two requests share a base.
+		// the REST handler. The provisioning service's retry loop closes
+		// the race between username_exists() and wp_insert_user() when
+		// two requests share a base.
 		$base     = sanitize_user( strtolower( str_replace( ' ', '', $display_name ) ), true );
 		$base     = '' !== $base ? $base : 'orbit-user';
 		$username = $base . wp_rand( 10000, 99999 );
 
-		$wpdb->query( 'START TRANSACTION' );
-
-		$ledger_rows = array();
-
-		try {
-			$attempts = 0;
-			$user_id  = null;
-			do {
-				$user_id = wp_insert_user(
-					array(
-						'user_login'   => $username,
-						'user_pass'    => wp_generate_password(),
-						'user_email'   => $email,
-						'display_name' => $display_name,
-						'role'         => 'subscriber',
-					)
-				);
-
-				if ( ! is_wp_error( $user_id ) ) {
-					break;
-				}
-
-				if ( 'existing_user_login' !== $user_id->get_error_code() ) {
-					throw new RuntimeException( $user_id->get_error_message() );
-				}
-
-				$username = $base . wp_rand( 10000, 99999 );
-				++$attempts;
-			} while ( $attempts < 5 );
-
-			if ( is_wp_error( $user_id ) ) {
-				$wpdb->query( 'ROLLBACK' );
-				WP_CLI::error( 'user_creation_failed: ' . $user_id->get_error_message() );
-			}
-
-			// Multisite attach — same rationale as the REST handler:
-			// wp_insert_user() creates a network user with no role on
-			// the current sub-site; add_user_to_blog() pins the role
-			// here. The function is only defined on multisite installs.
-			if ( is_multisite() ) {
-				add_user_to_blog( get_current_blog_id(), $user_id, 'subscriber' );
-			}
-
-			update_user_meta( $user_id, 'orbit_timezone', wp_timezone_string() );
-
-			$pending_phone_stashed = false;
-			if ( '' !== $phone ) {
-				update_user_meta( $user_id, 'orbit_phone_pending', $phone );
-				update_user_meta( $user_id, 'orbit_phone_pending_at', time() );
-				$pending_phone_stashed = true;
-			}
-
-			$email_consent = Orbit_Consent::record(
-				$user_id,
-				'email',
-				'opt_in',
-				array(
-					'source'       => 'cli',
-					'cta_snapshot' => $cta_snapshot,
-					'ip'           => '',
-					'user_agent'   => 'wp orbit signup create',
-				)
+		// Build consent payload — CLI provenance is `source=cli`,
+		// `user_agent=wp orbit signup create` so ops-initiated rows are
+		// distinguishable from end-user opt-in for TCPA / TCR audits.
+		$consents = array(
+			'email' => array(
+				'state'        => 'opt_in',
+				'source'       => 'cli',
+				'cta_snapshot' => $cta_snapshot,
+				'ip'           => '',
+				'user_agent'   => 'wp orbit signup create',
+			),
+		);
+		if ( $consent_sms ) {
+			$consents['sms'] = array(
+				'state'        => 'opt_in',
+				'source'       => 'cli',
+				'cta_snapshot' => $cta_snapshot,
+				'ip'           => '',
+				'user_agent'   => 'wp orbit signup create',
 			);
-			if ( is_wp_error( $email_consent ) ) {
-				throw new RuntimeException( 'consent_email: ' . $email_consent->get_error_message() );
-			}
-			$ledger_rows[] = (int) $email_consent;
-
-			if ( $consent_sms ) {
-				$sms_consent = Orbit_Consent::record(
-					$user_id,
-					'sms',
-					'opt_in',
-					array(
-						'source'       => 'cli',
-						'cta_snapshot' => $cta_snapshot,
-						'ip'           => '',
-						'user_agent'   => 'wp orbit signup create',
-					)
-				);
-				if ( is_wp_error( $sms_consent ) ) {
-					throw new RuntimeException( 'consent_sms: ' . $sms_consent->get_error_message() );
-				}
-				$ledger_rows[] = (int) $sms_consent;
-			}
-
-			$wpdb->query( 'COMMIT' );
-		} catch ( Throwable $e ) {
-			$wpdb->query( 'ROLLBACK' );
-			WP_CLI::error( 'signup_failed: ' . $e->getMessage() );
 		}
 
-		// Side effects after COMMIT — they can't be rolled back. The
-		// welcome email is opt-in for CLI (vs. always-on for REST) so
-		// seed scripts don't spray real inboxes; pass --send-welcome-email
-		// when you actually want the password-set link delivered.
-		if ( $send_welcome_email ) {
-			wp_send_new_user_notifications( $user_id, 'user' );
+		// Hand off the full transactional envelope to the provisioning
+		// service: wp_insert_user (with the same 5-retry username loop
+		// the REST handler uses), multisite role attach, timezone meta,
+		// optional pending-phone meta, and consent rows — all inside one
+		// START TRANSACTION / COMMIT.
+		$user_id = Orbit_User_Provisioning::create_user_with_consent(
+			array(
+				'user_login'              => $username,
+				'user_email'              => $email,
+				'display_name'            => $display_name,
+				'role'                    => 'subscriber',
+				'phone_pending'           => $phone,
+				'username_retry_attempts' => 5,
+			),
+			$consents,
+			array(
+				// Welcome email is opt-in for CLI (vs. always-on for REST)
+				// so seed scripts don't spray real inboxes. CLI also wants
+				// the email delivered synchronously when requested — the
+				// CLI process exits before any ActionScheduler tick fires.
+				'send_welcome_email'     => $send_welcome_email,
+				'schedule_welcome_async' => false,
+			)
+		);
+
+		if ( is_wp_error( $user_id ) ) {
+			WP_CLI::error( $user_id->get_error_code() . ': ' . $user_id->get_error_message() );
 		}
+
+		$pending_phone_stashed = '' !== $phone;
+
+		// Inspect the ledger rows just written so the summary payload
+		// keeps the same shape as before the refactor. Same-request reads
+		// against the just-committed table are deterministic.
+		global $wpdb;
+		$table       = Orbit_Consent::table_name();
+		$ledger_rows = array_map(
+			'intval',
+			(array) $wpdb->get_col(
+				$wpdb->prepare(
+					// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+					"SELECT id FROM {$table} WHERE user_id = %d ORDER BY id ASC",
+					(int) $user_id
+				)
+			)
+		);
+
+		$user = get_user_by( 'id', (int) $user_id );
 
 		$summary = (object) array(
 			'user_id'               => (int) $user_id,
-			'username'              => $username,
+			'username'              => $user ? $user->user_login : $username,
 			'email'                 => $email,
 			'display_name'          => $display_name,
 			'ledger_row_ids'        => $ledger_rows,

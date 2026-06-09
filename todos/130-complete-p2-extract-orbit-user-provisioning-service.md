@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: "130"
 tags: [code-review, PR-26, refactor, architecture]
@@ -80,6 +80,57 @@ Option A. Pair with todo 116 (carrier exception lives next to the service), todo
 ## Work Log
 
 - 2026-06-08: Surfaced during PR #26 multi-agent code review.
+- 2026-06-09: Extracted `Orbit_User_Provisioning::create_user_with_consent()` into a
+  new file at `includes/class-orbit-user-provisioning.php` (298 LOC). The service
+  owns the full transactional envelope (`START TRANSACTION` → `wp_insert_user`
+  with optional retry-on-`existing_user_login` → multisite `add_user_to_blog` →
+  `orbit_timezone` + optional `orbit_phone_pending` meta → per-channel
+  `Orbit_Consent::record` → `COMMIT` / `ROLLBACK` via
+  `Orbit_Rolled_Back_Exception`). Loader entry added to `orbit.php` after the
+  three dependencies (`Orbit_Consent`, `Orbit_Notifier`,
+  `Orbit_Rolled_Back_Exception`).
+
+  Collapsed call sites:
+  - `includes/class-orbit-rest-signup.php::handle_signup()` (351 → 285 lines):
+    new-account creation now routes through the service. Email-race handling
+    (`existing_user_email` → 409 `login_required`), retry-loop exhaustion
+    (`user_creation_failed` → 503), and rollback error-code preservation all
+    still work because the service returns the original WP_Error code.
+  - `includes/class-orbit-rest-subscription.php::handle_subscribe()` (663 →
+    662 lines): the new-account branch routes through the service; the
+    existing-logged-in branch keeps its own minimal consent-stamping
+    transaction (matches todo guidance — the service is "create user + stamp
+    consent", not "stamp consent on existing user"). Subscription row +
+    `Orbit_Notifier::get_or_create_preferences` are written post-provisioning
+    because they're subscribe-specific. The early-return-if-anonymous-and-
+    email-exists guard moved above the transaction.
+  - `cli/class-orbit-cli-signup.php::create()` (252 → 221 lines): routes
+    through the service with `send_welcome_email` controlled by the
+    `--send-welcome-email` flag and `schedule_welcome_async=false` so the
+    CLI process delivers synchronously when requested.
+  - `cli/class-orbit-cli-subscription.php`: NOT touched. Confirmed by reading
+    the file — CLI subscribe only attaches existing user IDs to profiles; it
+    never creates users. The provisioning service is "create user + stamp
+    consent" and doesn't apply to the existing-user-attach flow.
+
+  Tests added (`tests/OrbitUserProvisioningTest.php`, 300 LOC):
+  - Happy path: `create_user_with_consent` returns int user_id, stamps the
+    email ledger row, writes `orbit_timezone` meta.
+  - Rollback path: forced `orbit_consent_salt_missing` via the
+    `orbit_consent_ip_salt_resolved` filter triggers ROLLBACK; no `wp_users`
+    row survives (verified via direct `SELECT COUNT(*)` to bypass WP's user
+    object cache).
+  - Retry path: pre-existing `user_login` collision with
+    `username_retry_attempts=5` resolves via suffix retry; returned user_id
+    differs from pre-existing one and new login shares the original base
+    prefix.
+  - Cache eviction: rollback-path `forget_preferences` is exercised by
+    seeding the cache from a `user_register` hook then dispatching the
+    rolled-back service call.
+
+  Full suite: `vendor/bin/phpunit` reports 228 tests, 635 assertions,
+  1 skipped (the same canary-deferral skip the baseline had). 4 new tests
+  added on top of 224 baseline = 228 total.
 
 ## Resources
 

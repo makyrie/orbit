@@ -87,6 +87,7 @@ require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-twilio.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-phone-verify.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-notifier.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rolled-back-exception.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-user-provisioning.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-api.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-subscription.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-activity.php';

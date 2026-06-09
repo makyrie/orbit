@@ -221,6 +221,21 @@ class Orbit_REST_Subscription {
 		// Check for existing WordPress account.
 		$existing_user = get_user_by( 'email', $email );
 
+		// Anonymous request hitting an existing-email path is a clear
+		// "log in first" UX — surface before opening any transaction.
+		// The 409 + login_url matches the signup endpoint's response so
+		// the JS branch is identical (see todo 127).
+		if ( $existing_user && ! is_user_logged_in() ) {
+			return new WP_Error(
+				'login_required',
+				__( 'An account with this email already exists. Please log in first.', 'orbit' ),
+				array(
+					'status'    => 409,
+					'login_url' => wp_login_url( home_url( '/@' . $profile->slug . '/subscribe?token=' . $share_token ) ),
+				)
+			);
+		}
+
 		// Cache the disclosure shown to the user so the consent ledger
 		// captures the exact wording they agreed to. The shortcode AND
 		// this handler both call Orbit_Compliance_UI::compliance_disclosure_text()
@@ -229,194 +244,178 @@ class Orbit_REST_Subscription {
 		// Orbit_Consent::record() so we don't need to pass it here.
 		$cta_snapshot = Orbit_Compliance_UI::compliance_disclosure_text();
 
-		// Defer non-DB side effects (auth cookies, password-set email)
-		// until after the transaction commits — those can't be rolled back.
 		$is_new_account            = false;
 		$pending_auth_user_id      = 0;
 		$pending_password_set_send = false;
+		$user_id                   = 0;
 
-		// Declared in the outer scope so the catch block can evict the
-		// Orbit_Notifier preferences cache on rollback. See cache-invariant
-		// note on Orbit_Notifier::get_or_create_preferences().
-		$user_id = 0;
+		if ( $existing_user ) {
+			// Existing logged-in user branch: no user creation. Stamp the
+			// consent rows directly under a minimal transaction so a
+			// partial failure doesn't leave a half-written audit trail.
+			// Notifier preferences and subscription row are created
+			// post-COMMIT below (same pattern the new-account branch uses).
+			$user_id = (int) $existing_user->ID;
 
-		// All DB writes (wp_users + wp_orbit_subscriptions + wp_orbit_
-		// notification_preferences + wp_orbit_consent_ledger rows) are
-		// wrapped in a single transaction. InnoDB supports this across
-		// wp_insert_user / $wpdb->insert calls on the same connection;
-		// callers are responsible for not introducing third-party hooks
-		// inside that issue COMMIT.
-		$wpdb->query( 'START TRANSACTION' );
+			$wpdb->query( 'START TRANSACTION' );
 
-		try {
-			if ( $existing_user ) {
-				if ( ! is_user_logged_in() ) {
-					$wpdb->query( 'ROLLBACK' );
-
-					return new WP_Error(
-						'login_required',
-						__( 'An account with this email already exists. Please log in first.', 'orbit' ),
-						array(
-							'status'    => 409,
-							'login_url' => wp_login_url( home_url( '/@' . $profile->slug . '/subscribe?token=' . $share_token ) ),
-						)
-					);
-				}
-				$user_id = (int) $existing_user->ID;
-			} else {
-				// Create new WordPress user with a generated placeholder
-				// password — wp_send_new_user_notifications() (called after
-				// COMMIT) emails them a "set your password" link.
-				$username = sanitize_user( strtolower( str_replace( ' ', '', $display_name ) ) . wp_rand( 100, 999 ) );
-				$password = wp_generate_password();
-				$user_id  = wp_create_user( $username, $password, $email );
-
-				if ( is_wp_error( $user_id ) ) {
-					throw new Orbit_Rolled_Back_Exception( $user_id );
-				}
-
-				wp_update_user(
-					array(
-						'ID'           => $user_id,
-						'display_name' => sanitize_text_field( $display_name ),
-					)
-				);
-
-				// On multisite, route role assignment through
-				// add_user_to_blog() so the canonical `add_user_to_blog`
-				// action fires — third-party integrations (Stream, WP
-				// Activity Log, multisite role managers) hook that action
-				// to track membership changes. On single-site the function
-				// isn't loaded (ms-functions.php is multisite-only) and
-				// WP_User::add_role() is the only path.
-				if ( is_multisite() ) {
-					add_user_to_blog( get_current_blog_id(), $user_id, 'orbit_subscriber' );
-				} else {
-					$user = get_userdata( $user_id );
-					$user->add_role( 'orbit_subscriber' );
-				}
-
-				update_user_meta( $user_id, 'orbit_timezone', wp_timezone_string() );
-
-				// Stash a pending phone ONLY in the new-account branch.
-				// The existing-logged-in branch never renders a phone
-				// field in the form, but a hand-crafted REST POST could
-				// otherwise overwrite a returning user's pending number
-				// (or pollute state for someone who already has a verified
-				// `orbit_phone`). See todo 126.
-				if ( '' !== $phone ) {
-					// `orbit_phone_pending` (not `orbit_phone`) — promotion
-					// to the verified meta happens in Orbit_Phone_Verify on
-					// successful code entry. The companion `_at` timestamp
-					// is the daily GC cron's age signal — usermeta has no
-					// native updated_at, so an explicit unix timestamp is
-					// the only way Orbit_Notifier::cleanup_pending_phones()
-					// can reap abandoned signups.
-					update_user_meta( $user_id, 'orbit_phone_pending', $phone );
-					update_user_meta( $user_id, 'orbit_phone_pending_at', time() );
-				}
-
-				$is_new_account            = true;
-				$pending_auth_user_id      = (int) $user_id;
-				$pending_password_set_send = true;
-			}
-
-			// Subscription row.
-			$subscription_id = Orbit_Subscription::subscribe(
-				array(
-					'user_id'         => $user_id,
-					'profile_id'      => $profile->id,
-					'connection_note' => $connection_note,
-				)
-			);
-
-			if ( is_wp_error( $subscription_id ) ) {
-				throw new Orbit_Rolled_Back_Exception( $subscription_id );
-			}
-
-			Orbit_Notifier::get_or_create_preferences( $user_id );
-
-			// Consent ledger rows — one per channel the user consented to.
-			$email_result = Orbit_Consent::record(
-				$user_id,
-				'email',
-				'opt_in',
-				array(
-					'source'       => 'subscribe',
-					'cta_snapshot' => $cta_snapshot,
-				)
-			);
-			if ( is_wp_error( $email_result ) ) {
-				throw new Orbit_Rolled_Back_Exception( $email_result );
-			}
-
-			if ( $consent_sms ) {
-				$sms_result = Orbit_Consent::record(
+			try {
+				$email_result = Orbit_Consent::record(
 					$user_id,
-					'sms',
+					'email',
 					'opt_in',
 					array(
 						'source'       => 'subscribe',
 						'cta_snapshot' => $cta_snapshot,
 					)
 				);
-				if ( is_wp_error( $sms_result ) ) {
-					throw new Orbit_Rolled_Back_Exception( $sms_result );
+				if ( is_wp_error( $email_result ) ) {
+					throw new Orbit_Rolled_Back_Exception( $email_result );
 				}
-			}
 
-			$wpdb->query( 'COMMIT' );
-		} catch ( Orbit_Rolled_Back_Exception $e ) {
-			$wpdb->query( 'ROLLBACK' );
+				if ( $consent_sms ) {
+					$sms_result = Orbit_Consent::record(
+						$user_id,
+						'sms',
+						'opt_in',
+						array(
+							'source'       => 'subscribe',
+							'cta_snapshot' => $cta_snapshot,
+						)
+					);
+					if ( is_wp_error( $sms_result ) ) {
+						throw new Orbit_Rolled_Back_Exception( $sms_result );
+					}
+				}
 
-			// Evict the Orbit_Notifier preferences cache if a row was
-			// inserted before the throw. get_or_create_preferences()
-			// populates the static cache immediately after the INSERT —
-			// after ROLLBACK the row is gone but the cache entry would
-			// otherwise survive the request and serve a phantom hit on
-			// any retry. Guarded so we don't pass a WP_Error from a
-			// failed wp_create_user() through the int cast.
-			if ( is_int( $user_id ) && $user_id > 0 ) {
-				Orbit_Notifier::forget_preferences( $user_id );
-			}
+				$wpdb->query( 'COMMIT' );
+			} catch ( Orbit_Rolled_Back_Exception $e ) {
+				$wpdb->query( 'ROLLBACK' );
 
-			$inner_error = $e->wp_error;
-			$inner_code  = (string) $inner_error->get_error_code();
+				$inner_error = $e->wp_error;
+				$inner_code  = (string) $inner_error->get_error_code();
 
-			// Log the full inner error server-side. Raw MySQL fragments
-			// and third-party hook debug strings stay out of the anonymous
-			// REST response but remain available to operators (see todo 116).
-			error_log(
-				sprintf(
-					'[orbit] subscribe rolled back: code=%s message=%s data=%s',
+				error_log(
+					sprintf(
+						'[orbit] subscribe (existing user) rolled back: code=%s message=%s data=%s',
+						$inner_code,
+						$inner_error->get_error_message(),
+						wp_json_encode( $inner_error->get_error_data() )
+					)
+				);
+
+				return new WP_Error(
 					$inner_code,
-					$inner_error->get_error_message(),
-					wp_json_encode( $inner_error->get_error_data() )
+					__( "We couldn't complete your subscription. Please try again in a moment.", 'orbit' ),
+					array( 'status' => 500 )
+				);
+			} catch ( Throwable $e ) {
+				$wpdb->query( 'ROLLBACK' );
+				error_log( '[orbit] subscribe (existing user) unexpected throwable: ' . $e->getMessage() );
+
+				return new WP_Error(
+					'subscribe_failed',
+					__( "We couldn't complete your subscription. Please try again in a moment.", 'orbit' ),
+					array( 'status' => 500 )
+				);
+			}
+		} else {
+			// New-account branch: hand off the full user-creation envelope
+			// (wp_insert_user → multisite role attach → meta → consent rows)
+			// to Orbit_User_Provisioning so signup and subscribe share the
+			// same transactional boundary. Subscription row + notifier
+			// preferences are subscribe-specific and stay below.
+			$username = sanitize_user( strtolower( str_replace( ' ', '', $display_name ) ) . wp_rand( 100, 999 ) );
+
+			$consents = array(
+				'email' => array(
+					'state'        => 'opt_in',
+					'source'       => 'subscribe',
+					'cta_snapshot' => $cta_snapshot,
+				),
+			);
+			if ( $consent_sms ) {
+				$consents['sms'] = array(
+					'state'        => 'opt_in',
+					'source'       => 'subscribe',
+					'cta_snapshot' => $cta_snapshot,
+				);
+			}
+
+			$result = Orbit_User_Provisioning::create_user_with_consent(
+				array(
+					'user_login'    => $username,
+					'user_email'    => $email,
+					'display_name'  => sanitize_text_field( $display_name ),
+					'role'          => 'orbit_subscriber',
+					'phone_pending' => $phone,
+					// Subscribe has historically been no-retry — keep that
+					// behavior so the rollback path's response code shape
+					// matches what the existing tests expect.
+				),
+				$consents,
+				array(
+					// REST handler defers the welcome email via
+					// ActionScheduler after we return so the auth-cookie
+					// write happens first.
+					'send_welcome_email' => false,
 				)
 			);
 
-			// Preserve the original code so the client can branch, but
-			// substitute a generic, translated user-facing message.
-			return new WP_Error(
-				$inner_code,
-				__( "We couldn't complete your subscription. Please try again in a moment.", 'orbit' ),
-				array( 'status' => 500 )
-			);
-		} catch ( Throwable $e ) {
-			$wpdb->query( 'ROLLBACK' );
+			if ( is_wp_error( $result ) ) {
+				$inner_code = (string) $result->get_error_code();
 
-			if ( is_int( $user_id ) && $user_id > 0 ) {
-				Orbit_Notifier::forget_preferences( $user_id );
+				error_log(
+					sprintf(
+						'[orbit] subscribe rolled back: code=%s message=%s data=%s',
+						$inner_code,
+						$result->get_error_message(),
+						wp_json_encode( $result->get_error_data() )
+					)
+				);
+
+				return new WP_Error(
+					$inner_code,
+					__( "We couldn't complete your subscription. Please try again in a moment.", 'orbit' ),
+					array( 'status' => 500 )
+				);
 			}
 
-			error_log( '[orbit] subscribe unexpected throwable: ' . $e->getMessage() );
+			$user_id                   = (int) $result;
+			$is_new_account            = true;
+			$pending_auth_user_id      = $user_id;
+			$pending_password_set_send = true;
+		}
 
+		// Subscription row + notifier preferences run AFTER the provisioning
+		// transaction has committed (or after the existing-user consent
+		// transaction). For the new-account branch this means the user
+		// exists by the time we try to subscribe them; for the existing
+		// branch, the consent rows are already durable.
+		$subscription_id = Orbit_Subscription::subscribe(
+			array(
+				'user_id'         => $user_id,
+				'profile_id'      => $profile->id,
+				'connection_note' => $connection_note,
+			)
+		);
+
+		if ( is_wp_error( $subscription_id ) ) {
+			error_log(
+				sprintf(
+					'[orbit] subscribe row write failed post-provisioning: code=%s message=%s',
+					$subscription_id->get_error_code(),
+					$subscription_id->get_error_message()
+				)
+			);
 			return new WP_Error(
-				'subscribe_failed',
+				$subscription_id->get_error_code(),
 				__( "We couldn't complete your subscription. Please try again in a moment.", 'orbit' ),
 				array( 'status' => 500 )
 			);
 		}
+
+		Orbit_Notifier::get_or_create_preferences( $user_id );
 
 		// Side effects below run after COMMIT — they can't be rolled
 		// back, and we want them to fire only on the happy path.
