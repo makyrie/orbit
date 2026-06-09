@@ -137,6 +137,15 @@ class Orbit_Shortcodes {
 				<input type="email" id="orbit-signup-email" name="email" required autocomplete="email">
 				<span class="orbit-field-help"><?php esc_html_e( 'Used to send you activity notifications and a link to set your password.', 'orbit' ); ?></span>
 			</p>
+			<?php
+			// Phone capture + compliance disclosure + per-channel consent.
+			// Same building blocks the subscribe form uses (Phase 2b) so
+			// the rendered text and ledger snapshots agree across all
+			// opt-in surfaces.
+			echo self::render_phone_field( 'orbit-signup' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Returns pre-escaped HTML.
+			echo self::render_compliance_block(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Returns pre-escaped HTML.
+			echo self::render_consent_checkboxes( 'orbit-signup' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Returns pre-escaped HTML.
+			?>
 			<?php Orbit_Spam::render_traps(); ?>
 			<p>
 				<button type="submit" class="orbit-btn orbit-btn-primary"><?php esc_html_e( 'Create account', 'orbit' ); ?></button>

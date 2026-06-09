@@ -87,6 +87,7 @@ class OrbitRestSignupTest extends WP_UnitTestCase {
 				'email'           => 'new-signup-' . wp_rand( 100000, 999999 ) . '@example.test',
 				'orbit_url'       => '',
 				'orbit_form_init' => $default_init_ms,
+				'consent_email'   => true,
 			),
 			$overrides
 		);

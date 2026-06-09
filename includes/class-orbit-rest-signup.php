@@ -37,13 +37,25 @@ class Orbit_REST_Signup {
 				'callback'            => array( __CLASS__, 'handle_signup' ),
 				'permission_callback' => '__return_true',
 				'args'                => array(
-					'display_name' => array(
+					'display_name'  => array(
 						'required'          => true,
 						'sanitize_callback' => 'sanitize_text_field',
 					),
-					'email'        => array(
+					'email'         => array(
 						'required'          => true,
 						'sanitize_callback' => 'sanitize_email',
+					),
+					'phone'         => array(
+						'required'          => false,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'consent_email' => array(
+						'required'          => true,
+						'sanitize_callback' => 'rest_sanitize_boolean',
+					),
+					'consent_sms'   => array(
+						'required'          => false,
+						'sanitize_callback' => 'rest_sanitize_boolean',
 					),
 				),
 			)
@@ -91,8 +103,11 @@ class Orbit_REST_Signup {
 			);
 		}
 
-		$display_name = $request->get_param( 'display_name' );
-		$email        = $request->get_param( 'email' );
+		$display_name  = $request->get_param( 'display_name' );
+		$email         = $request->get_param( 'email' );
+		$phone         = trim( (string) $request->get_param( 'phone' ) );
+		$consent_email = (bool) $request->get_param( 'consent_email' );
+		$consent_sms   = (bool) $request->get_param( 'consent_sms' );
 
 		if ( ! is_email( $email ) ) {
 			return new WP_Error( 'invalid_email', __( 'Please enter a valid email address.', 'orbit' ), array( 'status' => 400 ) );
@@ -100,6 +115,20 @@ class Orbit_REST_Signup {
 
 		if ( '' === trim( (string) $display_name ) ) {
 			return new WP_Error( 'invalid_name', __( 'Please enter your name.', 'orbit' ), array( 'status' => 400 ) );
+		}
+
+		// Email consent is required to create an account that we'd
+		// otherwise send a password-set email to.
+		if ( ! $consent_email ) {
+			return new WP_Error( 'consent_required', __( 'You must agree to receive notifications by email to create an account.', 'orbit' ), array( 'status' => 400 ) );
+		}
+
+		if ( '' !== $phone && ! preg_match( '/^\+[1-9]\d{1,14}$/', $phone ) ) {
+			return new WP_Error( 'invalid_phone', __( 'Phone number must be in E.164 format, like +12025550123.', 'orbit' ), array( 'status' => 400 ) );
+		}
+
+		if ( $consent_sms && '' === $phone ) {
+			return new WP_Error( 'consent_sms_without_phone', __( 'To opt in to SMS, please provide a phone number.', 'orbit' ), array( 'status' => 400 ) );
 		}
 
 		// Email collision → tell the user clearly and offer a login link.
@@ -116,71 +145,120 @@ class Orbit_REST_Signup {
 			);
 		}
 
+		global $wpdb;
+
+		// Cache the disclosure the user agreed to. Stored verbatim on
+		// each consent ledger row — see Orbit_Shortcodes::compliance_
+		// disclosure_text() for the canonical source.
+		$cta_snapshot = Orbit_Shortcodes::compliance_disclosure_text();
+
 		// Build a unique username from the display name. Same shape as
 		// the subscribe flow: lowercased, spaces stripped, then a random
 		// 5-digit suffix. Username collisions are likely on multisite
 		// where usernames are network-wide; the post-check retry loop
-		// below also closes the race between `username_exists()` and
-		// `wp_insert_user()` when two requests share a base.
+		// below also closes the race between username_exists() and
+		// wp_insert_user() when two requests share a base.
 		$base     = sanitize_user( strtolower( str_replace( ' ', '', $display_name ) ), true );
 		$base     = '' !== $base ? $base : 'orbit-user';
 		$username = $base . wp_rand( 10000, 99999 );
 
-		$attempts = 0;
-		$user_id  = null;
-		do {
-			$user_id = wp_insert_user(
+		// Wrap user creation + ms-attach + meta + consent rows in a
+		// transaction so a partial failure can't leave a half-created
+		// account with no audit trail (or vice versa). Auth-cookie setup
+		// and the password-set email are deferred until after COMMIT —
+		// they can't be rolled back and we only want them on the happy
+		// path.
+		$wpdb->query( 'START TRANSACTION' );
+
+		try {
+			$attempts = 0;
+			$user_id  = null;
+			do {
+				$user_id = wp_insert_user(
+					array(
+						'user_login'   => $username,
+						'user_pass'    => wp_generate_password(),
+						'user_email'   => $email,
+						'display_name' => $display_name,
+						'role'         => 'subscriber',
+					)
+				);
+
+				if ( ! is_wp_error( $user_id ) ) {
+					break;
+				}
+
+				if ( 'existing_user_login' !== $user_id->get_error_code() ) {
+					throw new RuntimeException( $user_id->get_error_message() );
+				}
+
+				$username = $base . wp_rand( 10000, 99999 );
+				++$attempts;
+			} while ( $attempts < 5 );
+
+			if ( is_wp_error( $user_id ) ) {
+				$wpdb->query( 'ROLLBACK' );
+				return new WP_Error(
+					'user_creation_failed',
+					__( "We couldn't create your account right now. Please try again in a moment.", 'orbit' ),
+					array( 'status' => 503 )
+				);
+			}
+
+			// On multisite, wp_insert_user creates a network user with no
+			// role on the current sub-site — add_user_to_blog() attaches
+			// the subscriber role here. On single-site the function isn't
+			// loaded (ms-functions.php is multisite-only), and
+			// wp_insert_user has already set the role globally, so the
+			// call is unnecessary.
+			if ( is_multisite() ) {
+				add_user_to_blog( get_current_blog_id(), $user_id, 'subscriber' );
+			}
+
+			update_user_meta( $user_id, 'orbit_timezone', wp_timezone_string() );
+
+			if ( '' !== $phone ) {
+				update_user_meta( $user_id, 'orbit_phone_pending', $phone );
+			}
+
+			$email_consent = Orbit_Consent::record(
+				$user_id,
+				'email',
+				'opt_in',
 				array(
-					'user_login'   => $username,
-					'user_pass'    => wp_generate_password(),
-					'user_email'   => $email,
-					'display_name' => $display_name,
-					'role'         => 'subscriber',
+					'source'       => 'signup',
+					'cta_snapshot' => $cta_snapshot,
 				)
 			);
-
-			if ( ! is_wp_error( $user_id ) ) {
-				break;
+			if ( is_wp_error( $email_consent ) ) {
+				throw new RuntimeException( 'consent_email: ' . $email_consent->get_error_message() );
 			}
 
-			if ( 'existing_user_login' !== $user_id->get_error_code() ) {
-				return new WP_Error( 'user_creation_failed', $user_id->get_error_message(), array( 'status' => 500 ) );
+			if ( $consent_sms ) {
+				$sms_consent = Orbit_Consent::record(
+					$user_id,
+					'sms',
+					'opt_in',
+					array(
+						'source'       => 'signup',
+						'cta_snapshot' => $cta_snapshot,
+					)
+				);
+				if ( is_wp_error( $sms_consent ) ) {
+					throw new RuntimeException( 'consent_sms: ' . $sms_consent->get_error_message() );
+				}
 			}
 
-			$username = $base . wp_rand( 10000, 99999 );
-			++$attempts;
-		} while ( $attempts < 5 );
-
-		if ( is_wp_error( $user_id ) ) {
-			return new WP_Error(
-				'user_creation_failed',
-				__( "We couldn't create your account right now. Please try again in a moment.", 'orbit' ),
-				array( 'status' => 503 )
-			);
+			$wpdb->query( 'COMMIT' );
+		} catch ( Throwable $e ) {
+			$wpdb->query( 'ROLLBACK' );
+			return new WP_Error( 'signup_failed', $e->getMessage(), array( 'status' => 500 ) );
 		}
 
-		// On multisite, wp_insert_user creates a network user with no
-		// role on the current sub-site — add_user_to_blog() attaches the
-		// subscriber role here. On single-site the function isn't loaded
-		// (ms-functions.php is multisite-only), and wp_insert_user has
-		// already set the role globally, so the call is unnecessary.
-		if ( is_multisite() ) {
-			add_user_to_blog( get_current_blog_id(), $user_id, 'subscriber' );
-		}
-
-		// Default timezone — used when formatting "Subscribed Apr 17, 2026"
-		// type display strings (the orbit_timezone meta would be set
-		// elsewhere if we ever capture the user's actual TZ at signup).
-		update_user_meta( $user_id, 'orbit_timezone', wp_timezone_string() );
-
-		// Auto-log in so the next page render shows the signed-in state.
+		// Side effects below run after COMMIT — they can't be rolled back.
 		wp_clear_auth_cookie();
 		wp_set_current_user( $user_id );
 		wp_set_auth_cookie( $user_id, true );
-
-		// Send WP's standard "your account has been created" email with
-		// a password-set link. Lets the user come back later if they
-		// close the tab before finishing their profile.
 		wp_send_new_user_notifications( $user_id, 'user' );
 
 		return new WP_REST_Response(
