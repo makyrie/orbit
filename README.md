@@ -1,8 +1,12 @@
-# Orbit
+# Orbit / Perihelion
 
 Person-centric social activity tool for WordPress. Share what you're doing, let people subscribe, and coordinate lightweight going/maybe responses via SMS and email.
 
-Orbit is a WordPress plugin that provides the data layer, business logic, REST API, WP-CLI commands, and notification system. A companion FSE theme (separate repo) handles rendering.
+Orbit is the internal name of the WordPress plugin behind the public-facing
+**Perihelion** service. It owns the application data, business logic, REST API,
+WP-CLI commands, shortcode-rendered screens, consent records, and notification
+system. The companion [Perihelion block theme](https://github.com/bookchiq/perihelion-theme)
+provides the site shell and templates.
 
 ## How It Works
 
@@ -18,10 +22,10 @@ A **poster** creates a profile and shares a link. People who receive the link be
 
 ## Requirements
 
-- WordPress 6.4+
+- WordPress 6.4 minimum; WordPress 7.0.1 is the current development baseline
 - PHP 8.0+
 - Composer (for ActionScheduler dependency)
-- Twilio account (for SMS notifications)
+- Twilio account only when enabling phone verification or SMS notifications
 - Configured SMTP (for email notifications)
 
 ## Installation
@@ -35,9 +39,9 @@ A **poster** creates a profile and shares a link. People who receive the link be
 3. Activate the plugin in WordPress admin (Plugins > Activate)
 
 On activation, Orbit automatically:
-- Creates 7 custom database tables (`orbit_profiles`, `orbit_subscriptions`, `orbit_activities`, `orbit_responses`, `orbit_notification_preferences`, `orbit_notification_log`, `orbit_phone_verification`)
+- Creates eight custom database tables, including the append-only consent ledger
 - Registers two roles: `orbit_subscriber` and `orbit_poster`
-- Creates WordPress pages for all authenticated routes (Dashboard, Settings, Manage, etc.)
+- Creates application, sign-up, privacy-policy, and terms pages
 - Registers ActionScheduler recurring jobs
 
 ## Configuration
@@ -50,12 +54,16 @@ define( 'ORBIT_TWILIO_ACCOUNT_SID', 'your_account_sid' );
 define( 'ORBIT_TWILIO_AUTH_TOKEN', 'your_auth_token' );
 define( 'ORBIT_TWILIO_FROM_NUMBER', '+1234567890' );
 
-// Optional (shown with defaults)
-define( 'ORBIT_NOTIFICATION_LOG_RETENTION', 90 );   // Days to keep notification logs
-define( 'ORBIT_DEFAULT_DIGEST_TIME', '18:00' );      // Default digest delivery time
-define( 'ORBIT_PHONE_VERIFY_EXPIRY', 600 );           // Verification code TTL in seconds
-define( 'ORBIT_PHONE_VERIFY_MAX_ATTEMPTS', 3 );       // Max code entry attempts
-define( 'ORBIT_RATE_LIMIT_SUBSCRIBE', 5 );             // Subscription requests per IP per hour
+// Recommended stable salt for consent-ledger IP hashing. If omitted, Orbit
+// generates and stores a per-site salt during activation.
+define( 'ORBIT_CONSENT_IP_SALT', 'generate-a-long-random-secret' );
+
+// Optional hard stop for subscriber SMS delivery.
+define( 'ORBIT_SMS_ENABLED', false );
+
+// Optional public messaging identity.
+define( 'ORBIT_MESSAGING_BRAND', 'Perihelion' );
+define( 'ORBIT_MESSAGING_SUPPORT', 'support@example.com' );
 ```
 
 ## Getting Started
@@ -73,7 +81,7 @@ wp orbit status --format=json
 This returns a system overview: table counts, configuration state, Twilio/SMTP status, and recent activity. If the tables were created correctly, all counts will be 0.
 
 Or check manually:
-- In phpMyAdmin or your DB client, look for 7 tables prefixed with `wp_orbit_`
+- In phpMyAdmin or your DB client, look for eight tables prefixed with `wp_orbit_`
 - In WordPress admin > Users, the Roles dropdown should show "Orbit Subscriber" and "Orbit Poster"
 
 ### 2. Create a Poster Profile
@@ -94,7 +102,7 @@ The `create` command returns the profile as JSON, including the generated `share
 
 The poster shares their link however they like -- text, email, QR code, etc. When someone visits the link:
 
-1. If not logged in: they create a WordPress account (name, email, password, optional phone)
+1. If not logged in: they create a WordPress account with name and email, plus an optional phone; Orbit generates the initial credential and emails the standard account link after the transaction commits
 2. If already logged in: the form is pre-filled, just confirm
 3. They can add a connection note ("How do you know this person?")
 4. If the poster requires approval, the subscription starts as `pending`
@@ -150,11 +158,14 @@ These WordPress pages are created on activation with shortcodes:
 | Path | Role Required | Shortcode |
 |------|--------------|-----------|
 | `/dashboard` | Subscriber | `[orbit_dashboard]` |
-| `/dashboard/settings` | Any logged-in user | `[orbit_settings]` |
+| `/settings` | Any logged-in user | `[orbit_settings]` |
+| `/subscriptions` | Subscriber | `[orbit_my_subscriptions]` |
 | `/manage` | Poster | `[orbit_manage]` |
-| `/manage/new` | Poster | `[orbit_new_activity]` |
-| `/manage/subscribers` | Poster | `[orbit_subscribers]` |
-| `/manage/profile` | Poster | `[orbit_edit_profile]` |
+| `/new-activity` | Poster | `[orbit_new_activity]` |
+| `/edit-activity` | Poster | `[orbit_edit_activity]` |
+| `/subscribers` | Poster | `[orbit_subscribers]` |
+| `/edit-profile` | Poster | `[orbit_edit_profile]` |
+| `/sign-up` | Public | `[orbit_sign_up]` |
 
 ## Notifications
 
@@ -162,8 +173,8 @@ These WordPress pages are created on activation with shortcodes:
 
 When an activity is created, the system checks each approved subscriber's notification preferences for that tier:
 
-1. **SMS** -- sent immediately via Twilio. Message includes a one-tap action token link.
-2. **Email** -- sent immediately via `wp_mail()`. HTML + plain text with RSVP links.
+1. **SMS** -- when enabled, sent via Twilio with an action-token link. SMS preferences are coerced to email while the runtime flag is off.
+2. **Email** -- sent immediately via `wp_mail()` with RSVP links.
 3. **Digest** -- batched into the subscriber's next daily digest email.
 4. **None** -- no notification sent.
 
@@ -193,6 +204,7 @@ Before SMS notifications work, subscribers must verify their phone number:
 Orbit handles incoming Twilio messages at `POST /wp-json/orbit/v1/twilio/incoming`:
 - **STOP** -- opts user out of all SMS (TCPA compliance)
 - **START** -- re-enables SMS notifications
+- **HELP** -- returns support details and an opt-out reminder
 
 ## REST API
 
@@ -203,6 +215,7 @@ All endpoints are under `/wp-json/orbit/v1/`.
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
 | POST | `/subscribe` | Subscribe with valid `share_token` |
+| POST | `/signup` | Create a branded Perihelion account |
 | POST | `/unsubscribe` | Unsubscribe with `subscription_secret` |
 | POST | `/respond` | RSVP via action token |
 | POST | `/twilio/incoming` | Twilio webhook (signature validated) |
@@ -215,8 +228,11 @@ All endpoints are under `/wp-json/orbit/v1/`.
 | GET | `/subscriptions` | List current user's subscriptions |
 | POST | `/respond` | RSVP as logged-in user |
 | DELETE | `/respond` | Remove a response |
+| DELETE | `/subscriptions/{id}` | Unsubscribe the current user |
 | PATCH | `/preferences` | Update notification preferences |
-| POST | `/verify-phone` | Submit phone verification code |
+| GET/POST | `/verify-phone` | Read phone state, send or verify a code |
+| POST | `/profiles/me` | Create the current user's poster profile |
+| POST | `/me/dismiss-onboarding-banner` | Persist banner dismissal |
 
 ### Poster (orbit_poster role)
 
@@ -317,13 +333,13 @@ wp orbit notification log --user_id=2 --method=sms --status=failed
 
 ## Token System
 
-Orbit uses three types of tokens:
+Orbit uses three primary token types:
 
 | Token | Format | Purpose | Lifetime |
 |-------|--------|---------|----------|
 | Share token | 32-char random string | Subscription links | Until regenerated |
-| Subscription secret | 32-char random string | Unsubscribe links, action token seed | Permanent per subscription |
-| Action token | HMAC-SHA256 | No-login RSVP links in notifications | 7 days after activity date (30 days if dateless) |
+| Subscription secret | Random lookup secret | Legacy identifier and action-token seed | Permanent per subscription |
+| Action/unsubscribe token | Versioned HMAC-SHA256 token with embedded lookup key | No-login RSVP and unsubscribe links | Action-dependent expiry |
 
 ## Privacy and Visibility
 
@@ -342,13 +358,19 @@ Orbit uses ActionScheduler for async processing:
 | Job | Schedule | Purpose |
 |-----|----------|---------|
 | `orbit_send_immediate_notification` | One-off per activity | Route and send SMS/email |
-| `orbit_send_daily_digest` | Recurring per user | Compile and send digest at preferred time |
+| `orbit_dispatch_activity_notifications` | One-off per activity | Fan out work in bounded batches |
+| `orbit_send_daily_digest` | One-off per user | Send the next digest at the preferred time |
 | `orbit_mark_past_activities` | Daily | Mark activities with past dates as `past` |
 | `orbit_cleanup_notification_log` | Weekly | Prune old notification log entries |
+| `orbit_cleanup_phone_verification` | Daily | Remove expired verification records |
+| `orbit_cleanup_pending_phones` | Daily | Remove abandoned unverified phone metadata |
+| `orbit_send_new_user_notification` | One-off per new user | Send account email after provisioning commits |
 
 ## Database
 
-Orbit creates 7 custom tables (all prefixed with `$wpdb->prefix`):
+Orbit creates eight custom tables. Seven are site-scoped with `$wpdb->prefix`;
+the consent ledger uses `$wpdb->base_prefix` on multisite so its audit chain
+follows the network-wide WordPress user identity.
 
 - `orbit_profiles` -- poster accounts with slug, share token, approval setting
 - `orbit_subscriptions` -- user-to-poster relationships with status lifecycle
@@ -357,11 +379,14 @@ Orbit creates 7 custom tables (all prefixed with `$wpdb->prefix`):
 - `orbit_notification_preferences` -- per-user tier routing and digest timing
 - `orbit_notification_log` -- sent notification records for deduplication and debugging
 - `orbit_phone_verification` -- verification codes with expiry and attempt tracking
+- `orbit_consent_ledger` -- append-only, hash-chained email/SMS consent evidence
 
-Additionally, three `wp_usermeta` entries per user:
+Important `wp_usermeta` entries include:
 - `orbit_phone` -- E.164 phone number
 - `orbit_phone_verified` -- 1 or 0
 - `orbit_timezone` -- IANA timezone string
+- `orbit_phone_pending` / `orbit_phone_pending_at` -- unverified phone candidate and retention timestamp
+- `orbit_dashboard_banner_dismissed` -- per-user onboarding state
 
 ## Roles and Capabilities
 
@@ -380,7 +405,10 @@ Users can hold both roles simultaneously. Subscribing adds `orbit_subscriber`; b
 vendor/bin/phpunit
 ```
 
-Runs 30 tests covering token security, subscription lifecycle, response idempotency, and notification routing.
+The integration suite covers provisioning transactions, consent-chain safety,
+REST flows, token security, subscription lifecycle, notifications, privacy, and
+WP-CLI behavior. Set `WP_TESTS_DIR` if the WordPress test library is not in the
+default temporary or Composer location.
 
 ### Project Structure
 
@@ -399,19 +427,24 @@ orbit/
     class-orbit-notifier.php   # Notification dispatch and digest
     class-orbit-twilio.php     # Twilio API wrapper
     class-orbit-phone-verify.php # Phone verification flow
-    class-orbit-rest-api.php   # REST API base + public routes
+    class-orbit-rest-api.php   # REST API composition root
     class-orbit-rest-subscription.php
     class-orbit-rest-activity.php
     class-orbit-rest-profile.php
     class-orbit-rest-notification.php
+    class-orbit-rest-signup.php
+    class-orbit-user-provisioning.php
+    class-orbit-consent.php
+    class-orbit-compliance-ui.php
     class-orbit-rate-limiter.php
     class-orbit-routes.php     # Custom rewrite rules
-    class-orbit-shortcodes.php # All 10 shortcodes
+    class-orbit-shortcodes.php # Public and authenticated application screens
   cli/
-    class-orbit-cli-*.php      # 7 WP-CLI command classes
+    class-orbit-cli-*.php      # Resource, signup, status, and consent commands
   tests/
     OrbitTokenTest.php
     OrbitSubscriptionTest.php
     OrbitResponseTest.php
     OrbitNotifierTest.php
+    OrbitTransactionSafetyCanaryTest.php
 ```

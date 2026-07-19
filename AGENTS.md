@@ -2,11 +2,58 @@
 
 ## Overview
 
-<!-- Describe the plugin's purpose and architecture here. -->
+Orbit is the WordPress plugin behind **Perihelion**, a person-centric social
+activity service. Posters publish activities at one of three commitment tiers;
+people subscribe to a poster, receive email, digest, or optional SMS
+notifications, and respond “going” or “maybe” without a separate app. “Orbit”
+is the internal code, database, REST, shortcode, and WP-CLI namespace;
+“Perihelion” is the public-facing brand.
+
+The plugin is the application layer. It owns roles and capabilities, eight
+custom tables, account provisioning, REST endpoints, virtual routes,
+shortcode-rendered screens, notification scheduling/delivery, Twilio
+integration, privacy, and consent evidence. The separate Perihelion block theme
+provides the site shell and templates; this repository contains the frontend
+CSS and JavaScript used by plugin forms and app screens.
+
+### Source map
+
+- `orbit.php` is the bootstrap and composition root.
+- `includes/class-orbit-{profile,activity,subscription,response}.php` contain
+  domain CRUD; `class-orbit-user-provisioning.php` centralizes account creation.
+- `includes/class-orbit-rest-*.php` expose the `orbit/v1` API.
+- `includes/class-orbit-routes.php` owns virtual public pages; shortcodes render
+  those pages and the authenticated application screens.
+- `includes/class-orbit-notifier.php`, `class-orbit-twilio.php`, and
+  `class-orbit-phone-verify.php` own asynchronous notification delivery.
+- `includes/class-orbit-consent.php`, `class-orbit-compliance-ui.php`, and
+  `class-orbit-privacy.php` own compliance evidence, policy UI, and deletion.
+- `includes/class-orbit-activator.php` creates the schema and required pages.
+  The consent ledger is network-scoped on multisite; other tables are per-site.
+- `cli/` contains operational commands; `tests/` is a WordPress PHPUnit
+  integration suite.
+
+### Documentation map
+
+- `README.md` is the current operator and developer guide.
+- `docs/README.md` classifies current guidance, strategy, historical plans, and
+  dated audit artifacts.
+- Website direction lives in `docs/content-architecture.md`,
+  `creative-direction.md`, `design-system.md`, and `brand-brief.md`.
+- Canonical legal prose lives in `docs/compliance/` and is duplicated in
+  `Orbit_Activator`. Keep the copies byte-equivalent with `composer policy-diff`
+  and bump `ORBIT_VERSION` whenever policy prose changes.
 
 ## Development Guidelines
 
-<!-- Add project-specific development instructions here. -->
+- Treat `README.md` and current code as authoritative for implemented behavior;
+  `docs/plans/`, `docs/refs/orbit-v1-spec.md`, and punch lists preserve earlier
+  decisions and observations and may describe superseded states.
+- User-facing copy is spread across shortcodes, compliance UI, REST responses,
+  email/SMS builders, JavaScript, and the companion theme. Search all relevant
+  surfaces before changing terminology.
+- Run focused PHPUnit coverage for behavioral changes and `composer
+  policy-diff` for any compliance-copy change.
 
 ## Transactional Boundaries
 
