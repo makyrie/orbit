@@ -43,18 +43,59 @@ class Orbit_Routes {
 	 * Redirect superseded policy slugs to Orbit's canonical pages.
 	 */
 	public static function redirect_legacy_policy_urls() {
-		$path = trim( (string) wp_parse_url( isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '', PHP_URL_PATH ), '/' );
+		$destination = self::legacy_policy_destination(
+			isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '',
+			home_url( '/' )
+		);
+
+		if ( ! $destination ) {
+			return;
+		}
+
+		$kind = '/privacy/' === $destination ? 'privacy' : 'terms';
+		if ( ! self::is_owned_canonical_policy_page( $kind ) ) {
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			error_log( sprintf( 'Orbit_Routes: legacy policy redirect skipped because /%s/ is not a published Orbit-owned canonical page.', $kind ) );
+			return;
+		}
+
+		wp_safe_redirect( home_url( $destination ), 301 );
+		exit;
+	}
+
+	/**
+	 * Whether a canonical policy destination is safe to expose via redirect.
+	 *
+	 * @param string $kind Privacy or terms.
+	 * @return bool
+	 */
+	public static function is_owned_canonical_policy_page( $kind ) {
+		$page = get_page_by_path( $kind, OBJECT, 'page' );
+		return $page
+			&& 'publish' === $page->post_status
+			&& $kind === (string) get_post_meta( $page->ID, '_orbit_code_owned_page', true )
+			&& $kind === (string) get_post_meta( $page->ID, '_orbit_canonical_compliance', true );
+	}
+
+	/**
+	 * Resolve a request URI to a canonical policy path.
+	 *
+	 * @param string $request_uri Request URI, including an optional query.
+	 * @param string $site_home   Site home URL, possibly in a subdirectory.
+	 * @return string Empty string or the canonical root-relative path.
+	 */
+	public static function legacy_policy_destination( $request_uri, $site_home ) {
+		$path      = trim( (string) wp_parse_url( $request_uri, PHP_URL_PATH ), '/' );
+		$home_path = trim( (string) wp_parse_url( $site_home, PHP_URL_PATH ), '/' );
+		if ( $home_path && ( $path === $home_path || 0 === strpos( $path, $home_path . '/' ) ) ) {
+			$path = ltrim( substr( $path, strlen( $home_path ) ), '/' );
+		}
 		$destinations = array(
 			'privacy-policy'       => '/privacy/',
 			'terms-and-conditions' => '/terms/',
 		);
 
-		if ( ! isset( $destinations[ $path ] ) ) {
-			return;
-		}
-
-		wp_safe_redirect( home_url( $destinations[ $path ] ), 301 );
-		exit;
+		return isset( $destinations[ $path ] ) ? $destinations[ $path ] : '';
 	}
 
 	/**

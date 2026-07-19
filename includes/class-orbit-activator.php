@@ -19,7 +19,9 @@ class Orbit_Activator {
 	 */
 	public static function activate() {
 		self::create_tables();
-		self::create_pages();
+		if ( self::create_pages() ) {
+			update_option( 'orbit_content_version', ORBIT_VERSION, false );
+		}
 		self::seed_consent_ip_salt();
 	}
 
@@ -242,8 +244,11 @@ class Orbit_Activator {
 	 *
 	 * These pages use shortcodes registered by the plugin to render dynamic content.
 	 * The theme's FSE templates handle the outer layout.
+	 *
+	 * @return bool Whether every code-owned public page verified successfully.
 	 */
 	public static function create_pages() {
+		$release_succeeded = true;
 		$pages = array(
 			'dashboard'     => array(
 				'title'    => 'Dashboard',
@@ -344,6 +349,7 @@ class Orbit_Activator {
 				if ( $owned_kind && ! self::may_manage_page( $existing, $owned_kind ) ) {
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 					error_log( sprintf( 'Orbit_Activator: refusing to overwrite unowned page at "/%s/" (page_id=%d).', $slug, $page_id ) );
+					$release_succeeded = false;
 					continue;
 				}
 			} else {
@@ -384,17 +390,33 @@ class Orbit_Activator {
 			}
 
 			if ( ! $page_id || is_wp_error( $page_id ) ) {
+				if ( $owned_kind ) {
+					$release_succeeded = false;
+				}
 				continue;
 			}
 
 			if ( $owned_kind ) {
-				wp_update_post( array(
-					'ID'           => $page_id,
-					'post_title'   => $page_data['title'],
-					'post_content' => $page_data['content'],
-					'post_status'  => 'publish',
-				) );
-				update_post_meta( $page_id, '_orbit_code_owned_page', $owned_kind );
+				$current_page = get_post( $page_id );
+				if ( ! $current_page
+					|| 'publish' !== $current_page->post_status
+					|| $page_data['title'] !== $current_page->post_title
+					|| $page_data['content'] !== $current_page->post_content
+				) {
+					$updated_page_id = wp_update_post( array(
+						'ID'           => $page_id,
+						'post_title'   => $page_data['title'],
+						'post_content' => $page_data['content'],
+						'post_status'  => 'publish',
+					), true );
+					if ( is_wp_error( $updated_page_id ) || ! $updated_page_id ) {
+						$release_succeeded = false;
+						continue;
+					}
+				}
+				if ( $owned_kind !== (string) get_post_meta( $page_id, '_orbit_code_owned_page', true ) ) {
+					update_post_meta( $page_id, '_orbit_code_owned_page', $owned_kind );
+				}
 			}
 
 			// Always upsert declared meta on every activation so values like
@@ -404,7 +426,9 @@ class Orbit_Activator {
 			// not.
 			if ( ! empty( $page_data['meta'] ) ) {
 				foreach ( $page_data['meta'] as $meta_key => $meta_value ) {
-					update_post_meta( $page_id, $meta_key, $meta_value );
+					if ( (string) $meta_value !== (string) get_post_meta( $page_id, $meta_key, true ) ) {
+						update_post_meta( $page_id, $meta_key, $meta_value );
+					}
 				}
 			}
 
@@ -443,6 +467,7 @@ class Orbit_Activator {
 							$canonical_kind
 						)
 					);
+					$release_succeeded = false;
 				} else {
 					// Stamp the ownership marker on existing pages too —
 					// newly inserted pages already received it via
@@ -453,7 +478,34 @@ class Orbit_Activator {
 					update_option( $option_key, (int) $page_id, false );
 				}
 			}
+
+			if ( $owned_kind ) {
+				$published_page = get_post( $page_id );
+				if ( ! $published_page
+					|| 'publish' !== $published_page->post_status
+					|| $page_data['title'] !== $published_page->post_title
+					|| $page_data['content'] !== $published_page->post_content
+					|| $owned_kind !== (string) get_post_meta( $page_id, '_orbit_code_owned_page', true )
+				) {
+					$release_succeeded = false;
+				}
+				foreach ( isset( $page_data['meta'] ) ? $page_data['meta'] : array() as $meta_key => $meta_value ) {
+					if ( (string) $meta_value !== (string) get_post_meta( $page_id, $meta_key, true ) ) {
+						$release_succeeded = false;
+					}
+				}
+				if ( $is_canonical ) {
+					$option_key = 'privacy' === $canonical_kind ? 'orbit_privacy_page_id' : 'orbit_terms_page_id';
+					if ( $canonical_kind !== (string) get_post_meta( $page_id, '_orbit_canonical_compliance', true )
+						|| (int) $page_id !== (int) get_option( $option_key, 0 )
+					) {
+						$release_succeeded = false;
+					}
+				}
+			}
 		}
+
+		return $release_succeeded;
 	}
 
 	/**
@@ -483,20 +535,41 @@ class Orbit_Activator {
 
 	/** @return string */
 	protected static function why_page_content() {
-		return '<!-- wp:paragraph {"fontSize":"lead"} --><p class="has-lead-font-size">Most apps designed to bring people together are also designed, more quietly, to keep you on the app. Perihelion is for the simpler thing: making it easier to ask your friends to do something together.</p><!-- /wp:paragraph -->\n\n<!-- wp:paragraph --><p>Inviting is asymmetric work. The friend who plans things notices nobody has seen each other in a while, picks the place, sends the text, and fields the half-replies. Group chats reward the loud; event platforms turn casual hangs into productions; calendar invites are for meetings.</p><!-- /wp:paragraph -->\n\n<!-- wp:paragraph --><p>Perihelion makes one structural choice and lets it ripple: friends opt in once, on their own terms. Every later invitation is something they already agreed to receive. The organizer is freed from feeling like a burden, and the invited friend can decline simply by saying nothing.</p><!-- /wp:paragraph -->\n\n<!-- wp:paragraph --><p>There is no feed to scroll, no streak to maintain, and no discovery engine. Notifications arrive by email, immediately or in a daily digest. SMS is planned, but it will stay off until the service is approved to send it responsibly. When the plan has been made, the right thing to do is close the tab.</p><!-- /wp:paragraph -->\n\n<!-- wp:paragraph --><p>It works for old friends and for newer friendships that need a little room to grow. Inviting somebody you barely know to do something casual is one of the highest-friction asks in adult life. Reducing that friction is a good in itself.</p><!-- /wp:paragraph -->\n\n<!-- wp:paragraph --><p>Perihelion is a small, open-source, non-commercial utility built by Sarah Lewis. It does not run ads or sell your data. If it helps you see your friends more often, that is enough.</p><!-- /wp:paragraph -->\n\n<!-- wp:buttons --><div class="wp-block-buttons"><!-- wp:button --><div class="wp-block-button"><a class="wp-block-button__link wp-element-button" href="/sign-up/">Set up your profile</a></div><!-- /wp:button --></div><!-- /wp:buttons -->';
+		return <<<'HTML'
+<!-- wp:paragraph {"fontSize":"lead"} --><p class="has-lead-font-size">Most apps designed to bring people together are also designed, more quietly, to keep you on the app. Perihelion is for the simpler thing: making it easier to ask your friends to do something together.</p><!-- /wp:paragraph -->
+
+<!-- wp:paragraph --><p>Inviting is asymmetric work. The friend who plans things notices nobody has seen each other in a while, picks the place, sends the text, and fields the half-replies. Group chats reward the loud; event platforms turn casual hangs into productions; calendar invites are for meetings.</p><!-- /wp:paragraph -->
+
+<!-- wp:paragraph --><p>Perihelion makes one structural choice and lets it ripple: friends opt in once, on their own terms. Every later invitation is something they already agreed to receive. The organizer is freed from feeling like a burden, and the invited friend can decline simply by saying nothing.</p><!-- /wp:paragraph -->
+
+<!-- wp:paragraph --><p>There is no feed to scroll, no streak to maintain, and no discovery engine. Notifications arrive by email, immediately or in a daily digest. SMS is planned, but it will stay off until the service is approved to send it responsibly. When the plan has been made, the right thing to do is close the tab.</p><!-- /wp:paragraph -->
+
+<!-- wp:paragraph --><p>It works for old friends and for newer friendships that need a little room to grow. Inviting somebody you barely know to do something casual is one of the highest-friction asks in adult life. Reducing that friction is a good in itself.</p><!-- /wp:paragraph -->
+
+<!-- wp:paragraph --><p>Perihelion is a small, open-source, non-commercial utility built by Sarah Lewis. It does not run ads or sell your data. If it helps you see your friends more often, that is enough.</p><!-- /wp:paragraph -->
+
+<!-- wp:buttons --><div class="wp-block-buttons"><!-- wp:button --><div class="wp-block-button"><a class="wp-block-button__link wp-element-button" href="/sign-up/">Set up your profile</a></div><!-- /wp:button --></div><!-- /wp:buttons -->
+HTML;
 	}
 
 	/** @return string */
 	protected static function contact_page_content() {
-		return '<!-- wp:paragraph {"fontSize":"lead"} --><p class="has-lead-font-size">Perihelion is a small project run by Sarah Lewis. Email <a href="mailto:sarah@perihelion.social">sarah@perihelion.social</a> with questions about your account, privacy, notifications, or the service.</p><!-- /wp:paragraph -->\n\n<!-- wp:paragraph --><p>I usually reply within a few days. Please do not send passwords, verification codes, or other secrets by email.</p><!-- /wp:paragraph -->\n\n<!-- wp:heading --><h2 class="wp-block-heading">Technical issues</h2><!-- /wp:heading -->\n\n<!-- wp:paragraph --><p>If you have found a reproducible bug or want to follow development, open an issue in the <a href="https://github.com/makyrie/orbit/issues">Orbit GitHub repository</a>. For anything involving personal information, email instead.</p><!-- /wp:paragraph -->';
+		return <<<'HTML'
+<!-- wp:paragraph {"fontSize":"lead"} --><p class="has-lead-font-size">Perihelion is a small project run by Sarah Lewis. Email <a href="mailto:sarah@perihelion.social">sarah@perihelion.social</a> with questions about your account, privacy, notifications, or the service.</p><!-- /wp:paragraph -->
+
+<!-- wp:paragraph --><p>I usually reply within a few days. Please do not send passwords, verification codes, or other secrets by email.</p><!-- /wp:paragraph -->
+
+<!-- wp:heading --><h2 class="wp-block-heading">Technical issues</h2><!-- /wp:heading -->
+
+<!-- wp:paragraph --><p>If you have found a reproducible bug or want to follow development, open an issue in the <a href="https://github.com/makyrie/orbit/issues">Orbit GitHub repository</a>. For anything involving personal information, email instead.</p><!-- /wp:paragraph -->
+HTML;
 	}
 
 	/**
 	 * Build post_content for the /privacy/ or /terms/ page.
 	 *
-	 * Stored as Gutenberg block markup so admins can edit via the block
-	 * editor after activation. Headings and paragraphs only — no fancy
-	 * layout — so the active theme controls typography.
+	 * Stored as Gutenberg block markup. Orbit republishes this code-owned
+	 * content on upgrade; the active theme controls its typography.
 	 *
 	 * Canonical source: docs/compliance/{privacy-policy,terms-of-service}.md.
 	 * When the published copy changes, update both this method AND the

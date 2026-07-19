@@ -41,7 +41,7 @@ A **poster** creates a profile and shares a link. People who receive the link be
 On activation, Orbit automatically:
 - Creates eight custom database tables, including the append-only consent ledger
 - Registers two roles: `orbit_subscriber` and `orbit_poster`
-- Creates code-owned Sign Up, Why, Contact, Privacy, and Terms pages alongside the application pages
+- Creates the Sign Up page plus code-owned Why, Contact, Privacy, and Terms pages alongside the application pages
 - Registers ActionScheduler recurring jobs
 
 ## Configuration

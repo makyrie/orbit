@@ -27,7 +27,7 @@ class OrbitActivatorPublicPagesTest extends WP_UnitTestCase {
 	}
 
 	public function test_creates_and_republishes_owned_public_pages() {
-		Orbit_Activator::create_pages();
+		$this->assertTrue( Orbit_Activator::create_pages() );
 
 		$why     = get_page_by_path( 'why' );
 		$contact = get_page_by_path( 'contact' );
@@ -36,9 +36,11 @@ class OrbitActivatorPublicPagesTest extends WP_UnitTestCase {
 		$this->assertSame( 'contact', get_post_meta( $contact->ID, '_orbit_code_owned_page', true ) );
 		$this->assertStringContainsString( '/sign-up/', $why->post_content );
 		$this->assertStringContainsString( 'sarah@perihelion.social', $contact->post_content );
+		$this->assertStringNotContainsString( '\\n', $why->post_content );
+		$this->assertStringNotContainsString( '\\n', $contact->post_content );
 
 		wp_update_post( array( 'ID' => $contact->ID, 'post_content' => 'editor drift' ) );
-		Orbit_Activator::create_pages();
+		$this->assertTrue( Orbit_Activator::create_pages() );
 
 		$this->assertStringContainsString( 'sarah@perihelion.social', get_post( $contact->ID )->post_content );
 		$this->assertStringNotContainsString( 'editor drift', get_post( $contact->ID )->post_content );
@@ -53,7 +55,7 @@ class OrbitActivatorPublicPagesTest extends WP_UnitTestCase {
 			'post_content' => 'Do not replace me.',
 		) );
 
-		Orbit_Activator::create_pages();
+		$this->assertFalse( Orbit_Activator::create_pages() );
 
 		$this->assertSame( 'Do not replace me.', get_post( $page_id )->post_content );
 		$this->assertSame( '', get_post_meta( $page_id, '_orbit_code_owned_page', true ) );
@@ -71,5 +73,18 @@ class OrbitActivatorPublicPagesTest extends WP_UnitTestCase {
 
 		$this->assertSame( 'why', get_post_meta( $page_id, '_orbit_code_owned_page', true ) );
 		$this->assertStringContainsString( '/sign-up/', get_post( $page_id )->post_content );
+	}
+
+	public function test_refuses_unfingerprinted_legacy_why_page() {
+		$page_id = self::factory()->post->create( array(
+			'post_type'    => 'page',
+			'post_status'  => 'publish',
+			'post_name'    => 'why',
+			'post_content' => 'An unrelated essay.',
+		) );
+
+		$this->assertFalse( Orbit_Activator::create_pages() );
+		$this->assertSame( 'An unrelated essay.', get_post( $page_id )->post_content );
+		$this->assertSame( '', get_post_meta( $page_id, '_orbit_code_owned_page', true ) );
 	}
 }

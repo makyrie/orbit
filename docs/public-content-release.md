@@ -4,7 +4,7 @@ Orbit owns the database-backed bodies for `/why/`, `/contact/`, `/privacy/`, and
 
 ## Ownership and collision safety
 
-`Orbit_Activator::create_pages()` marks each managed page with `_orbit_code_owned_page`. A release updates the title, body, and publication state only when that marker matches the expected page kind. The canonical policy pages also retain `_orbit_canonical_compliance` and their option-backed page IDs for consent records.
+`Orbit_Activator::create_pages()` marks each managed page with `_orbit_code_owned_page`. A release updates the title, body, and publication state only when that marker matches the expected page kind. The canonical policy pages also retain `_orbit_canonical_compliance` and their option-backed page IDs for consent records. Orbit records `orbit_content_version` only after every owned page and its required metadata verify successfully, independently of the database-schema version.
 
 The production Why essay predates ownership metadata. Orbit recognizes that one legacy body by two distinctive phrases, adopts it once, and stamps the normal marker. Any other page occupying a managed slug is left untouched and logged for manual reconciliation.
 
