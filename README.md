@@ -41,7 +41,7 @@ A **poster** creates a profile and shares a link. People who receive the link be
 On activation, Orbit automatically:
 - Creates eight custom database tables, including the append-only consent ledger
 - Registers two roles: `orbit_subscriber` and `orbit_poster`
-- Creates application, sign-up, privacy-policy, and terms pages
+- Creates the Sign Up page plus code-owned Why, Contact, Privacy, and Terms pages alongside the application pages
 - Registers ActionScheduler recurring jobs
 
 ## Configuration
@@ -61,9 +61,10 @@ define( 'ORBIT_CONSENT_IP_SALT', 'generate-a-long-random-secret' );
 // Optional hard stop for subscriber SMS delivery.
 define( 'ORBIT_SMS_ENABLED', false );
 
-// Optional public messaging identity.
+// Optional public messaging identity. The support address defaults to
+// sarah@perihelion.social for the Perihelion deployment.
 define( 'ORBIT_MESSAGING_BRAND', 'Perihelion' );
-define( 'ORBIT_MESSAGING_SUPPORT', 'support@example.com' );
+define( 'ORBIT_MESSAGING_SUPPORT', 'sarah@perihelion.social' );
 ```
 
 ## Getting Started

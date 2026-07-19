@@ -1,6 +1,6 @@
 # Privacy Policy
 
-_Last updated: June 8, 2026 · Version: 1.7.0_
+_Last updated: July 18, 2026 · Version: 1.8.0_
 
 This Privacy Policy describes how Perihelion ("we", "us", "our") collects, uses, and shares information about you when you use perihelion.social and our notification services (the "Service").
 
@@ -72,4 +72,4 @@ We may revise this Policy. The "Last updated" date at the top of this page refle
 
 ## Contact
 
-For privacy questions, opt-out requests, or to exercise the rights above, contact us at the support address shown in your account settings.
+For privacy questions, opt-out requests, or to exercise the rights above, email [sarah@perihelion.social](mailto:sarah@perihelion.social).

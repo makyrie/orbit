@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Perihelion
  * Description: Person-centric social activity tool. Subscribe to people, get notified about their activities, respond with lightweight going/maybe actions.
- * Version:     1.7.0
+ * Version:     1.8.0
  * Author:      Perihelion
  * License:     GPL-2.0-or-later
  * Text Domain: orbit
@@ -17,7 +17,7 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Plugin constants.
  */
-define( 'ORBIT_VERSION', '1.7.0' );
+define( 'ORBIT_VERSION', '1.8.0' );
 define( 'ORBIT_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ORBIT_PLUGIN_FILE', __FILE__ );
 
@@ -31,11 +31,10 @@ defined( 'ORBIT_MESSAGING_BRAND' ) || define( 'ORBIT_MESSAGING_BRAND', 'Periheli
 /**
  * Support contact returned by HELP TwiML replies. Pinned via constant so it
  * matches the support address registered with TCR (sample-message drift
- * triggers campaign suspension). Defaults to the WP admin email so fresh
- * installs work out of the box; override in wp-config.php to the
- * TCR-registered address (e.g. `support@perihelion.social`).
+ * triggers campaign suspension). Override in wp-config.php for another
+ * deployment identity.
  */
-defined( 'ORBIT_MESSAGING_SUPPORT' ) || define( 'ORBIT_MESSAGING_SUPPORT', get_option( 'admin_email' ) );
+defined( 'ORBIT_MESSAGING_SUPPORT' ) || define( 'ORBIT_MESSAGING_SUPPORT', 'sarah@perihelion.social' );
 
 /**
  * Sunset date (UTC) for the legacy raw-secret unsubscribe fallback path.
@@ -173,11 +172,17 @@ function orbit_maybe_upgrade() {
 
 	if ( ! $installed_version || version_compare( $installed_version, ORBIT_VERSION, '<' ) ) {
 		Orbit_Activator::create_tables();
-		Orbit_Activator::create_pages();
 		Orbit_Roles::register();
 		orbit_migrate_page_slugs();
 		orbit_migrate_app_page_templates();
 		update_option( 'orbit_db_version', ORBIT_VERSION );
+	}
+
+	$content_version = get_option( 'orbit_content_version' );
+	if ( ! $content_version || version_compare( $content_version, ORBIT_VERSION, '<' ) ) {
+		if ( Orbit_Activator::create_pages() ) {
+			update_option( 'orbit_content_version', ORBIT_VERSION, false );
+		}
 	}
 }
 
