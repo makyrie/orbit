@@ -3,64 +3,72 @@
 ## Overview
 
 Orbit is the WordPress plugin behind **Perihelion**, a person-centric social
-activity service. Posters publish activities at one of three commitment tiers;
-people subscribe to a poster, receive email, digest, or optional SMS
-notifications, and respond “going” or “maybe” without a separate app. “Orbit”
-is the internal code, database, REST, shortcode, and WP-CLI namespace;
-“Perihelion” is the public-facing brand.
+activity service. A poster publishes activities at one of three commitment
+tiers; people subscribe to that poster and receive email, digest, or optional
+SMS notifications, then respond “going” or “maybe” without needing a separate
+app. The product deliberately treats no response as a private, socially
+costless decline. “Orbit” remains the internal code, database, REST, shortcode,
+and WP-CLI namespace; “Perihelion” is the public-facing brand.
 
-The plugin is the application layer. It owns roles and capabilities, eight
-custom tables, account provisioning, REST endpoints, virtual routes,
-shortcode-rendered screens, notification scheduling/delivery, Twilio
-integration, privacy, and consent evidence. The separate Perihelion block theme
-provides the site shell and templates; this repository contains the frontend
-CSS and JavaScript used by plugin forms and app screens.
+The plugin is the application layer, not just a WordPress content extension. It
+owns user roles and capabilities, custom-table persistence, provisioning,
+privacy and consent records, REST endpoints, virtual routes, shortcode-rendered
+screens, notification scheduling/delivery, Twilio integration, and operational
+WP-CLI commands. A companion block theme supplies the site shell and templates,
+while this repository also contains the frontend CSS and JavaScript used by the
+plugin's forms and app screens.
 
-### Source map
+### Product model
+- WordPress users may be subscribers, posters, or both. Posters have one
+  `orbit_profiles` record; `orbit_subscriptions` relates subscriber users to
+  poster profiles.
+- Activities belong to profiles and use tiers 1–3 (“Just an idea”, “I'll go if
+  you will”, and “I'm going — join me”). Responses belong to a subscription and
+  are limited to `going` or `maybe`.
+- Notification preferences are account-wide. Action Scheduler handles activity
+  dispatch, immediate delivery, daily digests, lifecycle updates, cleanup, and
+  deferred new-user email. Twilio provides phone verification and SMS webhooks.
+- Privacy is restrictive by default. Subscription secrets and scoped HMAC
+  action tokens support no-login RSVP/unsubscribe flows. Consent is recorded in
+  an append-only, hash-chained ledger with policy snapshots and retention rules.
 
-- `orbit.php` is the bootstrap and composition root.
+### Architecture and source map
+- `orbit.php` is the bootstrap and composition root: constants, class loading,
+  activation/upgrades, hooks, asset loading, and WP-CLI registration.
 - `includes/class-orbit-{profile,activity,subscription,response}.php` contain
-  domain CRUD; `class-orbit-user-provisioning.php` centralizes account creation.
-- `includes/class-orbit-rest-*.php` expose the `orbit/v1` API.
-- `includes/class-orbit-routes.php` owns virtual public pages; shortcodes render
-  those pages and the authenticated application screens.
+  the core domain CRUD. `class-orbit-user-provisioning.php` centralizes account
+  creation shared by signup and subscribe flows.
+- `includes/class-orbit-rest-*.php` expose the `orbit/v1` REST API. Public
+  signup, subscribe, RSVP-token, unsubscribe, and Twilio webhook operations sit
+  beside capability-checked subscriber, poster, and admin operations.
+- `includes/class-orbit-routes.php` implements virtual public pages such as
+  `/@{slug}`, `/@{slug}/subscribe`, `/activity/{id}`, and `/unsubscribe`.
+  `class-orbit-shortcodes.php` renders those pages plus the dashboard, settings,
+  subscription management, poster management, profile, and signup screens.
 - `includes/class-orbit-notifier.php`, `class-orbit-twilio.php`, and
-  `class-orbit-phone-verify.php` own asynchronous notification delivery.
-- `includes/class-orbit-consent.php`, `class-orbit-compliance-ui.php`, and
+  `class-orbit-phone-verify.php` own asynchronous notification routing and SMS.
+  `class-orbit-consent.php`, `class-orbit-compliance-ui.php`, and
   `class-orbit-privacy.php` own compliance evidence, policy UI, and deletion.
-- `includes/class-orbit-activator.php` creates the schema and required pages.
-  The consent ledger is network-scoped on multisite; other tables are per-site.
-- `cli/` contains operational commands; `tests/` is a WordPress PHPUnit
-  integration suite.
+- `includes/class-orbit-activator.php` creates eight InnoDB tables and the
+  shortcode-backed application/compliance pages. The consent ledger is
+  network-scoped on multisite; the other tables are site-scoped.
+- `cli/` mirrors the main resources for administration and diagnostics.
+  `tests/` is a WordPress PHPUnit integration suite; run it using the settings
+  in `phpunit.xml.dist`. Run `composer policy-diff` whenever policy copy changes.
 
-### Documentation map
-
-- `README.md` is the current operator and developer guide.
-- `docs/README.md` classifies current guidance, strategy, historical plans, and
-  dated audit artifacts.
-- Website direction lives in `docs/content-architecture.md`,
-  `creative-direction.md`, `design-system.md`, and `brand-brief.md`.
-- Canonical legal prose lives in `docs/compliance/` and is duplicated in
-  `Orbit_Activator`. Keep the copies byte-equivalent with `composer policy-diff`
-  and bump `ORBIT_VERSION` whenever policy prose changes.
-
-## Development Guidelines
-
-- Public page bodies for Why, Contact, Privacy, and Terms are code-owned by `Orbit_Activator::create_pages()`. Editor changes are not authoritative; upgrades overwrite only pages carrying the matching Orbit ownership marker (plus the fingerprinted legacy Why page).
-- Deploy plugin releases that introduce canonical pages before the Perihelion theme release that links to them. Do not use a WordPress database export/import for public-content releases.
-- Policy prose must remain byte-synchronized between `includes/class-orbit-activator.php` and `docs/compliance/`; run `composer policy-diff` and bump `ORBIT_VERSION` for every policy revision.
-
-- Treat `README.md` and current code as authoritative for implemented behavior;
-  `docs/plans/`, `docs/refs/orbit-v1-spec.md`, and punch lists preserve earlier
-  decisions and observations and may describe superseded states.
-- User-facing copy is spread across shortcodes, compliance UI, REST responses,
-  email/SMS builders, JavaScript, and the companion theme. Search all relevant
-  surfaces before changing terminology.
-- Run focused PHPUnit coverage for behavioral changes and `composer
-  policy-diff` for any compliance-copy change.
+### Website and content work
+Website strategy and source material live in `docs/`. Start with
+`content-architecture.md`, `creative-direction.md`, `design-system.md`, and
+`brand-brief.md`; `marketing-plan.md`, `gtm-playbook.md`, and
+`website-engagement.md` cover launch and engagement. Canonical legal prose lives
+in `docs/compliance/` and is duplicated in `Orbit_Activator`; those copies must
+remain byte-equivalent, and policy edits require an `ORBIT_VERSION` bump because
+the consent ledger records that version. User-facing application copy is also
+embedded in shortcode, compliance, messaging-copy, REST, email, SMS, and
+JavaScript code, so content changes should search all of those surfaces rather
+than assuming the theme is the sole owner.
 
 ## Transactional Boundaries
-
 Both `Orbit_REST_Subscription::handle_subscribe()` and
 `Orbit_REST_Signup::handle_signup()` wrap account provisioning in an InnoDB
 transaction (`START TRANSACTION` / `COMMIT` / `ROLLBACK`). Inside the
@@ -94,3 +102,11 @@ Rules for code in this repo and for plugins that integrate with Orbit:
   somewhere in the chain.
 - Related: todo 130 (extract a provisioning service) — if/when that
   lands, this invariant travels with the service.
+
+## Local Testing
+Orbit is a WordPress plugin. The directory is located at `wp-content/plugins/orbit/` within a Local Sites WordPress installation.
+
+- Admin panel: https://orbit.local/wp-admin/
+- Front end: https://orbit.local/
+- Username: ai
+- Password: d@(fUHQrUufY5*XE(w05DviD
