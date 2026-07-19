@@ -17,7 +17,7 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Plugin constants.
  */
-define( 'ORBIT_VERSION', '1.7.0' );
+define( 'ORBIT_VERSION', '1.8.0' );
 define( 'ORBIT_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ORBIT_PLUGIN_FILE', __FILE__ );
 
@@ -35,7 +35,7 @@ defined( 'ORBIT_MESSAGING_BRAND' ) || define( 'ORBIT_MESSAGING_BRAND', 'Periheli
  * installs work out of the box; override in wp-config.php to the
  * TCR-registered address (e.g. `support@perihelion.social`).
  */
-defined( 'ORBIT_MESSAGING_SUPPORT' ) || define( 'ORBIT_MESSAGING_SUPPORT', get_option( 'admin_email' ) );
+defined( 'ORBIT_MESSAGING_SUPPORT' ) || define( 'ORBIT_MESSAGING_SUPPORT', 'sarah@perihelion.social' );
 
 /**
  * Sunset date (UTC) for the legacy raw-secret unsubscribe fallback path.

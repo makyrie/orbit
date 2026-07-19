@@ -46,6 +46,10 @@ CSS and JavaScript used by plugin forms and app screens.
 
 ## Development Guidelines
 
+- Public page bodies for Why, Contact, Privacy, and Terms are code-owned by `Orbit_Activator::create_pages()`. Editor changes are not authoritative; upgrades overwrite only pages carrying the matching Orbit ownership marker (plus the fingerprinted legacy Why page).
+- Deploy plugin releases that introduce canonical pages before the Perihelion theme release that links to them. Do not use a WordPress database export/import for public-content releases.
+- Policy prose must remain byte-synchronized between `includes/class-orbit-activator.php` and `docs/compliance/`; run `composer policy-diff` and bump `ORBIT_VERSION` for every policy revision.
+
 - Treat `README.md` and current code as authoritative for implemented behavior;
   `docs/plans/`, `docs/refs/orbit-v1-spec.md`, and punch lists preserve earlier
   decisions and observations and may describe superseded states.

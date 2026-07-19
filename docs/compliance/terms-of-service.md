@@ -1,6 +1,6 @@
 # Terms of Service
 
-_Last updated: June 8, 2026 · Version: 1.7.0_
+_Last updated: July 18, 2026 · Version: 1.8.0_
 
 These Terms govern your use of perihelion.social and our notification services (the "Service"). By creating an account or subscribing to a creator, you agree to these Terms.
 
@@ -61,4 +61,4 @@ We may revise these Terms. The "Last updated" date reflects the current version.
 
 ## Contact
 
-For questions about these Terms, contact us at the support address shown in your account settings.
+For questions about these Terms, email [sarah@perihelion.social](mailto:sarah@perihelion.social).

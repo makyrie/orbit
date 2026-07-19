@@ -23,6 +23,7 @@ class Orbit_Routes {
 		// `template_redirect` work that might short-circuit on the home page.
 		add_action( 'template_redirect', array( __CLASS__, 'redirect_logged_in_from_home' ), 5 );
 		add_action( 'template_redirect', array( __CLASS__, 'handle_routes' ) );
+		add_action( 'template_redirect', array( __CLASS__, 'redirect_legacy_policy_urls' ) );
 		add_action( 'wp_head', array( __CLASS__, 'add_noindex_meta' ) );
 		add_filter( 'robots_txt', array( __CLASS__, 'modify_robots_txt' ), 10, 2 );
 		add_filter( 'login_redirect', array( __CLASS__, 'redirect_after_login' ), 10, 3 );
@@ -36,6 +37,24 @@ class Orbit_Routes {
 		foreach ( array( 'page_template_hierarchy', 'singular_template_hierarchy' ) as $hook ) {
 			add_filter( $hook, array( __CLASS__, 'force_app_template' ) );
 		}
+	}
+
+	/**
+	 * Redirect superseded policy slugs to Orbit's canonical pages.
+	 */
+	public static function redirect_legacy_policy_urls() {
+		$path = trim( (string) wp_parse_url( isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '', PHP_URL_PATH ), '/' );
+		$destinations = array(
+			'privacy-policy'       => '/privacy/',
+			'terms-and-conditions' => '/terms/',
+		);
+
+		if ( ! isset( $destinations[ $path ] ) ) {
+			return;
+		}
+
+		wp_safe_redirect( home_url( $destinations[ $path ] ), 301 );
+		exit;
 	}
 
 	/**
