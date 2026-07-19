@@ -1,5 +1,9 @@
 # Perihelion Theme — Phase 6 QA Punch List
 
+> **Dated snapshot.** This audit describes the theme and plugin versions tested
+> during Phase 6. Consult the theme repository and reproduce findings before
+> treating unchecked items as current launch blockers.
+
 Phase 6 deliverable from the website engagement. Reads
 [`docs/design-system.md`](./design-system.md), the theme repo's
 `DEVIATIONS.md`, and the [creative-direction.md](./creative-direction.md)

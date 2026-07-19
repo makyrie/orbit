@@ -1,5 +1,9 @@
 # UX Audit Punch List — 2026-05-06
 
+> **Dated snapshot.** This records the site state observed on May 6, 2026.
+> Reproduce unchecked findings against the current plugin and theme before
+> treating them as open work.
+
 Comprehensive walk-through of the live site (`orbit.local` / `perihelion.social`) as both anonymous and logged-in users. Each finding has a recommended fix. Check items off as resolved.
 
 **Test fixture used:** logged in as `claude` (admin role, has profile, subscribed to Sarah K). Sarah K subscribed to claude. Three activities: Crafternoon (Sarah K), Saturday morning bike ride (Sarah K), Cherry Blossom Festival (claude, undated).

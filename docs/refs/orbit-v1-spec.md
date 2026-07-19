@@ -1,5 +1,10 @@
 # Orbit v1 — Product & Technical Specification
 
+> **Historical reference.** This was the original v1 specification. It remains
+> useful for product intent and design rationale, but it is not a current file,
+> schema, route, or implementation inventory. See [`../../README.md`](../../README.md)
+> and the code for current behavior.
+
 ## Overview
 
 Orbit is a person-centric social activity tool. A **poster** shares a link with people they've met. Those people **subscribe** and receive notifications when the poster broadcasts activities at varying levels of commitment. Subscribers respond with lightweight "going" / "maybe" actions. No app download required — the entire experience lives on the web, with SMS and email as notification channels.

@@ -664,7 +664,9 @@ Almost no motion. Only:
 - No page-level animations, no scroll-triggered animations, no entrance animations on first paint, no animated indicators (the actionable workflow indicator is intentionally static — see brand brief and creative direction).
 
 ### Browser support
-- WordPress 6.4+ targeted (per plugin requirements). That implies Chrome 86+, Safari 14+, Firefox 78+.
+- WordPress 7.0.1 is the current project baseline. Browser support should follow
+  WordPress core's current browser policy rather than the older 6.4-era browser
+  versions that originally informed this design system.
 - Variable fonts require Chrome 62+, Safari 11+ — universal in target browsers.
 - CSS custom properties, `clamp()`, modern flexbox/grid: all available in target.
 

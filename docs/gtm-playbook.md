@@ -17,8 +17,10 @@ into a concrete 7-week launch sequence.
 - **Design system** with theme.json-ready tokens (Phase 4)
 - **FSE theme** at v0.3.0, all Phase 6 QA fixes merged (Phase 5 + 6)
 - **Marketing plan** at v1 (Phase 7)
-- **Plugin** at v1.3.0 with consume-theme-token CSS, role-aware app nav, page-app meta migration
-- **53 PHPUnit tests passing** on the plugin (activity REST endpoints covered)
+- **Plugin** at v1.7.0 with consent capture, compliance pages, transactional
+  provisioning, SMS runtime gating, role-aware app nav, and page-app migration
+- **WordPress PHPUnit integration suite** covering REST, provisioning,
+  transaction safety, consent, notification, privacy, and CLI behavior
 - **Local install working** — site renders correctly at `orbit.local` with theme + plugin coordinated
 
 ### Blocking 🔴
