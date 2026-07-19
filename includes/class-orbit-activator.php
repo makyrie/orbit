@@ -20,6 +20,39 @@ class Orbit_Activator {
 	public static function activate() {
 		self::create_tables();
 		self::create_pages();
+		self::seed_consent_ip_salt();
+	}
+
+	/**
+	 * Seed the consent IP salt option on fresh installs.
+	 *
+	 * Orbit_Consent::record() refuses to write a ledger row when no salt
+	 * resolves — and every signup / subscribe write runs through it. Without
+	 * an activator-side fallback, a fresh install on a host where the
+	 * operator hasn't added ORBIT_CONSENT_IP_SALT to wp-config.php would 500
+	 * every signup. We mint a per-site fallback so zero-config installs work.
+	 *
+	 * Guards:
+	 * - If the constant is defined, do nothing — the documented best practice
+	 *   wins and we leave the option absent so deleting it does not silently
+	 *   shadow the constant later.
+	 * - If the option already exists (re-activation, restored backup), do
+	 *   nothing — rewriting the salt would invalidate every previously
+	 *   recorded ip_hash.
+	 *
+	 * Autoload is off because record() is the only consumer and it runs
+	 * outside the page-load hot path.
+	 */
+	public static function seed_consent_ip_salt() {
+		if ( defined( 'ORBIT_CONSENT_IP_SALT' ) ) {
+			return;
+		}
+
+		if ( false !== get_option( 'orbit_consent_ip_salt', false ) ) {
+			return;
+		}
+
+		add_option( 'orbit_consent_ip_salt', wp_generate_password( 64, false ), '', false );
 	}
 
 	/**
@@ -257,31 +290,346 @@ class Orbit_Activator {
 				'content'  => '[orbit_sign_up]',
 				'template' => '',
 			),
+			// Public compliance pages. /privacy/ and /terms/ are referenced by
+			// the subscribe + signup compliance blocks and are a required
+			// field on TCR campaign registration (as of 2026-06-30). The
+			// content uses Twilio-blessed sharing language verbatim — see
+			// docs/compliance/privacy-policy.md for the canonical source.
+			//
+			// Both pages get an `orbit_policy_version` post_meta so that
+			// Orbit_Consent::record() can capture the version each user
+			// agreed to at consent time.
+			'privacy'       => array(
+				'title'                => 'Privacy Policy',
+				'content'              => self::compliance_page_content( 'privacy' ),
+				'template'             => '',
+				'meta'                 => array(
+					'orbit_policy_version' => ORBIT_VERSION,
+				),
+				'compliance_canonical' => 'privacy',
+			),
+			'terms'         => array(
+				'title'                => 'Terms of Service',
+				'content'              => self::compliance_page_content( 'terms' ),
+				'template'             => '',
+				'meta'                 => array(
+					'orbit_policy_version' => ORBIT_VERSION,
+				),
+				'compliance_canonical' => 'terms',
+			),
 		);
 
 		foreach ( $pages as $slug => $page_data ) {
-			$existing = get_page_by_path( $slug );
+			$existing       = get_page_by_path( $slug );
+			$is_canonical   = ! empty( $page_data['compliance_canonical'] );
+			$canonical_kind = $is_canonical ? (string) $page_data['compliance_canonical'] : '';
 
 			if ( $existing ) {
+				$page_id = $existing->ID;
+			} else {
+				$post_args = array(
+					'post_title'   => $page_data['title'],
+					'post_name'    => $slug,
+					'post_content' => $page_data['content'],
+					'post_status'  => 'publish',
+					'post_type'    => 'page',
+					'post_author'  => 1,
+				);
+
+				$meta_input = array();
+
+				if ( ! empty( $page_data['template'] ) ) {
+					$meta_input['_wp_page_template'] = $page_data['template'];
+				}
+
+				if ( ! empty( $page_data['meta'] ) ) {
+					$meta_input = array_merge( $meta_input, $page_data['meta'] );
+				}
+
+				// Stamp the canonical-compliance ownership marker at insert
+				// time so newly-minted /privacy/ and /terms/ pages are
+				// identifiable as Orbit-owned from the very first row.
+				if ( $is_canonical ) {
+					$meta_input['_orbit_canonical_compliance'] = $canonical_kind;
+				}
+
+				if ( ! empty( $meta_input ) ) {
+					$post_args['meta_input'] = $meta_input;
+				}
+
+				$page_id = wp_insert_post( $post_args );
+			}
+
+			if ( ! $page_id || is_wp_error( $page_id ) ) {
 				continue;
 			}
 
-			$post_args = array(
-				'post_title'   => $page_data['title'],
-				'post_name'    => $slug,
-				'post_content' => $page_data['content'],
-				'post_status'  => 'publish',
-				'post_type'    => 'page',
-				'post_author'  => 1,
-			);
-
-			if ( ! empty( $page_data['template'] ) ) {
-				$post_args['meta_input'] = array(
-					'_wp_page_template' => $page_data['template'],
-				);
+			// Always upsert declared meta on every activation so values like
+			// `orbit_policy_version` stay in sync with the plugin even when the
+			// page itself already exists (e.g. on upgrade). The content/template
+			// insert above is what's gated on `! $existing`; the meta-write is
+			// not.
+			if ( ! empty( $page_data['meta'] ) ) {
+				foreach ( $page_data['meta'] as $meta_key => $meta_value ) {
+					update_post_meta( $page_id, $meta_key, $meta_value );
+				}
 			}
 
-			wp_insert_post( $post_args );
+			// Canonical compliance pages (/privacy/, /terms/) store their
+			// page_id in an option so the consent ledger and any downstream
+			// URL/version lookups can dereference the canonical post directly
+			// instead of going through get_page_by_path() — which lets any
+			// user with edit_pages capability silently win the slug by
+			// pre-creating a draft. See todo 117.
+			//
+			// Slug-collision guard: if the page at the slug is already
+			// stamped `_orbit_canonical_compliance` but with a marker value
+			// for a DIFFERENT canonical kind (e.g. the /privacy/ page is
+			// somehow stamped 'terms'), refuse to overwrite the option — the
+			// data is inconsistent and the operator needs to reconcile. The
+			// policy-version meta upsert above still runs, preserving todo
+			// 112 behavior.
+			if ( $is_canonical ) {
+				$option_key = 'privacy' === $canonical_kind
+					? 'orbit_privacy_page_id'
+					: 'orbit_terms_page_id';
+
+				$existing_marker = get_post_meta( $page_id, '_orbit_canonical_compliance', true );
+
+				$collision_detected = ! empty( $existing_marker )
+					&& (string) $existing_marker !== $canonical_kind;
+
+				if ( $collision_detected ) {
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log(
+						sprintf(
+							'Orbit_Activator: slug-collision detected for canonical compliance page "/%s/" (page_id=%d, existing marker="%s"). Skipping orbit_%s_page_id option write — reconcile manually.',
+							$slug,
+							$page_id,
+							(string) $existing_marker,
+							$canonical_kind
+						)
+					);
+				} else {
+					// Stamp the ownership marker on existing pages too —
+					// newly inserted pages already received it via
+					// meta_input, but re-activation paths and pages that
+					// pre-existed the canonical-id system need backfill.
+					update_post_meta( $page_id, '_orbit_canonical_compliance', $canonical_kind );
+
+					update_option( $option_key, (int) $page_id, false );
+				}
+			}
 		}
+	}
+
+	/**
+	 * Build post_content for the /privacy/ or /terms/ page.
+	 *
+	 * Stored as Gutenberg block markup so admins can edit via the block
+	 * editor after activation. Headings and paragraphs only — no fancy
+	 * layout — so the active theme controls typography.
+	 *
+	 * Canonical source: docs/compliance/{privacy-policy,terms-of-service}.md.
+	 * When the published copy changes, update both this method AND the
+	 * markdown source-of-truth, and bump ORBIT_VERSION so the
+	 * orbit_policy_version post_meta tracks the change.
+	 *
+	 * @param string $kind 'privacy' or 'terms'.
+	 * @return string Block-formatted post content.
+	 */
+	protected static function compliance_page_content( $kind ) {
+		if ( 'privacy' === $kind ) {
+			return self::privacy_policy_content();
+		}
+
+		return self::terms_of_service_content();
+	}
+
+	/**
+	 * Privacy policy content.
+	 *
+	 * MUST byte-match the prose in docs/compliance/privacy-policy.md
+	 * (block markup excluded). When updating, edit both files and run
+	 * `composer policy-diff` (or `php bin/check-policy-sync.php`). The
+	 * Orbit_Consent ledger stamps ORBIT_VERSION on every policy
+	 * revision — bump it whenever this prose changes.
+	 *
+	 * @return string
+	 */
+	protected static function privacy_policy_content() {
+		ob_start();
+		?>
+<!-- wp:paragraph --><p><em>Last updated: June 8, 2026 · Version: 1.7.0</em></p><!-- /wp:paragraph -->
+
+<!-- wp:paragraph --><p>This Privacy Policy describes how Perihelion ("we", "us", "our") collects, uses, and shares information about you when you use perihelion.social and our notification services (the "Service").</p><!-- /wp:paragraph -->
+
+<!-- wp:heading --><h2>What we collect</h2><!-- /wp:heading -->
+
+<!-- wp:paragraph --><p>When you create an account or subscribe to a creator, we collect:</p><!-- /wp:paragraph -->
+
+<!-- wp:list --><ul>
+<li><strong>Account information</strong>: your name, email address, and (optionally) phone number.</li>
+<li><strong>Notification preferences</strong>: which creators you follow, which channels you want to receive notifications on (email and/or SMS), and how often.</li>
+<li><strong>Activity records</strong>: which activities you've responded to ("going," "maybe," or no response).</li>
+<li><strong>Technical context at consent</strong>: when you opt in to or out of notifications, we record the date and time, a one-way hashed version of your IP address, a truncated user-agent string, and the exact wording of the consent prompt you saw. This is held as immutable audit evidence required by U.S. telecommunications regulations (TCPA).</li>
+</ul><!-- /wp:list -->
+
+<!-- wp:paragraph --><p>We do not sell your information. We do not share your information with advertisers, data brokers, or lead-generation services.</p><!-- /wp:paragraph -->
+
+<!-- wp:heading --><h2>How we use your information</h2><!-- /wp:heading -->
+
+<!-- wp:paragraph --><p>We use your information to:</p><!-- /wp:paragraph -->
+
+<!-- wp:list --><ul>
+<li>Operate the Service — deliver notifications when creators you follow post activities.</li>
+<li>Authenticate you and keep your account secure.</li>
+<li>Respond to your requests for help.</li>
+<li>Comply with legal obligations (including responding to lawful requests from courts or government agencies).</li>
+</ul><!-- /wp:list -->
+
+<!-- wp:heading --><h2>How we share your information</h2><!-- /wp:heading -->
+
+<!-- wp:paragraph --><p><strong>No mobile information will be shared with third parties or affiliates for marketing or promotional purposes. All the above categories exclude text-messaging originator opt-in data and consent; this information will not be shared with any third parties.</strong></p><!-- /wp:paragraph -->
+
+<!-- wp:paragraph --><p>We do work with a small number of subcontractors who provide infrastructure that makes the Service work:</p><!-- /wp:paragraph -->
+
+<!-- wp:list --><ul>
+<li><strong>Twilio</strong> — sends SMS messages when you've opted in to SMS notifications.</li>
+<li><strong>SendGrid</strong> — delivers transactional and notification emails.</li>
+<li><strong>The host of perihelion.social</strong> — runs the WordPress server.</li>
+</ul><!-- /wp:list -->
+
+<!-- wp:paragraph --><p>These subcontractors process information only on our behalf, only to provide their service, and may not use it for their own marketing.</p><!-- /wp:paragraph -->
+
+<!-- wp:paragraph --><p>We may disclose information when required by law, when responding to a lawful court order or subpoena, or when necessary to protect the safety or rights of users or the public.</p><!-- /wp:paragraph -->
+
+<!-- wp:heading --><h2>SMS and email opt-in</h2><!-- /wp:heading -->
+
+<!-- wp:paragraph --><p>When you opt in to SMS notifications from Perihelion, you agree to receive messages about activities posted by creators you follow. <strong>Message frequency varies — up to 10 messages per week.</strong> Message and data rates may apply.</p><!-- /wp:paragraph -->
+
+<!-- wp:paragraph --><p>To stop receiving SMS messages, reply <strong>STOP</strong> to any message we send you, or visit your account settings. For help, reply <strong>HELP</strong>. For email, click the "Unsubscribe" link in any message we send you, or visit your account settings.</p><!-- /wp:paragraph -->
+
+<!-- wp:paragraph --><p>We honor opt-out requests promptly across both channels.</p><!-- /wp:paragraph -->
+
+<!-- wp:heading --><h2>Your rights</h2><!-- /wp:heading -->
+
+<!-- wp:paragraph --><p>You can:</p><!-- /wp:paragraph -->
+
+<!-- wp:list --><ul>
+<li>Access, correct, or delete your account information at any time via your account settings.</li>
+<li>Opt out of any notification channel via STOP, HELP, an unsubscribe link, or account settings.</li>
+<li>Request a copy of the consent and notification records we hold about you by emailing the support address below.</li>
+</ul><!-- /wp:list -->
+
+<!-- wp:paragraph --><p>If you delete your account, we will redact personally identifying details from our consent audit records but retain the record itself (without identifying you) for the length of time required by TCPA.</p><!-- /wp:paragraph -->
+
+<!-- wp:heading --><h2>Data retention</h2><!-- /wp:heading -->
+
+<!-- wp:list --><ul>
+<li>Account information: retained while your account is active. Deleted within 30 days of account deletion.</li>
+<li>Notification log: retained for 90 days, then automatically purged.</li>
+<li>Consent audit records: retained for 4 years (the TCPA statute-of-limitations period). After that, personally identifying details (hashed IP, user agent) are removed while the consent event itself is preserved as audit evidence.</li>
+</ul><!-- /wp:list -->
+
+<!-- wp:heading --><h2>Children</h2><!-- /wp:heading -->
+
+<!-- wp:paragraph --><p>The Service is not directed to children under 13. We do not knowingly collect personal information from children under 13.</p><!-- /wp:paragraph -->
+
+<!-- wp:heading --><h2>Changes to this Policy</h2><!-- /wp:heading -->
+
+<!-- wp:paragraph --><p>We may revise this Policy. The "Last updated" date at the top of this page reflects the current version. Material changes will be announced via email to active account holders at least 30 days before they take effect.</p><!-- /wp:paragraph -->
+
+<!-- wp:heading --><h2>Contact</h2><!-- /wp:heading -->
+
+<!-- wp:paragraph --><p>For privacy questions, opt-out requests, or to exercise the rights above, contact us at the support address shown in your account settings.</p><!-- /wp:paragraph -->
+		<?php
+		return trim( ob_get_clean() );
+	}
+
+	/**
+	 * Terms of service content.
+	 *
+	 * MUST byte-match the prose in docs/compliance/terms-of-service.md
+	 * (block markup excluded). When updating, edit both files and run
+	 * `composer policy-diff` (or `php bin/check-policy-sync.php`). The
+	 * Orbit_Consent ledger stamps ORBIT_VERSION on every policy
+	 * revision — bump it whenever this prose changes.
+	 *
+	 * @return string
+	 */
+	protected static function terms_of_service_content() {
+		ob_start();
+		?>
+<!-- wp:paragraph --><p><em>Last updated: June 8, 2026 · Version: 1.7.0</em></p><!-- /wp:paragraph -->
+
+<!-- wp:paragraph --><p>These Terms govern your use of perihelion.social and our notification services (the "Service"). By creating an account or subscribing to a creator, you agree to these Terms.</p><!-- /wp:paragraph -->
+
+<!-- wp:heading --><h2>What Perihelion does</h2><!-- /wp:heading -->
+
+<!-- wp:paragraph --><p>Perihelion lets you subscribe to creators ("posters") and receive notifications when they post activities — meetups, events, ideas, plans. Notifications are delivered by email and, when you opt in, SMS.</p><!-- /wp:paragraph -->
+
+<!-- wp:heading --><h2>Account and consent</h2><!-- /wp:heading -->
+
+<!-- wp:paragraph --><p>You must be at least 13 years old to use the Service. When you create an account or subscribe to a creator, you confirm that you control the email address (and phone number, if provided) you give us, and that you authorize Perihelion to send notifications to those endpoints.</p><!-- /wp:paragraph -->
+
+<!-- wp:paragraph --><p>You may revoke that authorization at any time:</p><!-- /wp:paragraph -->
+
+<!-- wp:list --><ul>
+<li><strong>SMS</strong>: reply STOP to any message, or change your settings.</li>
+<li><strong>Email</strong>: click the "Unsubscribe" link in any message, or change your settings.</li>
+</ul><!-- /wp:list -->
+
+<!-- wp:heading --><h2>Messaging program</h2><!-- /wp:heading -->
+
+<!-- wp:paragraph --><p>When you opt in to SMS notifications, you agree to receive activity notifications from creators you follow.</p><!-- /wp:paragraph -->
+
+<!-- wp:list --><ul>
+<li><strong>Frequency</strong>: up to 10 messages per week.</li>
+<li><strong>Msg &amp; data rates may apply</strong> — your wireless carrier may charge for messages sent or received.</li>
+<li><strong>Reply STOP</strong> to opt out of all Perihelion SMS at any time. You will receive a confirmation message.</li>
+<li><strong>Reply HELP</strong> for help — you'll get a reply with our support contact, message frequency, and a STOP reminder.</li>
+</ul><!-- /wp:list -->
+
+<!-- wp:paragraph --><p>For full privacy details, see our <a href="/privacy/">Privacy Policy</a>.</p><!-- /wp:paragraph -->
+
+<!-- wp:heading --><h2>Conduct</h2><!-- /wp:heading -->
+
+<!-- wp:paragraph --><p>You agree not to:</p><!-- /wp:paragraph -->
+
+<!-- wp:list --><ul>
+<li>Use the Service to harass, threaten, or impersonate others.</li>
+<li>Post unlawful content or engage in unlawful activity.</li>
+<li>Interfere with the Service's operation (e.g., scraping, DDoS, bypassing rate limits).</li>
+<li>Use the Service to send commercial messages without recipient consent.</li>
+</ul><!-- /wp:list -->
+
+<!-- wp:paragraph --><p>We may suspend or terminate accounts that violate these Terms.</p><!-- /wp:paragraph -->
+
+<!-- wp:heading --><h2>Your content</h2><!-- /wp:heading -->
+
+<!-- wp:paragraph --><p>You retain ownership of any content you post (activity titles, descriptions, RSVPs). By posting, you grant Perihelion a non-exclusive, royalty-free license to display that content to other users you've authorized to see it (your subscribers).</p><!-- /wp:paragraph -->
+
+<!-- wp:heading --><h2>Disclaimers</h2><!-- /wp:heading -->
+
+<!-- wp:paragraph --><p>The Service is provided "as is." We do not guarantee uninterrupted availability, that all messages will be delivered, or that the Service will be free of errors. Carrier-side delivery is outside our control.</p><!-- /wp:paragraph -->
+
+<!-- wp:heading --><h2>Limitation of liability</h2><!-- /wp:heading -->
+
+<!-- wp:paragraph --><p>To the maximum extent permitted by law, Perihelion is not liable for indirect, incidental, special, consequential, or punitive damages arising out of your use of the Service. Our total liability to you for any claim arising out of or relating to these Terms or the Service will not exceed the greater of (a) $100, or (b) the amount you paid us in the 12 months before the claim arose.</p><!-- /wp:paragraph -->
+
+<!-- wp:heading --><h2>Governing law</h2><!-- /wp:heading -->
+
+<!-- wp:paragraph --><p>These Terms are governed by the laws of the United States and, where applicable, the State of California, without regard to its conflict-of-laws principles. Disputes will be resolved in the state or federal courts located in San Francisco County, California.</p><!-- /wp:paragraph -->
+
+<!-- wp:heading --><h2>Changes</h2><!-- /wp:heading -->
+
+<!-- wp:paragraph --><p>We may revise these Terms. The "Last updated" date reflects the current version. Material changes will be announced via email to active account holders at least 30 days before they take effect; continued use after the effective date constitutes acceptance.</p><!-- /wp:paragraph -->
+
+<!-- wp:heading --><h2>Contact</h2><!-- /wp:heading -->
+
+<!-- wp:paragraph --><p>For questions about these Terms, contact us at the support address shown in your account settings.</p><!-- /wp:paragraph -->
+		<?php
+		return trim( ob_get_clean() );
 	}
 }

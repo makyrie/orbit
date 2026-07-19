@@ -244,6 +244,13 @@ class Orbit_Privacy {
 		// Clean up usermeta.
 		delete_user_meta( $user_id, 'orbit_phone' );
 		delete_user_meta( $user_id, 'orbit_phone_verified' );
+		// `orbit_phone_pending` holds an unverified candidate phone written
+		// at sign-up / subscribe time; without explicit deletion here,
+		// GDPR Article 17 erasure would leak a phone number for any user
+		// who never completed SMS verification. The `_at` companion is
+		// the GC cron's age signal — purge both.
+		delete_user_meta( $user_id, 'orbit_phone_pending' );
+		delete_user_meta( $user_id, 'orbit_phone_pending_at' );
 		delete_user_meta( $user_id, 'orbit_timezone' );
 		delete_user_meta( $user_id, 'orbit_sms_opted_out' );
 

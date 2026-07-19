@@ -465,6 +465,39 @@ class Orbit_Consent {
 	}
 
 	/**
+	 * Resolve the canonical compliance page_id for /privacy/ or /terms/.
+	 *
+	 * The activator stamps `orbit_privacy_page_id` and `orbit_terms_page_id`
+	 * options on first creation (todo 117). Callers should prefer the
+	 * option-stored ID over a slug lookup because any user with the
+	 * `edit_pages` capability can pre-create a draft page at /privacy/ or
+	 * /terms/ — `get_page_by_path()` would return that attacker-controlled
+	 * page, silently desyncing the consent ledger's `policy_url` from the
+	 * canonical Orbit-owned policy text.
+	 *
+	 * Callers should fall back to `home_url( '/privacy/' )` (or `/terms/`)
+	 * when this returns 0 — that path means the activator has not run yet
+	 * (early in the install lifecycle) or the option was deleted manually,
+	 * and the slug-based URL is the safest backward-compatible default.
+	 *
+	 * @param string $kind 'privacy' or 'terms'.
+	 * @return int Canonical page ID, or 0 when unset / unknown kind.
+	 */
+	public static function canonical_compliance_page_id( $kind ) {
+		$kind = (string) $kind;
+
+		if ( 'privacy' === $kind ) {
+			return (int) get_option( 'orbit_privacy_page_id', 0 );
+		}
+
+		if ( 'terms' === $kind ) {
+			return (int) get_option( 'orbit_terms_page_id', 0 );
+		}
+
+		return 0;
+	}
+
+	/**
 	 * Look up the currently published version string for a policy page.
 	 *
 	 * Reads post_meta `orbit_policy_version` from the relevant page. When

@@ -13,6 +13,11 @@ defined( 'ABSPATH' ) || exit;
 
 /**
  * Class Orbit_Shortcodes
+ *
+ * Compliance UI helpers (compliance_disclosure_text, render_compliance_block,
+ * render_phone_field, render_consent_checkboxes) moved to Orbit_Compliance_UI
+ * as of 1.7.0 — see todo 131. Internal form-render call sites here forward
+ * through that class.
  */
 class Orbit_Shortcodes {
 
@@ -137,6 +142,15 @@ class Orbit_Shortcodes {
 				<input type="email" id="orbit-signup-email" name="email" required autocomplete="email">
 				<span class="orbit-field-help"><?php esc_html_e( 'Used to send you activity notifications and a link to set your password.', 'orbit' ); ?></span>
 			</p>
+			<?php
+			// Phone capture + compliance disclosure + per-channel consent.
+			// Same building blocks the subscribe form uses (Phase 2b) so
+			// the rendered text and ledger snapshots agree across all
+			// opt-in surfaces.
+			echo Orbit_Compliance_UI::render_phone_field( 'orbit-signup' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Returns pre-escaped HTML.
+			echo Orbit_Compliance_UI::render_compliance_block(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Returns pre-escaped HTML.
+			echo Orbit_Compliance_UI::render_consent_checkboxes( 'orbit-signup' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Returns pre-escaped HTML.
+			?>
 			<?php Orbit_Spam::render_traps(); ?>
 			<p>
 				<button type="submit" class="orbit-btn orbit-btn-primary"><?php esc_html_e( 'Create account', 'orbit' ); ?></button>
@@ -201,6 +215,53 @@ class Orbit_Shortcodes {
 		echo '<div class="orbit-dashboard">';
 
 		echo '<h1>' . esc_html__( 'Dashboard', 'orbit' ) . '</h1>';
+
+		// One-time onboarding banner for users who haven't verified a phone
+		// yet. Dismissable per-user via the `orbit_dashboard_banner_dismissed`
+		// user_meta. Shown when:
+		// - The user has no verified phone.
+		// - Settings page is reachable to act on the banner.
+		// During the dormant window this is the primary path that surfaces
+		// the SMS opt-in surface to new posters — without it /settings/ is
+		// unreachable via the post-signup redirect.
+		$has_verified_phone = (bool) get_user_meta( $user_id, 'orbit_phone_verified', true );
+		$dismissed          = (bool) get_user_meta( $user_id, 'orbit_dashboard_banner_dismissed', true );
+
+		// Gate on Orbit_Features::sms_enabled() so the "as soon as our SMS
+		// program launches" copy doesn't keep rendering after SMS goes
+		// live. Post-launch the banner disappears for unverified users
+		// entirely; a verify-your-phone CTA can land elsewhere later (per
+		// todo 128). The banner body itself comes from
+		// Orbit_Messaging_Copy so the dormancy copy stays a one-flag flip.
+		if ( ! Orbit_Features::sms_enabled() && ! $has_verified_phone && ! $dismissed ) {
+			$settings_link = '<a href="' . esc_url( home_url( '/settings/' ) ) . '">'
+				. esc_html__( 'verify your phone in Settings', 'orbit' )
+				. '</a>';
+
+			$banner_body = Orbit_Messaging_Copy::dashboard_onboarding_banner_copy();
+			// The body comes back with an `{settings_link}` placeholder
+			// so the helper itself stays HTML-free; we substitute the
+			// anchor here after escaping the surrounding sentence.
+			$banner_html = str_replace(
+				'{settings_link}',
+				$settings_link,
+				esc_html( $banner_body )
+			);
+
+			echo '<div class="orbit-onboarding-banner" data-orbit-onboarding-banner>';
+			echo '<p>' . wp_kses(
+				$banner_html,
+				array(
+					'a' => array(
+						'href' => array(),
+					),
+				)
+			) . '</p>';
+			echo '<button type="button" class="orbit-btn-link" data-orbit-onboarding-dismiss aria-label="' . esc_attr__( 'Dismiss this banner', 'orbit' ) . '">';
+			echo esc_html_x( 'Dismiss', 'banner action', 'orbit' );
+			echo '</button>';
+			echo '</div>';
+		}
 
 		if ( ! empty( $activities ) ) {
 			echo '<p class="orbit-page-intro">' . esc_html__( 'Upcoming activities from you and the people you\'ve subscribed to, soonest first.', 'orbit' ) . '</p>';
@@ -443,19 +504,32 @@ class Orbit_Shortcodes {
 	 */
 	private static function render_phone_verification( $user_id ) {
 		$phone             = (string) get_user_meta( $user_id, 'orbit_phone', true );
+		$phone_pending     = (string) get_user_meta( $user_id, 'orbit_phone_pending', true );
 		$verified          = (bool) get_user_meta( $user_id, 'orbit_phone_verified', true );
 		$has_verified      = $verified && '' !== $phone;
 		$twilio_configured = defined( 'ORBIT_TWILIO_ACCOUNT_SID' ) && defined( 'ORBIT_TWILIO_AUTH_TOKEN' ) && defined( 'ORBIT_TWILIO_FROM_NUMBER' );
+		$sms_live          = Orbit_Features::sms_enabled();
 
 		ob_start();
 
 		echo '<div class="orbit-phone-verification">';
 		echo '<h2>' . esc_html__( 'Phone number', 'orbit' ) . ' <span class="orbit-section-tag">' . esc_html__( 'optional', 'orbit' ) . '</span></h2>';
-		echo '<p class="orbit-help">' . esc_html__( 'Only needed if you want SMS notifications for any of the tiers below. We use it only to send activity alerts you opt into.', 'orbit' ) . '</p>';
+
+		// Status banner — visible at the top of the block so the user knows
+		// what verifying their phone right now will (or won't) do.
+		if ( ! $sms_live ) {
+			echo '<div class="orbit-notice orbit-notice-info">';
+			echo esc_html__( "Verifying your phone now lets you receive SMS notifications as soon as the program launches. Until then, we'll send everything by email.", 'orbit' );
+			echo '</div>';
+		} else {
+			echo '<p class="orbit-help">' . esc_html__( 'Only needed if you want SMS notifications for any of the tiers below. We use it only to send activity alerts you opt into.', 'orbit' ) . '</p>';
+		}
 
 		if ( ! $twilio_configured ) {
+			// During the dormant phase Twilio creds may not be configured
+			// yet. The plan: don't hide the surface — explain the state.
 			echo '<div class="orbit-notice orbit-notice-warning">';
-			echo esc_html__( 'SMS is not currently available — Twilio is not configured on this site.', 'orbit' );
+			echo esc_html__( "Phone verification will be available once SMS is live. You'll be notified by email when that happens.", 'orbit' );
 			echo '</div>';
 			echo '</div>';
 			return ob_get_clean();
@@ -475,11 +549,21 @@ class Orbit_Shortcodes {
 		}
 
 		// Phone entry form — hidden when already verified (revealed by Change button).
+		// Pre-populate with orbit_phone_pending so a user who provided a
+		// phone at subscribe/signup-time doesn't have to re-type it.
+		$initial_phone_value = '' !== $phone_pending ? $phone_pending : '';
+
 		echo '<form method="post" class="orbit-phone-form" data-orbit-api="verify-phone" data-orbit-step="phone"' . ( $has_verified ? ' hidden' : '' ) . '>';
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-phone-input">' . esc_html__( 'Phone number', 'orbit' ) . '</label>';
-		echo '<input type="tel" id="orbit-phone-input" name="phone" placeholder="+15551234567" required>';
+		echo '<input type="tel" id="orbit-phone-input" name="phone" placeholder="+15551234567" value="' . esc_attr( $initial_phone_value ) . '" required>';
 		echo '<p class="orbit-help">' . esc_html__( 'Use E.164 format with country code (e.g., +15551234567).', 'orbit' ) . '</p>';
+		if ( '' !== $phone_pending && ! $has_verified ) {
+			// Copy lives in Orbit_Messaging_Copy so the "when SMS goes live"
+			// promise flips to a launch-appropriate sentence the moment
+			// Orbit_Features::sms_enabled() returns true.
+			echo '<p class="orbit-help">' . esc_html( Orbit_Messaging_Copy::settings_phone_help_note() ) . '</p>';
+		}
 		echo '</div>';
 		echo '<button type="submit" class="orbit-btn">' . esc_html__( 'Send verification code', 'orbit' ) . '</button>';
 		echo '</form>';
@@ -1413,6 +1497,26 @@ class Orbit_Shortcodes {
 			$profile->display_name
 		) ) . '</p>';
 		echo '</div>';
+
+		// Phone field, compliance disclosure, and per-channel consent
+		// checkboxes — grouped so the disclosure reads adjacent to the
+		// phone capture rather than as a footer afterthought (Twilio
+		// reviewer guidance).
+		if ( ! is_user_logged_in() ) {
+			// Anonymous-flow subscribers may provide a phone for SMS at
+			// account-creation time. Logged-in users already have an
+			// account; they can verify their phone from /settings/ if
+			// they want SMS.
+			echo Orbit_Compliance_UI::render_phone_field( 'orbit-subscribe' );
+		}
+		echo Orbit_Compliance_UI::render_compliance_block();
+		echo Orbit_Compliance_UI::render_consent_checkboxes( 'orbit-subscribe' );
+
+		// Honeypot + timestamp traps — same defense the signup form uses,
+		// rendered just before the submit button so it sits inside the
+		// <form> envelope. Orbit_Spam::check_traps() in the REST handler
+		// reads orbit_url + orbit_form_init off the request payload.
+		Orbit_Spam::render_traps();
 
 		echo '<div class="orbit-form-actions">';
 		echo '<button type="submit" class="orbit-btn">' . esc_html__( 'Subscribe', 'orbit' ) . '</button>';

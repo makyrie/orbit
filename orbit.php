@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Perihelion
  * Description: Person-centric social activity tool. Subscribe to people, get notified about their activities, respond with lightweight going/maybe actions.
- * Version:     1.6.0
+ * Version:     1.7.0
  * Author:      Perihelion
  * License:     GPL-2.0-or-later
  * Text Domain: orbit
@@ -17,7 +17,7 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Plugin constants.
  */
-define( 'ORBIT_VERSION', '1.6.0' );
+define( 'ORBIT_VERSION', '1.7.0' );
 define( 'ORBIT_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ORBIT_PLUGIN_FILE', __FILE__ );
 
@@ -74,6 +74,8 @@ if ( file_exists( ORBIT_PLUGIN_DIR . 'vendor/autoload.php' ) ) {
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-activator.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-roles.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-features.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-messaging-copy.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-compliance-ui.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-consent.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-token.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-profile.php';
@@ -84,6 +86,8 @@ require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-privacy.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-twilio.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-phone-verify.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-notifier.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rolled-back-exception.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-user-provisioning.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-api.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-subscription.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-activity.php';
@@ -95,6 +99,7 @@ require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-routes.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-shortcodes.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-spam.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-signup.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-user-notifications.php';
 
 /**
  * Register WP-CLI commands.
@@ -108,6 +113,8 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 	require_once ORBIT_PLUGIN_DIR . 'cli/class-orbit-cli-response.php';
 	require_once ORBIT_PLUGIN_DIR . 'cli/class-orbit-cli-notification.php';
 	require_once ORBIT_PLUGIN_DIR . 'cli/class-orbit-cli-status.php';
+	require_once ORBIT_PLUGIN_DIR . 'cli/class-orbit-cli-signup.php';
+	require_once ORBIT_PLUGIN_DIR . 'cli/class-orbit-cli-consent.php';
 
 	WP_CLI::add_command( 'orbit profile', 'Orbit_CLI_Profile' );
 	WP_CLI::add_command( 'orbit activity', 'Orbit_CLI_Activity' );
@@ -116,6 +123,8 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 	WP_CLI::add_command( 'orbit response', 'Orbit_CLI_Response' );
 	WP_CLI::add_command( 'orbit notification', 'Orbit_CLI_Notification' );
 	WP_CLI::add_command( 'orbit status', 'Orbit_CLI_Status' );
+	WP_CLI::add_command( 'orbit signup', 'Orbit_CLI_Signup' );
+	WP_CLI::add_command( 'orbit consent', 'Orbit_CLI_Consent' );
 }
 
 /**
@@ -142,6 +151,7 @@ function orbit_deactivate() {
 		as_unschedule_all_actions( 'orbit_mark_past_activities' );
 		as_unschedule_all_actions( 'orbit_cleanup_notification_log' );
 		as_unschedule_all_actions( 'orbit_dispatch_activity_notifications' );
+		as_unschedule_all_actions( 'orbit_send_new_user_notification' );
 	}
 
 	flush_rewrite_rules();
@@ -269,6 +279,16 @@ Orbit_Consent::register_query_guard();
  */
 Orbit_Notifier::register_hooks();
 add_action( 'init', array( 'Orbit_Notifier', 'schedule_recurring_jobs' ) );
+
+/**
+ * Register the deferred new-user-notification handler.
+ *
+ * Signup + subscribe enqueue an `orbit_send_new_user_notification` job
+ * after COMMIT so the REST response isn't blocked on SMTP latency. The
+ * job carries a single positional arg (`user_id`) and dispatches via
+ * `Orbit_User_Notifications::send_new_user_notification()`.
+ */
+add_action( 'orbit_send_new_user_notification', array( 'Orbit_User_Notifications', 'send_new_user_notification' ), 10, 1 );
 
 /**
  * Register REST API routes.

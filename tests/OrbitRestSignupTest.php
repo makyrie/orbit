@@ -87,6 +87,7 @@ class OrbitRestSignupTest extends WP_UnitTestCase {
 				'email'           => 'new-signup-' . wp_rand( 100000, 999999 ) . '@example.test',
 				'orbit_url'       => '',
 				'orbit_form_init' => $default_init_ms,
+				'consent_email'   => true,
 			),
 			$overrides
 		);
@@ -157,6 +158,98 @@ class OrbitRestSignupTest extends WP_UnitTestCase {
 		$tz = get_user_meta( $user_id, 'orbit_timezone', true );
 		$this->assertNotEmpty( $tz );
 		$this->assertSame( wp_timezone_string(), $tz );
+	}
+
+	// ---------------------------------------------------------------- //
+	// Consent capture (Phase 2c)
+	// ---------------------------------------------------------------- //
+
+	public function test_missing_consent_email_returns_400() {
+		$response = $this->dispatch_signup(
+			$this->signup_params(
+				array(
+					'consent_email' => false,
+				)
+			)
+		);
+
+		$this->assertSame( 400, $response->get_status() );
+		$this->assertSame( 'consent_required', $response->as_error()->get_error_code() );
+	}
+
+	public function test_consent_sms_without_phone_returns_400() {
+		$response = $this->dispatch_signup(
+			$this->signup_params(
+				array(
+					'consent_sms' => true,
+				)
+			)
+		);
+
+		$this->assertSame( 400, $response->get_status() );
+		$this->assertSame( 'consent_sms_without_phone', $response->as_error()->get_error_code() );
+	}
+
+	public function test_invalid_phone_format_returns_400() {
+		$response = $this->dispatch_signup(
+			$this->signup_params(
+				array(
+					'phone' => '555-555-1234',
+				)
+			)
+		);
+
+		$this->assertSame( 400, $response->get_status() );
+		$this->assertSame( 'invalid_phone', $response->as_error()->get_error_code() );
+	}
+
+	public function test_happy_path_writes_email_consent_row() {
+		$response = $this->dispatch_signup( $this->signup_params() );
+		$this->assertSame( 201, $response->get_status() );
+		$user_id = $response->get_data()['user_id'];
+
+		$this->assertSame( 'opt_in', Orbit_Consent::latest_state( $user_id, 'email' ) );
+		$this->assertNull( Orbit_Consent::latest_state( $user_id, 'sms' ) );
+	}
+
+	public function test_phone_plus_sms_consent_writes_both_rows_and_pending_meta() {
+		$response = $this->dispatch_signup(
+			$this->signup_params(
+				array(
+					'phone'       => '+12025550199',
+					'consent_sms' => true,
+				)
+			)
+		);
+
+		$this->assertSame( 201, $response->get_status() );
+		$user_id = $response->get_data()['user_id'];
+
+		$this->assertSame( 'opt_in', Orbit_Consent::latest_state( $user_id, 'email' ) );
+		$this->assertSame( 'opt_in', Orbit_Consent::latest_state( $user_id, 'sms' ) );
+		$this->assertSame( '+12025550199', get_user_meta( $user_id, 'orbit_phone_pending', true ) );
+		// orbit_phone (the verified slot) stays empty until Orbit_Phone_Verify
+		// confirms.
+		$this->assertSame( '', get_user_meta( $user_id, 'orbit_phone', true ) );
+	}
+
+	public function test_phone_without_sms_consent_writes_only_email_row() {
+		$response = $this->dispatch_signup(
+			$this->signup_params(
+				array(
+					'phone'       => '+12025550199',
+					'consent_sms' => false,
+				)
+			)
+		);
+
+		$this->assertSame( 201, $response->get_status() );
+		$user_id = $response->get_data()['user_id'];
+
+		$this->assertSame( 'opt_in', Orbit_Consent::latest_state( $user_id, 'email' ) );
+		$this->assertNull( Orbit_Consent::latest_state( $user_id, 'sms' ) );
+		// Phone is still stashed for /settings/ to pre-fill.
+		$this->assertSame( '+12025550199', get_user_meta( $user_id, 'orbit_phone_pending', true ) );
 	}
 
 	// ---------------------------------------------------------------- //
@@ -370,5 +463,171 @@ class OrbitRestSignupTest extends WP_UnitTestCase {
 
 		// Current user remains the pre-existing user, not a freshly minted one.
 		$this->assertSame( $existing_user_id, get_current_user_id() );
+	}
+
+	// ---------------------------------------------------------------- //
+	// Error-code preservation through the rollback catch (todo 116/127)
+	// ---------------------------------------------------------------- //
+
+	/**
+	 * A failure injected below the controller layer must come back to
+	 * the client with the *original* code preserved, and with a generic
+	 * translated user-facing message — never the raw inner error string.
+	 *
+	 * Inject by hooking `pre_user_login` (runs inside `wp_insert_user`)
+	 * to return an empty string, which produces a deterministic
+	 * `empty_user_login` WP_Error from core (see WP user.php at the
+	 * `'empty_user_login'` branch). That's a "below the controller"
+	 * code we don't special-case, so the catch should preserve the
+	 * code and substitute the generic message.
+	 */
+	public function test_below_controller_failure_preserves_code_and_returns_generic_message() {
+		$swap_login = function ( $login ) {
+			return '';
+		};
+		add_filter( 'pre_user_login', $swap_login, 10, 1 );
+
+		try {
+			$response = $this->dispatch_signup(
+				$this->signup_params(
+					array(
+						'display_name' => 'Forced Failure',
+						'email'        => 'forced-' . wp_rand( 100000, 999999 ) . '@example.test',
+					)
+				)
+			);
+		} finally {
+			remove_filter( 'pre_user_login', $swap_login, 10 );
+		}
+
+		$this->assertSame( 500, $response->get_status() );
+
+		$data = $response->get_data();
+		// Code preserved from the inner WP_Error, NOT the legacy generic
+		// `signup_failed`.
+		$this->assertSame( 'empty_user_login', $data['code'] );
+		// Message is the controller's translated, generic copy — no MySQL
+		// fragments, no internal vocabulary.
+		$this->assertStringContainsString( 'sign-up', $data['message'] );
+		$this->assertStringNotContainsString( 'database', strtolower( $data['message'] ) );
+		$this->assertStringNotContainsString( 'mysql', strtolower( $data['message'] ) );
+	}
+
+	/**
+	 * If a race lets the upfront `get_user_by('email')` check pass but
+	 * `wp_insert_user` then fails with `existing_user_email` (because a
+	 * concurrent request grabbed the same email), the catch should map
+	 * the failure to the same 409 `login_required` + `login_url` shape
+	 * the steady-state duplicate path produces. See todo 127.
+	 *
+	 * We simulate the race by pre-creating a user with a "taken" email,
+	 * then hooking `pre_user_email` so the email that `wp_insert_user`
+	 * actually checks against `email_exists()` resolves to the taken
+	 * value — but the controller's upfront `get_user_by()` check uses
+	 * the original posted email and passes. Core's email_exists check
+	 * inside wp_insert_user (which runs against the post-filter email)
+	 * then returns `existing_user_email`.
+	 */
+	public function test_email_race_returns_409_with_login_url() {
+		$taken_email = 'race-taken-' . wp_rand( 100000, 999999 ) . '@example.test';
+		$this->factory->user->create(
+			array(
+				'user_email' => $taken_email,
+				'user_login' => 'race-taken-' . wp_rand( 100000, 999999 ),
+			)
+		);
+
+		// Posted email is unique; the upfront get_user_by() controller
+		// check passes.
+		$posted_email = 'race-poster-' . wp_rand( 100000, 999999 ) . '@example.test';
+
+		// pre_user_email runs inside wp_insert_user, before the inner
+		// email_exists check. Swap in the already-taken value so the
+		// insert collides.
+		$swap_email = function ( $email ) use ( $taken_email ) {
+			return $taken_email;
+		};
+		add_filter( 'pre_user_email', $swap_email, 10, 1 );
+
+		try {
+			$response = $this->dispatch_signup(
+				$this->signup_params(
+					array(
+						'display_name' => 'Race Loser',
+						'email'        => $posted_email,
+					)
+				)
+			);
+		} finally {
+			remove_filter( 'pre_user_email', $swap_email, 10 );
+		}
+
+		$this->assertSame( 409, $response->get_status() );
+
+		$data = $response->get_data();
+		$this->assertSame( 'login_required', $data['code'] );
+		$this->assertArrayHasKey( 'data', $data );
+		$this->assertArrayHasKey( 'login_url', $data['data'] );
+		$this->assertNotEmpty( $data['data']['login_url'] );
+	}
+
+	// ---------------------------------------------------------------- //
+	// Deferred new-user notification (todo 119)
+	// ---------------------------------------------------------------- //
+
+	/**
+	 * The welcome email must NOT be sent synchronously from the REST
+	 * handler. We hook the user-facing filter `wp_new_user_notification_email`
+	 * and assert it never fires during the request — proving the
+	 * `wp_send_new_user_notifications()` call moved off the request hot
+	 * path. If ActionScheduler is loaded, we additionally confirm the
+	 * deferred job was enqueued; otherwise the absence of the sync call
+	 * still proves the swap landed (the fallback only kicks in when AS
+	 * is missing, which we don't simulate here).
+	 */
+	public function test_happy_path_defers_welcome_email_to_action_scheduler() {
+		$filter_fired = false;
+		$capture      = function ( $email ) use ( &$filter_fired ) {
+			$filter_fired = true;
+			return $email;
+		};
+		add_filter( 'wp_new_user_notification_email', $capture, 10, 1 );
+
+		try {
+			$email    = 'defer-' . wp_rand( 100000, 999999 ) . '@example.test';
+			$response = $this->dispatch_signup(
+				$this->signup_params(
+					array(
+						'display_name' => 'Defer User',
+						'email'        => $email,
+					)
+				)
+			);
+
+			$this->assertSame( 201, $response->get_status() );
+			$user_id = (int) $response->get_data()['user_id'];
+
+			// The synchronous mail path must NOT have fired during the
+			// REST request — that's the whole point of todo 119.
+			$this->assertFalse(
+				$filter_fired,
+				'wp_send_new_user_notifications fired synchronously from the signup REST handler; it should be deferred to ActionScheduler.'
+			);
+
+			// When AS is loaded (the real production path), the job
+			// should be on the schedule.
+			if ( function_exists( 'as_has_scheduled_action' ) ) {
+				$this->assertTrue(
+					as_has_scheduled_action(
+						'orbit_send_new_user_notification',
+						array( 'user_id' => $user_id ),
+						'orbit'
+					),
+					'Expected orbit_send_new_user_notification to be scheduled for the new user.'
+				);
+			}
+		} finally {
+			remove_filter( 'wp_new_user_notification_email', $capture, 10 );
+		}
 	}
 }

@@ -35,10 +35,22 @@ require_once $_tests_dir . '/includes/functions.php';
 
 /**
  * Manually load the plugin being tested.
+ *
+ * Also pull ActionScheduler into the test runtime. AS ships as a
+ * WordPress plugin and its bootstrap is gated behind `plugins_loaded`,
+ * so it must be required after WP has loaded but before `plugins_loaded`
+ * fires — `muplugins_loaded` is the right seam. Without this, the
+ * `as_*()` family of functions never get declared and tests covering
+ * todo 119 (deferred new-user-notification dispatch) fall through to
+ * the synchronous fallback path.
  */
 tests_add_filter(
 	'muplugins_loaded',
 	function () {
+		$action_scheduler = dirname( __DIR__ ) . '/vendor/woocommerce/action-scheduler/action-scheduler.php';
+		if ( file_exists( $action_scheduler ) ) {
+			require_once $action_scheduler;
+		}
 		require dirname( __DIR__ ) . '/orbit.php';
 	}
 );

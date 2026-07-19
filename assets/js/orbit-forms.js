@@ -285,17 +285,30 @@
 					} else {
 						window.location.href = orbitForms.manageUrl;
 					}
-				} else if ( endpoint === 'signup' ) {
-					// Server response carries a `redirect_url` pointing
-					// at the next step (/edit-profile/). Use it so the
-					// new user lands on the profile editor instead of
-					// re-rendering the now-stale sign-up page.
-					if ( result && result.redirect_url ) {
-						window.location.href = result.redirect_url;
-					} else {
-						window.location.reload();
+				} else if ( endpoint === 'signup' || endpoint === 'subscribe' ) {
+					// Both endpoints carry a `redirect_url` in the
+					// success body — signup points to /edit-profile/,
+					// subscribe points to /dashboard/ (new account) or
+					// the profile permalink (returning logged-in user).
+					// Reject cross-origin destinations defensively:
+					// the server already sanitizes with esc_url_raw, but
+					// a misconfigured filter could in principle let one
+					// through and we don't want a same-origin form to
+					// navigate off-site.
+					var nextUrl = result && result.redirect_url;
+					if ( nextUrl ) {
+						try {
+							var parsed = new URL( nextUrl, window.location.href );
+							if ( parsed.origin === window.location.origin ) {
+								window.location.href = nextUrl;
+								return;
+							}
+						} catch ( e ) {
+							// Fall through to reload on parse error.
+						}
 					}
-				} else if ( endpoint === 'subscribe' || endpoint === 'profiles/me' ) {
+					window.location.reload();
+				} else if ( endpoint === 'profiles/me' ) {
 					window.location.reload();
 				}
 			} )
@@ -621,6 +634,137 @@
 		var option = select.options[ select.selectedIndex ];
 		var description = option ? option.getAttribute( 'data-tier-description' ) : '';
 		help.textContent = description || '';
+	} );
+
+	/**
+	 * Dashboard onboarding banner — dismiss button. POSTs to the user's
+	 * dismiss endpoint to set the orbit_dashboard_banner_dismissed
+	 * user_meta. Uses optimistic visual acknowledgement (aria-busy +
+	 * faded opacity) but defers DOM removal until the POST resolves so
+	 * a failed request can be surfaced and the banner restored. On
+	 * success, keyboard focus is moved to a stable fallback target
+	 * before the banner is removed so screen readers and keyboard
+	 * users don't land on <body>.
+	 */
+	document.addEventListener( 'click', function ( e ) {
+		var dismissBtn = e.target.closest( '[data-orbit-onboarding-dismiss]' );
+		if ( ! dismissBtn ) {
+			return;
+		}
+
+		var banner = dismissBtn.closest( '[data-orbit-onboarding-banner]' );
+		if ( ! banner ) {
+			return;
+		}
+
+		// Optimistic acknowledgement: keep the banner in the DOM but
+		// mark it as dismissing so users see immediate feedback. The
+		// element stays available for rollback if the POST fails.
+		banner.classList.add( 'orbit-onboarding-banner--dismissing' );
+		banner.setAttribute( 'aria-busy', 'true' );
+		banner.style.opacity = '0.5';
+		dismissBtn.disabled = true;
+
+		// Clear any previous inline error from an earlier failed attempt.
+		var prevError = banner.querySelector( '.orbit-onboarding-banner__error' );
+		if ( prevError && prevError.parentNode ) {
+			prevError.parentNode.removeChild( prevError );
+		}
+
+		apiRequest( 'me/dismiss-onboarding-banner', 'POST', {} ).then( function () {
+			// Move focus to a stable target before removing the banner
+			// so keyboard / screen-reader users don't land on <body>.
+			// Preference order: theme-provided hook, then main heading,
+			// then <main>, then #main, then body.
+			var focusTarget = document.querySelector( '[data-orbit-banner-after]' );
+			if ( ! focusTarget ) {
+				focusTarget = document.querySelector( 'main h1' );
+			}
+			if ( ! focusTarget ) {
+				focusTarget = document.querySelector( 'main' );
+			}
+			if ( ! focusTarget ) {
+				focusTarget = document.getElementById( 'main' );
+			}
+			if ( ! focusTarget ) {
+				focusTarget = document.body;
+			}
+
+			if ( focusTarget ) {
+				// Shim tabindex if the target isn't natively focusable
+				// so .focus() actually lands somewhere meaningful.
+				if ( ! focusTarget.hasAttribute( 'tabindex' ) ) {
+					focusTarget.setAttribute( 'tabindex', '-1' );
+				}
+				// rAF lets the browser settle the DOM mutation that
+				// follows; focusing before removal keeps focus stable.
+				window.requestAnimationFrame( function () {
+					focusTarget.focus();
+					if ( banner.parentNode ) {
+						banner.parentNode.removeChild( banner );
+					}
+				} );
+			} else if ( banner.parentNode ) {
+				banner.parentNode.removeChild( banner );
+			}
+		} ).catch( function ( err ) {
+			// Rollback optimistic state so the banner reappears intact.
+			banner.classList.remove( 'orbit-onboarding-banner--dismissing' );
+			banner.removeAttribute( 'aria-busy' );
+			banner.style.opacity = '';
+			dismissBtn.disabled = false;
+
+			// Surface an inline error so the user knows the dismiss
+			// didn't persist. Falls back to a literal English string
+			// because orbitForms.strings doesn't currently expose a
+			// dedicated banner-dismiss error.
+			// TODO: i18n — add an `orbit_banner_dismiss_failed` entry
+			// to wp_localize_script in orbit.php and prefer it here.
+			var message = ( err && err.message )
+				? err.message
+				: "We couldn't save your preference — please try again.";
+
+			var errorEl = document.createElement( 'span' );
+			errorEl.className = 'orbit-onboarding-banner__error';
+			errorEl.setAttribute( 'role', 'alert' );
+			errorEl.textContent = message;
+			banner.appendChild( errorEl );
+
+			// Restore focus to the dismiss button so keyboard users
+			// can retry without hunting for it.
+			dismissBtn.focus();
+		} );
+	} );
+
+	/**
+	 * Phone-input → SMS-consent gate. The SMS opt-in checkbox is
+	 * disabled by default and becomes enabled only when the phone field
+	 * has non-empty content. Server-side, if `consent_sms=1` arrives
+	 * without a phone the handler rejects with a validation error — the
+	 * UX gate here is just so users don't see (and check) a checkbox
+	 * they can't act on.
+	 */
+	document.addEventListener( 'input', function ( e ) {
+		var phoneInput = e.target.closest( '[data-orbit-phone-input]' );
+		if ( ! phoneInput ) {
+			return;
+		}
+
+		var form = phoneInput.closest( 'form' );
+		if ( ! form ) {
+			return;
+		}
+
+		var smsConsent = form.querySelector( '[data-orbit-sms-consent]' );
+		if ( ! smsConsent ) {
+			return;
+		}
+
+		var hasPhone = phoneInput.value.trim().length > 0;
+		smsConsent.disabled = ! hasPhone;
+		if ( ! hasPhone ) {
+			smsConsent.checked = false;
+		}
 	} );
 
 	/**

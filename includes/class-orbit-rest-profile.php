@@ -104,6 +104,28 @@ class Orbit_REST_Profile {
 				'permission_callback' => array( 'Orbit_REST_API', 'is_admin' ),
 			)
 		);
+
+		register_rest_route(
+			$ns,
+			'/me/dismiss-onboarding-banner',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( __CLASS__, 'dismiss_onboarding_banner' ),
+				'permission_callback' => 'is_user_logged_in',
+			)
+		);
+	}
+
+	/**
+	 * Mark the dashboard onboarding banner as dismissed for the current
+	 * user. Stored in user_meta so the dismissal is persistent and
+	 * specific to the user.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public static function dismiss_onboarding_banner() {
+		update_user_meta( get_current_user_id(), 'orbit_dashboard_banner_dismissed', 1 );
+		return new WP_REST_Response( array( 'dismissed' => true ), 200 );
 	}
 
 	/**

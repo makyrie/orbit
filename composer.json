@@ -22,5 +22,8 @@
 		"allow-plugins": {
 			"composer/installers": true
 		}
+	},
+	"scripts": {
+		"policy-diff": "php bin/check-policy-sync.php"
 	}
 }
