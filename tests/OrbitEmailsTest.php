@@ -63,19 +63,24 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 	/**
 	 * Poster welcome: branded subject, the poster copy, and a working
 	 * set-your-password link addressed to the right user.
+	 *
+	 * The recipient holds `orbit_subscriber` (what signup now assigns, see
+	 * #54) yet still gets the POSTER welcome, because routing keys on the
+	 * absence of poster context — not on role.
 	 */
 	public function test_welcome_poster_is_well_formed() {
 		reset_phpmailer_instance();
 
 		$user_id = self::factory()->user->create(
 			array(
-				'role'         => 'subscriber', // Signup gives WP core subscriber, not orbit_subscriber.
+				'role'         => 'orbit_subscriber', // Signup role; no poster context ⇒ poster welcome.
 				'display_name' => 'Pat Poster',
 				'user_login'   => 'patposter',
 				'user_email'   => 'pat@example.test',
 			)
 		);
 
+		// No poster profile ID threaded (signup-style).
 		Orbit_User_Notifications::send_new_user_notification( $user_id );
 
 		$mailer = tests_retrieve_phpmailer_instance();
@@ -124,10 +129,11 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Subscriber welcome without poster context: poster-agnostic fallback
-	 * wording is used and no poster name leaks in.
+	 * Subscriber welcome with poster context but an unresolvable profile:
+	 * the subscriber branch is still taken (poster_profile_id > 0), and the
+	 * poster-agnostic fallback wording is used with no poster name leaking in.
 	 */
-	public function test_welcome_subscriber_uses_fallback_without_poster_context() {
+	public function test_welcome_subscriber_uses_fallback_when_profile_missing() {
 		reset_phpmailer_instance();
 
 		$user_id = self::factory()->user->create(
@@ -139,8 +145,11 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 			)
 		);
 
-		// No poster profile ID threaded.
-		Orbit_User_Notifications::send_new_user_notification( $user_id );
+		// A poster profile ID that doesn't resolve to a profile (e.g. the
+		// poster's profile was deleted between subscribe and send): routing
+		// still picks the subscriber welcome, which then falls back to
+		// poster-agnostic wording.
+		Orbit_User_Notifications::send_new_user_notification( $user_id, 999999 );
 
 		$mailer = tests_retrieve_phpmailer_instance();
 		$this->assertCount( 1, $mailer->mock_sent );
@@ -148,6 +157,32 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 		$sent = $mailer->get_sent();
 		$this->assertStringContainsString( 'hear about the people you follow', $sent->body );
 		$this->assertStringContainsString( "They'll get your request and approve it", $sent->body );
+	}
+
+	/**
+	 * A signup-style user (role `orbit_subscriber`, no poster context) gets
+	 * the POSTER welcome — role does NOT route the copy. Guards against a
+	 * regression of #45 now that signup users are also `orbit_subscriber`.
+	 */
+	public function test_welcome_orbit_subscriber_without_context_gets_poster_copy() {
+		reset_phpmailer_instance();
+
+		$user_id = self::factory()->user->create(
+			array(
+				'role'         => 'orbit_subscriber',
+				'display_name' => 'Robin Signup',
+				'user_login'   => 'robinsignup',
+				'user_email'   => 'robin-signup@example.test',
+			)
+		);
+
+		// No poster profile ID: signup (poster onboarding).
+		Orbit_User_Notifications::send_new_user_notification( $user_id );
+
+		$sent = tests_retrieve_phpmailer_instance()->get_sent();
+		// Poster copy, not subscriber copy.
+		$this->assertStringContainsString( 'friends you already have', $sent->body );
+		$this->assertStringNotContainsString( 'hear about', $sent->body );
 	}
 
 	/**
@@ -165,7 +200,7 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 
 		$user_id = self::factory()->user->create(
 			array(
-				'role'       => 'subscriber',
+				'role'       => 'orbit_subscriber', // Signup role; no poster context ⇒ poster welcome.
 				'user_login' => 'filterposter',
 				'user_email' => 'filter@example.test',
 			)

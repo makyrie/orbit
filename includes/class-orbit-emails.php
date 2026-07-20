@@ -32,11 +32,15 @@ class Orbit_Emails {
 	 * exactly the way core builds its reset link so the `wp-login.php?action=rp`
 	 * flow accepts it.
 	 *
-	 * The copy is role-aware: a subscriber (role `orbit_subscriber`) gets the
-	 * subscriber welcome, threaded with the poster's display name when the
-	 * caller supplies the poster's profile ID; everyone else (posters signing
-	 * up via the marketing form, who hold WordPress's core `subscriber` role)
-	 * gets the poster welcome.
+	 * The copy is keyed on the poster context threaded through by the caller,
+	 * NOT on the recipient's role: signup and subscribe users now both hold
+	 * `orbit_subscriber`, so role can no longer distinguish the two flows (see
+	 * #54). A caller-supplied poster profile ID (`$poster_profile_id > 0`) means
+	 * this is a subscribe (subscriber onboarding), so they get the subscriber
+	 * welcome — threaded with the poster's display name when the profile
+	 * resolves, falling back to poster-agnostic wording when it doesn't. No
+	 * poster context (`0`) means this is a signup (poster onboarding), so they
+	 * get the poster welcome.
 	 *
 	 * If `get_password_reset_key()` fails we fall back to core's
 	 * `wp_send_new_user_notifications()` so account setup never breaks.
@@ -70,7 +74,10 @@ class Orbit_Emails {
 		$subject = __( 'Welcome to Perihelion', 'orbit' );
 		$name    = $user->display_name;
 
-		if ( in_array( 'orbit_subscriber', (array) $user->roles, true ) ) {
+		// Route on poster context, not role: a poster profile ID means this
+		// is a subscribe (subscriber onboarding); its absence means a signup
+		// (poster onboarding). See #54.
+		if ( (int) $poster_profile_id > 0 ) {
 			$body = self::welcome_subscriber_body( $name, $link, (int) $poster_profile_id, $user );
 		} else {
 			$body = self::welcome_poster_body( $name, $link, $user );

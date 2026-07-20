@@ -166,7 +166,10 @@ class Orbit_CLI_Signup extends Orbit_CLI {
 				'user_login'              => $username,
 				'user_email'              => $email,
 				'display_name'            => $display_name,
-				'role'                    => 'subscriber',
+				// Parity with the REST handler: orbit_subscriber (not core
+				// 'subscriber') so the account carries orbit_subscribe and
+				// can create a profile. See #54.
+				'role'                    => 'orbit_subscriber',
 				'phone_pending'           => $phone,
 				'username_retry_attempts' => 5,
 			),
