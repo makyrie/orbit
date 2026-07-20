@@ -55,16 +55,28 @@ sends too. (Notifications may therefore lag up to ~15 min — fine for the trial
 
 Publish these at the DNS host for perihelion.social.
 
-### SPF (one TXT record only — merge if others send for the domain)
+### SPF — usually no change needed
+
+SendGrid's CNAME-based domain authentication routes the envelope/return-path
+through `emNNNN.perihelion.social` (a CNAME to sendgrid.net), so SPF passes and
+aligns via SendGrid's own records — **you do not need to add sendgrid.net to the
+root SPF.** DMARC alignment comes from the DKIM CNAMEs.
+
+perihelion.social already has an SPF record for Namecheap email forwarding:
 
 ```
-Type:  TXT
-Host:  @
-Value: v=spf1 include:sendgrid.net -all
+v=spf1 include:spf.efwd.registrar-servers.com ~all
 ```
 
-If another service also sends mail for the domain, combine the `include:`
-mechanisms into this single record — a domain may have only one SPF TXT record.
+**Leave it as-is.** Only if you later want belt-and-suspenders SPF alignment,
+*edit* (never duplicate — one SPF TXT per domain) to merge the include:
+
+```
+v=spf1 include:spf.efwd.registrar-servers.com include:sendgrid.net ~all
+```
+
+Keep `~all` (softfail); do not switch to `-all`, and do not drop the efwd
+include or you break email forwarding.
 
 ### DKIM (2048-bit, from SendGrid's wizard)
 
