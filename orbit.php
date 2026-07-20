@@ -98,6 +98,7 @@ require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-routes.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-shortcodes.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-spam.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-signup.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-email-template.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-emails.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-mail.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-user-notifications.php';
@@ -384,9 +385,9 @@ function orbit_enqueue_scripts() {
 			'homeUrl'   => esc_url_raw( home_url() ),
 			'manageUrl' => esc_url_raw( home_url( '/manage/' ) ),
 			'strings'   => array(
-				'success'       => __( 'Saved successfully.', 'orbit' ),
-				'responseSaved' => __( 'Response saved.', 'orbit' ),
-				'confirmCancel'       => __( 'Are you sure you want to cancel this activity?', 'orbit' ),
+				'success'            => __( 'Saved successfully.', 'orbit' ),
+				'responseSaved'      => __( 'Response saved.', 'orbit' ),
+				'confirmCancel'      => __( 'Are you sure you want to cancel this activity?', 'orbit' ),
 				'confirmUnsubscribe' => __( 'Are you sure you want to unsubscribe?', 'orbit' ),
 				'retract'            => __( 'Cancel RSVP', 'orbit' ),
 				'timeout'            => __( 'The request timed out. Please try again.', 'orbit' ),
