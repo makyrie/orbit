@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Perihelion
  * Description: Person-centric social activity tool. Subscribe to people, get notified about their activities, respond with lightweight going/maybe actions.
- * Version:     1.8.0
+ * Version:     1.8.1
  * Author:      Perihelion
  * License:     GPL-2.0-or-later
  * Text Domain: orbit
@@ -17,7 +17,7 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Plugin constants.
  */
-define( 'ORBIT_VERSION', '1.8.0' );
+define( 'ORBIT_VERSION', '1.8.1' );
 define( 'ORBIT_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ORBIT_PLUGIN_FILE', __FILE__ );
 
@@ -175,6 +175,12 @@ function orbit_maybe_upgrade() {
 		Orbit_Roles::register();
 		orbit_migrate_page_slugs();
 		orbit_migrate_app_page_templates();
+		// Seed the consent IP salt on in-place upgrades too, not just fresh
+		// activation. Installs first activated before the salt-seed landed are
+		// updated by uploading files (no re-activation), so without this every
+		// signup / subscribe 500s with orbit_consent_salt_missing. Guarded and
+		// idempotent — no-ops when the constant is defined or the option exists.
+		Orbit_Activator::seed_consent_ip_salt();
 		update_option( 'orbit_db_version', ORBIT_VERSION );
 	}
 
