@@ -638,16 +638,20 @@ class OrbitRestSubscriptionTest extends WP_UnitTestCase {
 				'wp_send_new_user_notifications fired synchronously from the subscribe REST handler; it should be deferred to ActionScheduler.'
 			);
 
-			// When AS is loaded (the real production path), the job
-			// should be on the schedule.
+			// When AS is loaded (the real production path), the job should
+			// be on the schedule, with the poster's profile ID threaded
+			// through the payload so the subscriber welcome can name them.
 			if ( function_exists( 'as_has_scheduled_action' ) ) {
 				$this->assertTrue(
 					as_has_scheduled_action(
 						'orbit_send_new_user_notification',
-						array( 'user_id' => $user_id ),
+						array(
+							'user_id'           => $user_id,
+							'poster_profile_id' => (int) $sub->profile_id,
+						),
 						'orbit'
 					),
-					'Expected orbit_send_new_user_notification to be scheduled for the new user.'
+					'Expected orbit_send_new_user_notification to be scheduled with the poster profile ID for the new user.'
 				);
 			}
 		} finally {

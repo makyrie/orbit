@@ -98,6 +98,7 @@ require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-routes.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-shortcodes.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-spam.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-signup.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-emails.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-user-notifications.php';
 
 /**
@@ -151,6 +152,8 @@ function orbit_deactivate() {
 		as_unschedule_all_actions( 'orbit_cleanup_notification_log' );
 		as_unschedule_all_actions( 'orbit_dispatch_activity_notifications' );
 		as_unschedule_all_actions( 'orbit_send_new_user_notification' );
+		as_unschedule_all_actions( 'orbit_send_subscription_approved' );
+		as_unschedule_all_actions( 'orbit_send_new_subscriber' );
 	}
 
 	flush_rewrite_rules();
@@ -296,10 +299,32 @@ add_action( 'init', array( 'Orbit_Notifier', 'schedule_recurring_jobs' ) );
  *
  * Signup + subscribe enqueue an `orbit_send_new_user_notification` job
  * after COMMIT so the REST response isn't blocked on SMTP latency. The
- * job carries a single positional arg (`user_id`) and dispatches via
+ * job carries `user_id` and (from the subscribe path) the poster's
+ * `poster_profile_id`, dispatching via
  * `Orbit_User_Notifications::send_new_user_notification()`.
  */
-add_action( 'orbit_send_new_user_notification', array( 'Orbit_User_Notifications', 'send_new_user_notification' ), 10, 1 );
+add_action( 'orbit_send_new_user_notification', array( 'Orbit_User_Notifications', 'send_new_user_notification' ), 10, 2 );
+
+/**
+ * Register the transactional lifecycle-email handlers.
+ *
+ * `orbit_subscription_status_changed` fires from Orbit_Subscription on every
+ * status change; the handler emails the subscriber only on pending → approved.
+ * `orbit_subscription_requested` fires when a subscription enters the pending
+ * state; the handler emails the poster their new-request notice.
+ */
+add_action( 'orbit_subscription_status_changed', array( 'Orbit_Emails', 'on_subscription_status_changed' ), 10, 3 );
+add_action( 'orbit_subscription_requested', array( 'Orbit_Emails', 'on_subscription_requested' ), 10, 1 );
+
+/**
+ * Register the deferred lifecycle-email ActionScheduler callbacks.
+ *
+ * The two handlers above enqueue these jobs (after COMMIT / after the REST
+ * response) so SMTP latency never blocks the request. Each callback re-loads
+ * the subscription by ID and no-ops if it's gone.
+ */
+add_action( Orbit_Emails::HOOK_SEND_APPROVED, array( 'Orbit_Emails', 'dispatch_subscription_approved' ), 10, 1 );
+add_action( Orbit_Emails::HOOK_SEND_NEW_SUBSCRIBER, array( 'Orbit_Emails', 'dispatch_new_subscriber' ), 10, 1 );
 
 /**
  * Register REST API routes.

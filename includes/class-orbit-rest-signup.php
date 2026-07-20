@@ -267,7 +267,7 @@ class Orbit_REST_Signup {
 			);
 		} else {
 			// Fallback: AS not loaded — should not happen in production.
-			wp_send_new_user_notifications( $user_id, 'user' );
+			Orbit_User_Notifications::send_new_user_notification( $user_id );
 		}
 
 		return new WP_REST_Response(
