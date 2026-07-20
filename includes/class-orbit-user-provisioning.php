@@ -254,9 +254,8 @@ class Orbit_User_Provisioning {
 		// is intentionally NOT touched here (the REST handlers set it
 		// after this returns; CLI has no session).
 		if ( $opts['send_welcome_email'] ) {
-			if ( $opts['schedule_welcome_async'] && function_exists( 'as_schedule_single_action' ) ) {
-				as_schedule_single_action(
-					time(),
+			if ( $opts['schedule_welcome_async'] && function_exists( 'as_enqueue_async_action' ) ) {
+				as_enqueue_async_action(
 					'orbit_send_new_user_notification',
 					array( 'user_id' => (int) $user_id ),
 					'orbit'

@@ -260,12 +260,13 @@ class Orbit_REST_Signup {
 		wp_set_auth_cookie( $user_id, true );
 
 		// Defer the welcome email so SMTP latency doesn't block the HTTP
-		// response (see todo 119). The job runs on the next AS tick; if
-		// ActionScheduler somehow isn't loaded, fall back to the sync
-		// path so users still get their password-set link.
-		if ( function_exists( 'as_schedule_single_action' ) ) {
-			as_schedule_single_action(
-				time(),
+		// response (see todo 119). Enqueued as an async action so AS fires
+		// a background loopback request and runs it within seconds, rather
+		// than waiting for the next system-cron tick; if ActionScheduler
+		// somehow isn't loaded, fall back to the sync path so users still
+		// get their password-set link.
+		if ( function_exists( 'as_enqueue_async_action' ) ) {
+			as_enqueue_async_action(
 				'orbit_send_new_user_notification',
 				array( 'user_id' => $user_id ),
 				'orbit'

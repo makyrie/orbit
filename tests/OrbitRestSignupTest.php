@@ -623,13 +623,34 @@ class OrbitRestSignupTest extends WP_UnitTestCase {
 			// When AS is loaded (the real production path), the job
 			// should be on the schedule.
 			if ( function_exists( 'as_has_scheduled_action' ) ) {
+				$args = array( 'user_id' => $user_id );
+
 				$this->assertTrue(
 					as_has_scheduled_action(
 						'orbit_send_new_user_notification',
-						array( 'user_id' => $user_id ),
+						$args,
 						'orbit'
 					),
 					'Expected orbit_send_new_user_notification to be scheduled for the new user.'
+				);
+
+				// It must be enqueued ASYNC (runs within seconds via loopback),
+				// not a delayed single action that waits for system cron.
+				// Async actions carry an ActionScheduler_NullSchedule.
+				$actions = as_get_scheduled_actions(
+					array(
+						'hook'   => 'orbit_send_new_user_notification',
+						'args'   => $args,
+						'group'  => 'orbit',
+						'status' => ActionScheduler_Store::STATUS_PENDING,
+					)
+				);
+				$this->assertNotEmpty( $actions, 'Expected a pending welcome-email action.' );
+				$action = reset( $actions );
+				$this->assertInstanceOf(
+					'ActionScheduler_NullSchedule',
+					$action->get_schedule(),
+					'Welcome email must be dispatched as an async action, not a delayed scheduled action.'
 				);
 			}
 		} finally {
