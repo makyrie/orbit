@@ -38,6 +38,46 @@ sent to the personal mobile above.
 | Message frequency disclosure | "Up to 10 msgs/week" |
 | Opt-in type | Web form — unchecked SMS consent checkbox adjacent to the phone field |
 
+## Registration status & resubmission (error 30909)
+
+**Current state (verified via Twilio API, 2026-07-20):**
+
+- **Brand `BNe45385…`: APPROVED** — `SOLE_PROPRIETOR`, identity `VERIFIED`, name Sarah
+  Lewis. No action needed.
+- **Campaign `QE2c6890…`: FAILED** — submitted 2026-05-04, on the
+  "Sole Proprietor A2P Messaging Service" (`MG9d3173…`, number `+16194324434`).
+  Rejection: **error 30909** — "issues verifying the Call to Action (CTA)",
+  field `MESSAGE_FLOW`.
+- A stray empty "My New Notifications Service" (`MGfc5b95…`) has no campaign — ignore
+  or delete it.
+
+**Root cause:** the campaign was reviewed on 2026-05-04, *before* the live opt-in UI
+existed. The phone field + unchecked SMS-consent checkbox + disclosures shipped in
+PR #26 (June 2026), so the reviewer could not verify the CTA. That UI is now live at
+`/sign-up/`, `/subscribe/`, and `/settings/`, which is exactly what 30909 requires.
+
+**Resubmission message flow (use verbatim):**
+
+> Consumers opt in on Perihelion's public web form at https://perihelion.social/sign-up/
+> (the same opt-in block also appears at https://perihelion.social/subscribe/ and
+> https://perihelion.social/settings/). No login or purchase is required to view it.
+> The form has a phone-number field and a separate, unchecked SMS-consent checkbox
+> labeled "Also send me SMS notifications at the phone above." Directly beside the
+> phone field the page discloses the program (activity notifications from people you
+> follow), message frequency ("Up to 10 msgs/week"), "Msg & data rates may apply,"
+> "Reply STOP to opt out, HELP for help," and links to the Privacy Policy
+> (https://perihelion.social/privacy/) and Terms (https://perihelion.social/terms/).
+> Phone numbers are verified with a one-time SMS code before any notification is sent.
+> Consumers may also opt in by texting START to the number, and opt out anytime by
+> replying STOP or via https://perihelion.social/settings/.
+
+**Console steps:** Messaging → Regulatory Compliance → the Sole Proprietor campaign.
+Edit/Resubmit the message flow if offered; if a FAILED campaign can't be edited,
+delete it and create a new campaign on the same "Sole Proprietor A2P Messaging
+Service" with the flow above. A small campaign registration fee may reapply. The
+resubmit is a paid carrier action — the account owner clicks submit; status is then
+re-verified via the Twilio API.
+
 ## Opt-in flow (what a reviewer will see)
 
 A person provides a phone number on `/sign-up/`, `/subscribe/`, or `/settings/`.
