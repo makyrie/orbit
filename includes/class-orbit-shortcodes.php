@@ -116,15 +116,7 @@ class Orbit_Shortcodes {
 		<p class="orbit-page-intro">
 			<?php esc_html_e( "A poster account lets you share what you're up to with the friends you invite. Two steps: this one, then a short profile so people know who they're subscribing to.", 'orbit' ); ?>
 		</p>
-		<p class="orbit-form-required-note">
-			<?php
-			echo wp_kses(
-				/* translators: %s is a red asterisk indicating the required-field marker. */
-				sprintf( __( 'Fields marked with %s are required.', 'orbit' ), '<span class="orbit-required-mark" aria-hidden="true">*</span>' ),
-				array( 'span' => array( 'class' => array(), 'aria-hidden' => array() ) )
-			);
-			?>
-		</p>
+		<?php echo self::render_required_note(); ?>
 		<form data-orbit-api="signup" method="post" class="orbit-form">
 			<div class="orbit-form-group">
 				<label for="orbit-signup-name">
@@ -153,7 +145,7 @@ class Orbit_Shortcodes {
 			?>
 			<?php Orbit_Spam::render_traps(); ?>
 			<p>
-				<button type="submit" class="orbit-btn orbit-btn-primary"><?php esc_html_e( 'Create account', 'orbit' ); ?></button>
+				<button type="submit" class="orbit-btn"><?php esc_html_e( 'Create account', 'orbit' ); ?></button>
 			</p>
 			<p class="orbit-form-footer">
 				<a href="<?php echo esc_url( $login_url ); ?>"><?php esc_html_e( 'Already have an account? Log in', 'orbit' ); ?></a>
