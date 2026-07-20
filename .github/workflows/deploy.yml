@@ -61,7 +61,7 @@ jobs:
             DRY="-n"
             echo "::warning::DRY RUN — reporting changes only, nothing will be written."
           fi
-          rsync -az $DRY --delete \
+          rsync -azi $DRY --delete \
             -e "ssh -p ${{ vars.SSH_PORT }} -i ~/.ssh/id_ed25519" \
             --exclude='.git/' \
             --exclude='.github/' \
