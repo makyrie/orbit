@@ -7,6 +7,30 @@ date: 2026-07-19
 
 # Launch readiness — email-first friends & family trial
 
+## Walkthrough findings (2026-07-19)
+
+Local email walkthrough (Playwright) — results:
+
+- 🔴 **Launch-blocking bug found + fixed:** every sign-up/subscribe 500'd with
+  `orbit_consent_salt_missing` because the consent IP salt was seeded only on
+  activation, not on the in-place upgrade path used for deploys. **Almost
+  certainly affects production.** Fixed in `orbit_maybe_upgrade()`; `ORBIT_VERSION`
+  bumped to `1.8.1` so the next prod deploy self-heals. See todo 133.
+  **Prod deploy must verify:** `wp option get orbit_consent_ip_salt` returns a
+  64-char string after the 1.8.1 upload.
+- ✅ **Email path verified end to end** after the fix: sign-up creates the
+  account, writes the consent ledger row (IP hashed), and the "[Perihelion]
+  Login Details" email lands with a valid password-set link. Activity-notification
+  email shape + RFC 8058 headers covered by a new unit test.
+- ✅ **Compliance UI renders correctly** on `/sign-up/` (phone optional,
+  channel-honest disclosure, frequency, msg&data-rates, STOP/HELP, Privacy/Terms
+  links, SMS-consent checkbox disabled until a phone is entered). Draft
+  screenshot captured for the Twilio submission.
+- ✅ **SMS confirmed dormant** — `orbit_sms_enabled` absent → kill-switch off.
+- 🟢 **UX P1 #2** (`[orbit_cta]` literal) appears resolved — the homepage CTA
+  renders as proper "Sign up" buttons. UX P1 #3 (anon nav on virtual pages) and
+  the theme-QA login wordmark still need confirming in the theme repo.
+
 ## Goal
 
 Get Perihelion into the hands of a small group of real people who can actually
