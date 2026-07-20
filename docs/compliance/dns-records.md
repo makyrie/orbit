@@ -8,29 +8,48 @@ phase — it is operational (SMTP provider + DNS).**
 > Values marked `<<FROM SENDGRID WIZARD>>` are generated per-domain by SendGrid's
 > Sender Authentication wizard and must be copied verbatim. Do not guess them.
 
-## 1. SMTP provider: SendGrid via FluentSMTP
+## 1. SMTP provider: SendGrid via wp-mail-smtp
 
-**Decision:** SendGrid (existing account, native FluentSMTP integration).
+**Decision:** SendGrid, sent through **wp-mail-smtp** — already installed on the
+network (v4.9.0), so nothing new to install. Configured entirely via `wp-config.php`
+constants so the API key never touches the database.
+
+> **Multisite scoping (critical).** Production is a large multi-project multisite;
+> perihelion.social is subsite 49 (`wp_49_`). wp-mail-smtp is activated **only on
+> the perihelion.social subsite** — never network-wide — so no other project's mail
+> is affected. `wp-config.php` constants are network-global, so they are wrapped in
+> a host guard to belt-and-suspenders the isolation.
 
 Setup:
 
-1. Install and activate **FluentSMTP** (`fluent-smtp`).
-2. In SendGrid, create an API key scoped to **Mail Send** only. Consider two
-   keys for isolation (optional for the trial):
-   - `transactional` — verification, welcome
-   - `notifications` — activity notifications, digests
-3. Store the key as a constant in `wp-config.php` (NOT in the options table,
-   where an admin compromise could read it):
+1. In SendGrid, create an API key scoped to **Mail Send** only.
+2. Add the host-guarded block to `wp-config.php` (above `/* That's all, stop
+   editing! */`). The key lives here, not in the options table:
 
    ```php
-   define( 'ORBIT_SENDGRID_API_KEY', '<<SENDGRID_API_KEY>>' );
+   // Perihelion transactional email via SendGrid (wp-mail-smtp).
+   // wp-config constants are network-global, so guard on host: never govern
+   // another subsite's mail even if wp-mail-smtp gets activated elsewhere.
+   if ( isset( $_SERVER['HTTP_HOST'] ) && false !== stripos( $_SERVER['HTTP_HOST'], 'perihelion.social' ) ) {
+       define( 'WPMS_ON', true );
+       define( 'WPMS_MAILER', 'sendgrid' );
+       define( 'WPMS_SENDGRID_API_KEY', '<<SENDGRID_API_KEY>>' );
+       define( 'WPMS_SENDGRID_DOMAIN', 'perihelion.social' );
+       define( 'WPMS_MAIL_FROM', 'hi@perihelion.social' );
+       define( 'WPMS_MAIL_FROM_FORCE', true );
+       define( 'WPMS_MAIL_FROM_NAME', 'Perihelion' );
+       define( 'WPMS_MAIL_FROM_NAME_FORCE', true );
+   }
    ```
 
-   FluentSMTP's connection settings accept a `PHP constant` reference for the
-   key — select that option rather than pasting the key into the DB.
-4. Set the From address to something on the authenticated domain, e.g.
-   `notifications@perihelion.social`, with From name `Perihelion`.
-5. Send a FluentSMTP test email and confirm it arrives.
+3. Activate the plugin **on the subsite only**:
+   `wp plugin activate wp-mail-smtp --url=https://perihelion.social`
+4. Send a test and confirm it routes via SendGrid.
+
+**Background-send note:** `DISABLE_WP_CRON` is on; a system cron runs each subsite's
+due events every 15 min via `wp cron event run --url=<site>`. WP-CLI's `--url` sets
+`$_SERVER['HTTP_HOST']`, so the host guard passes for Action Scheduler notification
+sends too. (Notifications may therefore lag up to ~15 min — fine for the trial.)
 
 ## 2. DNS records for perihelion.social
 
@@ -75,7 +94,7 @@ SPF/DKIM aligning cleanly.
 
 ## 3. Verification checklist
 
-- [ ] FluentSMTP test email delivered.
+- [ ] wp-mail-smtp active on the perihelion.social subsite only; test email delivered.
 - [ ] SendGrid Sender Authentication shows the domain **verified** (all CNAMEs
       green).
 - [ ] `dig TXT perihelion.social` shows the SPF record.
