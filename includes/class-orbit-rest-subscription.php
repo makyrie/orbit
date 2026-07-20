@@ -429,17 +429,22 @@ class Orbit_REST_Subscription {
 			// HTTP response (see todo 119). The job runs on the next AS
 			// tick; if ActionScheduler somehow isn't loaded, fall back
 			// to the sync path so users still get their password-set
-			// link.
+			// link. The poster's profile ID is threaded through the job
+			// payload so the subscriber welcome can name the poster they
+			// signed up to follow.
 			if ( function_exists( 'as_schedule_single_action' ) ) {
 				as_schedule_single_action(
 					time(),
 					'orbit_send_new_user_notification',
-					array( 'user_id' => $user_id ),
+					array(
+						'user_id'           => $user_id,
+						'poster_profile_id' => (int) $profile->id,
+					),
 					'orbit'
 				);
 			} else {
 				// Fallback: AS not loaded — should not happen in production.
-				wp_send_new_user_notifications( $user_id, 'user' );
+				Orbit_User_Notifications::send_new_user_notification( $user_id, (int) $profile->id );
 			}
 		}
 

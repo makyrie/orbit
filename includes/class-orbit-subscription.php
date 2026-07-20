@@ -83,6 +83,10 @@ class Orbit_Subscription {
 				array( '%d' )
 			);
 
+			if ( 'pending' === $new_status ) {
+				self::fire_subscription_requested( (int) $existing->id );
+			}
+
 			return (int) $existing->id;
 		}
 
@@ -109,7 +113,32 @@ class Orbit_Subscription {
 			return new WP_Error( 'db_error', __( 'Failed to create subscription.', 'orbit' ) );
 		}
 
-		return (int) $wpdb->insert_id;
+		$subscription_id = (int) $wpdb->insert_id;
+
+		if ( 'pending' === $status ) {
+			self::fire_subscription_requested( $subscription_id );
+		}
+
+		return $subscription_id;
+	}
+
+	/**
+	 * Fire the `orbit_subscription_requested` action for a pending request.
+	 *
+	 * Extracted so the new-subscription and re-subscription branches share a
+	 * single documented emit point. Listeners (e.g. the poster's new-request
+	 * email) receive the subscription ID.
+	 *
+	 * @param int $subscription_id Subscription ID.
+	 */
+	private static function fire_subscription_requested( $subscription_id ) {
+		/**
+		 * Fires when a subscription is created or reactivated into the
+		 * pending (awaiting-approval) state.
+		 *
+		 * @param int $subscription_id Subscription ID.
+		 */
+		do_action( 'orbit_subscription_requested', (int) $subscription_id );
 	}
 
 	/**
@@ -403,6 +432,19 @@ class Orbit_Subscription {
 		if ( false === $result ) {
 			return new WP_Error( 'db_error', __( 'Failed to update subscription status.', 'orbit' ) );
 		}
+
+		/**
+		 * Fires after a subscription's status is successfully changed.
+		 *
+		 * Carries the new status and the previous status so listeners can
+		 * act on specific transitions (e.g. pending → approved sends the
+		 * subscriber their approval email).
+		 *
+		 * @param int    $id             Subscription ID.
+		 * @param string $new_status     The status just written.
+		 * @param string $previous_status The status before the change.
+		 */
+		do_action( 'orbit_subscription_status_changed', (int) $id, $new_status, $subscription->status );
 
 		return true;
 	}
