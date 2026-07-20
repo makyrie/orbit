@@ -497,13 +497,166 @@ class OrbitNotifierTest extends WP_UnitTestCase {
 		// Subject is "{poster}: {title}".
 		$this->assertSame( 'Poster: Saturday morning bike ride', $sent->subject );
 
-		// Body carries the activity and both actionable links.
+		// Body opens in Perihelion's voice, carries the activity, the RSVP
+		// invitation and link, the "silence is fine" reassurance, and the
+		// unsubscribe link.
+		$this->assertStringContainsString( 'just shared something on Perihelion', $sent->body );
 		$this->assertStringContainsString( 'Saturday morning bike ride', $sent->body );
-		$this->assertStringContainsString( 'Respond:', $sent->body );
+		$this->assertStringContainsString( 'Want in?', $sent->body );
+		$this->assertStringContainsString( '/activity/', $sent->body );
+		$this->assertStringContainsString( 'Saying nothing is always a fine answer', $sent->body );
 		$this->assertStringContainsString( 'Unsubscribe:', $sent->body );
 		$this->assertStringContainsString( '/unsubscribe/?token=', $sent->body );
 
 		// RFC 8058 one-click unsubscribe headers (Gmail/Yahoo 2026 bulk-sender rules).
+		$this->assertStringContainsString( 'List-Unsubscribe:', $sent->header );
+		$this->assertStringContainsString(
+			'List-Unsubscribe-Post: List-Unsubscribe=One-Click',
+			$sent->header
+		);
+	}
+
+	/**
+	 * Helper: create a profile with a specific display name so digest
+	 * grouping can be asserted against a known poster header.
+	 *
+	 * @param string $slug         Profile slug.
+	 * @param string $display_name Poster display name.
+	 * @return int Profile ID.
+	 */
+	private function create_named_profile( $slug, $display_name ) {
+		$owner_id = self::factory()->user->create( array( 'role' => 'subscriber' ) );
+
+		return Orbit_Profile::create(
+			array(
+				'user_id'          => $owner_id,
+				'slug'             => $slug,
+				'display_name'     => $display_name,
+				'require_approval' => false,
+			)
+		);
+	}
+
+	/**
+	 * Helper: insert a queued digest log row for a user/activity so
+	 * send_digest() picks it up.
+	 *
+	 * @param int $user_id     Subscriber user ID.
+	 * @param int $activity_id Activity ID.
+	 */
+	private function queue_digest_item( $user_id, $activity_id ) {
+		global $wpdb;
+
+		$wpdb->insert(
+			$wpdb->prefix . ORBIT_TABLE_NOTIFICATION_LOG,
+			array(
+				'user_id'     => absint( $user_id ),
+				'activity_id' => absint( $activity_id ),
+				'method'      => 'digest',
+				'status'      => 'queued',
+				'created_at'  => current_time( 'mysql', true ),
+			),
+			array( '%d', '%d', '%s', '%s', '%s' )
+		);
+	}
+
+	/**
+	 * The daily digest a subscriber receives is warm and well-formed:
+	 * subject "Your Perihelion digest", the "here's what the people you
+	 * follow are up to" opener, a clean per-poster header (no `--- Name ---`
+	 * ASCII dividers), each queued item's title and tier label, the
+	 * "silence is a complete answer" closer, the manage-subscriptions link,
+	 * and the RFC 8058 one-click unsubscribe headers.
+	 *
+	 * Runs wp_mail() through MockPHPMailer so the actual rendered digest is
+	 * inspected rather than short-circuited.
+	 */
+	public function test_digest_email_is_warm_and_well_formed() {
+		reset_phpmailer_instance();
+
+		// Two posters so grouping-by-poster is exercised.
+		$profile_a = $this->create_named_profile( 'digest-poster-a', 'Ada' );
+		$profile_b = $this->create_named_profile( 'digest-poster-b', 'Grace' );
+		$this->assertIsInt( $profile_a );
+		$this->assertIsInt( $profile_b );
+
+		$activity_a1 = Orbit_Activity::create(
+			array(
+				'profile_id' => $profile_a,
+				'tier'       => 2,
+				'title'      => 'Sunday farmers market',
+				'date_time'  => '2026-08-01 09:00:00',
+			)
+		);
+		$activity_a2 = Orbit_Activity::create(
+			array(
+				'profile_id'    => $profile_a,
+				'tier'          => 1,
+				'title'         => 'Evening board games',
+				'location_name' => 'The Corner Cafe',
+			)
+		);
+		$activity_b1 = Orbit_Activity::create(
+			array(
+				'profile_id' => $profile_b,
+				'tier'       => 3,
+				'title'      => 'Weekend hiking trip',
+			)
+		);
+		$this->assertIsInt( $activity_a1 );
+		$this->assertIsInt( $activity_a2 );
+		$this->assertIsInt( $activity_b1 );
+
+		$this->insert_approved_subscription( self::$user_id, $profile_a );
+		$this->insert_approved_subscription( self::$user_id, $profile_b );
+
+		$this->queue_digest_item( self::$user_id, $activity_a1 );
+		$this->queue_digest_item( self::$user_id, $activity_a2 );
+		$this->queue_digest_item( self::$user_id, $activity_b1 );
+
+		$result = Orbit_Notifier::send_digest( self::$user_id );
+		$this->assertTrue( $result, 'send_digest() should report success under MockPHPMailer.' );
+
+		$mailer = tests_retrieve_phpmailer_instance();
+		$sent   = $mailer->get_sent();
+		$this->assertNotFalse( $sent, 'Exactly one digest email must have been handed to the mailer.' );
+
+		// Addressed to the subscriber.
+		$subscriber = get_userdata( self::$user_id );
+		$this->assertSame( $subscriber->user_email, $sent->to[0][0] );
+
+		// Sentence-case subject built from the site name (Perihelion).
+		$this->assertSame(
+			sprintf( 'Your %s digest', get_bloginfo( 'name' ) ),
+			$sent->subject
+		);
+
+		// Warm opener.
+		$this->assertStringContainsString(
+			"Here's what the people you follow are up to",
+			$sent->body
+		);
+
+		// Per-poster headers present.
+		$this->assertStringContainsString( 'Ada', $sent->body );
+		$this->assertStringContainsString( 'Grace', $sent->body );
+
+		// Each item's title and tier label render.
+		$tier_labels = Orbit_Activity::get_tier_labels();
+		$this->assertStringContainsString( 'Sunday farmers market', $sent->body );
+		$this->assertStringContainsString( 'Evening board games', $sent->body );
+		$this->assertStringContainsString( 'Weekend hiking trip', $sent->body );
+		$this->assertStringContainsString( $tier_labels[2], $sent->body );
+
+		// Warm closer + manage link.
+		$this->assertStringContainsString( 'silence is a complete answer', $sent->body );
+		$this->assertStringContainsString( 'Manage your subscriptions:', $sent->body );
+
+		// The old `--- Name ---` ASCII divider is gone.
+		$this->assertStringNotContainsString( '--- Ada ---', $sent->body );
+		$this->assertStringNotContainsString( '--- Grace ---', $sent->body );
+
+		// RFC 8058 one-click unsubscribe headers survive the rewrite.
 		$this->assertStringContainsString( 'List-Unsubscribe:', $sent->header );
 		$this->assertStringContainsString(
 			'List-Unsubscribe-Post: List-Unsubscribe=One-Click',

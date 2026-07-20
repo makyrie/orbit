@@ -391,9 +391,25 @@ class Orbit_Notifier {
 			$activity->title
 		);
 
+		/**
+		 * Filter the opening line of an immediate activity email.
+		 *
+		 * @param string $opener      The rendered opener line.
+		 * @param string $poster_name The poster's display name.
+		 */
+		$opener = apply_filters(
+			'orbit_email_activity_opener',
+			sprintf(
+				/* translators: %s: poster display name */
+				__( '%s just shared something on Perihelion:', 'orbit' ),
+				$poster_name
+			),
+			$poster_name
+		);
+
 		$message = sprintf(
-			"%s shared a new activity:\n\n%s\n%s\n",
-			$poster_name,
+			"%s\n\n%s\n%s\n",
+			$opener,
 			$activity->title,
 			$tier_label
 		);
@@ -402,20 +418,69 @@ class Orbit_Notifier {
 			$message .= "\n" . $activity->description . "\n";
 		}
 
-		if ( $activity->location_name ) {
-			$message .= "\n" . sprintf( __( 'Location: %s', 'orbit' ), $activity->location_name );
-		}
-
 		if ( $activity->date_time ) {
 			$message .= "\n" . sprintf( __( 'When: %s', 'orbit' ), $activity->date_time );
 		}
 
-		if ( $action_url ) {
-			$message .= "\n\n" . sprintf( __( 'Respond: %s', 'orbit' ), $action_url );
+		if ( $activity->location_name ) {
+			$message .= "\n" . sprintf( __( 'Where: %s', 'orbit' ), $activity->location_name );
 		}
 
+		if ( $action_url ) {
+			/**
+			 * Filter the "want in?" invitation line that precedes the RSVP
+			 * link in an immediate activity email.
+			 *
+			 * @param string $invite      The rendered invitation line.
+			 * @param string $poster_name The poster's display name.
+			 */
+			$invite = apply_filters(
+				'orbit_email_activity_invite',
+				sprintf(
+					/* translators: %s: poster display name */
+					__( 'Want in? Let %s know:', 'orbit' ),
+					$poster_name
+				),
+				$poster_name
+			);
+
+			$message .= "\n\n" . $invite . "\n" . $action_url . "\n";
+		}
+
+		/**
+		 * Filter the reassurance line that reminds the reader they are
+		 * never obligated to respond.
+		 *
+		 * @param string $reassurance The rendered reassurance line.
+		 */
+		$reassurance = apply_filters(
+			'orbit_email_activity_reassurance',
+			__( 'Saying nothing is always a fine answer, too.', 'orbit' )
+		);
+
+		$message .= "\n\n" . $reassurance . "\n";
+
+		/**
+		 * Filter the footer line explaining why the reader received the
+		 * email.
+		 *
+		 * @param string $footer      The rendered footer line.
+		 * @param string $poster_name The poster's display name.
+		 */
+		$footer = apply_filters(
+			'orbit_email_activity_footer',
+			sprintf(
+				/* translators: %s: poster display name */
+				__( "You're getting this because you follow %s on Perihelion.", 'orbit' ),
+				$poster_name
+			),
+			$poster_name
+		);
+
+		$message .= "\n—\n" . $footer . "\n";
+
 		if ( $unsub_url ) {
-			$message .= "\n\n" . sprintf( __( 'Unsubscribe: %s', 'orbit' ), $unsub_url );
+			$message .= sprintf( __( 'Unsubscribe: %s', 'orbit' ), $unsub_url ) . "\n";
 		}
 
 		$headers = self::build_email_headers( $unsub_url );
@@ -489,10 +554,20 @@ class Orbit_Notifier {
 		// Build digest message.
 		$tier_labels = Orbit_Activity::get_tier_labels();
 
-		$message = __( "Here's what's new from people you follow:\n\n", 'orbit' );
+		/**
+		 * Filter the digest opening line.
+		 *
+		 * @param string $opener The rendered opener line.
+		 */
+		$opener = apply_filters(
+			'orbit_email_digest_opener',
+			__( "Here's what the people you follow are up to:", 'orbit' )
+		);
+
+		$message = $opener . "\n\n";
 
 		foreach ( $grouped as $poster_name => $items ) {
-			$message .= "--- {$poster_name} ---\n\n";
+			$message .= $poster_name . "\n";
 
 			foreach ( $items as $item ) {
 				$subscription = isset( $sub_by_profile[ (int) $item->profile_id ] ) ? $sub_by_profile[ (int) $item->profile_id ] : null;
@@ -505,7 +580,7 @@ class Orbit_Notifier {
 
 				$tier_label = isset( $tier_labels[ $item->tier ] ) ? $tier_labels[ $item->tier ] : '';
 
-				$message .= sprintf( "[%s] %s\n", $tier_label, $item->title );
+				$message .= sprintf( "  %s — %s\n", $item->title, $tier_label );
 
 				if ( $item->date_time ) {
 					$message .= sprintf( __( "  When: %s\n", 'orbit' ), $item->date_time );
@@ -523,13 +598,25 @@ class Orbit_Notifier {
 			}
 		}
 
+		/**
+		 * Filter the digest closing reassurance line.
+		 *
+		 * @param string $closer The rendered closing line.
+		 */
+		$closer = apply_filters(
+			'orbit_email_digest_closer',
+			__( "Reply to whatever sounds good — or don't; silence is a complete answer.", 'orbit' )
+		);
+
+		$message .= $closer . "\n";
+
 		if ( ! empty( $subscriptions ) ) {
-			$message .= "---\n" . __( 'Manage your subscriptions at: ', 'orbit' ) . home_url( '/dashboard' ) . "\n";
+			$message .= "\n" . __( 'Manage your subscriptions: ', 'orbit' ) . home_url( '/dashboard' ) . "\n";
 		}
 
 		$subject = sprintf(
 			/* translators: %s: site name */
-			__( 'Your %s Digest', 'orbit' ),
+			__( 'Your %s digest', 'orbit' ),
 			get_bloginfo( 'name' )
 		);
 
