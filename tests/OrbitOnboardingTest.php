@@ -27,18 +27,15 @@ class OrbitOnboardingTest extends WP_UnitTestCase {
 	public function set_up() {
 		parent::set_up();
 
+		// A freshly-signed-up user holds orbit_subscriber (see #54), which
+		// carries the orbit_subscribe capability the self-service create
+		// endpoint gates on — no manual cap grant needed.
 		$this->user_id = self::factory()->user->create(
 			array(
-				'role'         => 'subscriber',
+				'role'         => 'orbit_subscriber',
 				'display_name' => 'Test Poster',
 			)
 		);
-
-		// The self-service create endpoint gates on orbit_subscribe; grant it
-		// directly so the test doesn't depend on the activation-time role
-		// registration having run in the test bootstrap.
-		$user = new WP_User( $this->user_id );
-		$user->add_cap( 'orbit_subscribe' );
 	}
 
 	public function tear_down() {

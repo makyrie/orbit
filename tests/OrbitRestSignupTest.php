@@ -130,12 +130,18 @@ class OrbitRestSignupTest extends WP_UnitTestCase {
 		$this->assertArrayHasKey( 'redirect_url', $data );
 		$this->assertStringContainsString( '/edit-profile/', $data['redirect_url'] );
 
-		// User exists with correct display name + subscriber role.
+		// User exists with correct display name + the orbit_subscriber role.
 		$user = get_user_by( 'id', (int) $data['user_id'] );
 		$this->assertInstanceOf( 'WP_User', $user );
 		$this->assertSame( 'Happy Path User', $user->display_name );
 		$this->assertSame( $email, $user->user_email );
-		$this->assertContains( 'subscriber', (array) $user->roles );
+		// orbit_subscriber, NOT core 'subscriber' — see #54.
+		$this->assertContains( 'orbit_subscriber', (array) $user->roles );
+		$this->assertNotContains( 'subscriber', (array) $user->roles );
+
+		// The role carries orbit_subscribe, so the profile-creation gate
+		// (POST /orbit/v1/profiles/me) would pass for this fresh signup.
+		$this->assertTrue( user_can( (int) $data['user_id'], 'orbit_subscribe' ) );
 
 		// Auto-login took effect.
 		$this->assertTrue( is_user_logged_in() );

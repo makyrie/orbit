@@ -144,11 +144,13 @@ class OrbitCliSignupTest extends WP_UnitTestCase {
 			)
 		);
 
-		// User exists with subscriber role + correct display name.
+		// User exists with the orbit_subscriber role + correct display name.
 		$user = get_user_by( 'email', $email );
 		$this->assertInstanceOf( 'WP_User', $user );
 		$this->assertSame( 'Happy Path', $user->display_name );
-		$this->assertContains( 'subscriber', (array) $user->roles );
+		// orbit_subscriber (not core 'subscriber'), parity with REST — see #54.
+		$this->assertContains( 'orbit_subscriber', (array) $user->roles );
+		$this->assertTrue( user_can( $user->ID, 'orbit_subscribe' ) );
 
 		// Single email consent row stamped, no SMS row.
 		$this->assertSame( 'opt_in', Orbit_Consent::latest_state( $user->ID, 'email' ) );

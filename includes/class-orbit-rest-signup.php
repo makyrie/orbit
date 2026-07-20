@@ -187,7 +187,12 @@ class Orbit_REST_Signup {
 				'user_login'              => $username,
 				'user_email'              => $email,
 				'display_name'            => $display_name,
-				'role'                    => 'subscriber',
+				// orbit_subscriber (NOT core 'subscriber') carries the
+				// orbit_subscribe capability the profile-creation gate
+				// (POST /orbit/v1/profiles/me) requires; core subscriber
+				// does not, so a signup poster would otherwise be stuck at
+				// rest_forbidden and never reach upgrade_to_poster(). See #54.
+				'role'                    => 'orbit_subscriber',
 				'phone_pending'           => $phone,
 				'username_retry_attempts' => 5,
 			),
