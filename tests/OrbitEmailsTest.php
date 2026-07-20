@@ -182,11 +182,11 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 	// ---------------------------------------------------------------- //
 
 	/**
-	 * Approving a pending subscription emails exactly one message to the
-	 * subscriber, with the poster name in the subject and the dashboard
-	 * link + closing reassurance in the body.
+	 * Approving a pending subscription DEFERS the subscriber email via
+	 * ActionScheduler (nothing sent inline), scheduling the job with the
+	 * subscription ID.
 	 */
-	public function test_approval_emails_subscriber() {
+	public function test_approval_defers_subscriber_email() {
 		$profile = $this->create_poster_profile( 'approve-poster', 'Robin Poster' );
 
 		$subscriber_id = self::factory()->user->create(
@@ -206,14 +206,59 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 		$this->assertIsInt( $sub_id );
 
 		// Reset AFTER creating the pending subscription so the poster's
-		// new-request email (fired by subscribe()) doesn't count here.
+		// deferred new-request job doesn't interfere here.
 		reset_phpmailer_instance();
 
 		$result = Orbit_Subscription::approve( $sub_id );
 		$this->assertTrue( $result );
 
+		// Nothing sent inline — the send is deferred.
 		$mailer = tests_retrieve_phpmailer_instance();
-		$this->assertCount( 1, $mailer->mock_sent, 'Exactly one email should be sent on approval.' );
+		$this->assertCount( 0, $mailer->mock_sent, 'Approval email must be deferred, not sent inline.' );
+
+		// The AS job is scheduled with the subscription ID.
+		$this->assertTrue(
+			as_has_scheduled_action(
+				Orbit_Emails::HOOK_SEND_APPROVED,
+				array( 'subscription_id' => (int) $sub_id ),
+				'orbit'
+			),
+			'Expected orbit_send_subscription_approved to be scheduled.'
+		);
+	}
+
+	/**
+	 * Running the deferred approval job emails exactly one message to the
+	 * subscriber, with the poster name in the subject and the dashboard link
+	 * + closing reassurance in the body.
+	 */
+	public function test_approval_job_emails_subscriber() {
+		$profile = $this->create_poster_profile( 'approve-poster-2', 'Robin Poster' );
+
+		$subscriber_id = self::factory()->user->create(
+			array(
+				'role'         => 'orbit_subscriber',
+				'display_name' => 'Lee Subscriber',
+				'user_email'   => 'lee@example.test',
+			)
+		);
+
+		$sub_id = Orbit_Subscription::subscribe(
+			array(
+				'user_id'    => $subscriber_id,
+				'profile_id' => (int) $profile->id,
+			)
+		);
+		$this->assertIsInt( $sub_id );
+		Orbit_Subscription::approve( $sub_id );
+
+		reset_phpmailer_instance();
+
+		// Invoke the AS callback directly.
+		Orbit_Emails::dispatch_subscription_approved( $sub_id );
+
+		$mailer = tests_retrieve_phpmailer_instance();
+		$this->assertCount( 1, $mailer->mock_sent, 'Exactly one email should be sent by the approval job.' );
 
 		$sent = $mailer->get_sent();
 		$this->assertSame( 'lee@example.test', $sent->to[0][0] );
@@ -224,7 +269,8 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Denial must NOT email the subscriber (denial copy is deferred).
+	 * Denial must NOT email the subscriber and must NOT schedule an approval
+	 * job (denial copy is deferred).
 	 */
 	public function test_deny_does_not_email_subscriber() {
 		$profile = $this->create_poster_profile( 'deny-poster', 'Morgan Poster' );
@@ -251,6 +297,14 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 
 		$mailer = tests_retrieve_phpmailer_instance();
 		$this->assertCount( 0, $mailer->mock_sent, 'Denial must not send any email.' );
+		$this->assertFalse(
+			as_has_scheduled_action(
+				Orbit_Emails::HOOK_SEND_APPROVED,
+				array( 'subscription_id' => (int) $sub_id ),
+				'orbit'
+			),
+			'Denial must not schedule an approval email.'
+		);
 	}
 
 	// ---------------------------------------------------------------- //
@@ -258,10 +312,10 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 	// ---------------------------------------------------------------- //
 
 	/**
-	 * A pending subscribe() emails the poster, with the subscriber's name in
-	 * the subject, the /subscribers/ link, and the connection note line.
+	 * A pending subscribe() DEFERS the poster email via ActionScheduler
+	 * (nothing sent inline) and schedules the job with the subscription ID.
 	 */
-	public function test_new_request_emails_poster_with_note() {
+	public function test_new_request_defers_poster_email() {
 		$profile = $this->create_poster_profile( 'req-poster', 'Dana Poster' );
 
 		$subscriber_id = self::factory()->user->create(
@@ -283,6 +337,50 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 		);
 		$this->assertIsInt( $sub_id );
 
+		// Nothing sent inline — the send is deferred.
+		$mailer = tests_retrieve_phpmailer_instance();
+		$this->assertCount( 0, $mailer->mock_sent, 'New-subscriber email must be deferred, not sent inline.' );
+
+		$this->assertTrue(
+			as_has_scheduled_action(
+				Orbit_Emails::HOOK_SEND_NEW_SUBSCRIBER,
+				array( 'subscription_id' => (int) $sub_id ),
+				'orbit'
+			),
+			'Expected orbit_send_new_subscriber to be scheduled.'
+		);
+	}
+
+	/**
+	 * Running the deferred new-subscriber job emails the poster, with the
+	 * subscriber's name in the subject, the /subscribers/ link, and the
+	 * connection note line.
+	 */
+	public function test_new_request_job_emails_poster_with_note() {
+		$profile = $this->create_poster_profile( 'req-poster-note', 'Dana Poster' );
+
+		$subscriber_id = self::factory()->user->create(
+			array(
+				'role'         => 'orbit_subscriber',
+				'display_name' => 'Kai Subscriber',
+				'user_email'   => 'kai@example.test',
+			)
+		);
+
+		$sub_id = Orbit_Subscription::subscribe(
+			array(
+				'user_id'         => $subscriber_id,
+				'profile_id'      => (int) $profile->id,
+				'connection_note' => 'We met at the climbing gym.',
+			)
+		);
+		$this->assertIsInt( $sub_id );
+
+		reset_phpmailer_instance();
+
+		// Invoke the AS callback directly.
+		Orbit_Emails::dispatch_new_subscriber( $sub_id );
+
 		$mailer = tests_retrieve_phpmailer_instance();
 		$this->assertCount( 1, $mailer->mock_sent, 'Exactly one email should be sent to the poster.' );
 
@@ -297,10 +395,10 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 	}
 
 	/**
-	 * A pending subscribe() with no connection note omits the "They added"
-	 * line entirely.
+	 * The deferred new-subscriber job with no connection note omits the
+	 * "They added" line entirely.
 	 */
-	public function test_new_request_omits_note_line_without_note() {
+	public function test_new_request_job_omits_note_line_without_note() {
 		$profile = $this->create_poster_profile( 'req-poster-2', 'Quinn Poster' );
 
 		$subscriber_id = self::factory()->user->create(
@@ -311,8 +409,6 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 			)
 		);
 
-		reset_phpmailer_instance();
-
 		$sub_id = Orbit_Subscription::subscribe(
 			array(
 				'user_id'    => $subscriber_id,
@@ -320,6 +416,10 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 			)
 		);
 		$this->assertIsInt( $sub_id );
+
+		reset_phpmailer_instance();
+
+		Orbit_Emails::dispatch_new_subscriber( $sub_id );
 
 		$sent = tests_retrieve_phpmailer_instance()->get_sent();
 		$this->assertStringNotContainsString( 'They added:', $sent->body );

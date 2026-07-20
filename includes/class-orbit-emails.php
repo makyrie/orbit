@@ -279,9 +279,20 @@ class Orbit_Emails {
 	}
 
 	/**
+	 * ActionScheduler hook names for the deferred lifecycle sends.
+	 */
+	const HOOK_SEND_APPROVED       = 'orbit_send_subscription_approved';
+	const HOOK_SEND_NEW_SUBSCRIBER = 'orbit_send_new_subscriber';
+
+	/**
 	 * Action handler: a subscription's status changed.
 	 *
-	 * Sends the approval email on the pending → approved transition only.
+	 * Defers the approval email (pending → approved only) to ActionScheduler
+	 * so the poster's "Approve" REST response isn't blocked on SMTP latency —
+	 * the recipient is the subscriber, not the poster waiting on the request,
+	 * so there is no reason to send inline (mirrors the deferred welcome, see
+	 * todo 119). Falls back to a synchronous send only when AS isn't loaded.
+	 *
 	 * Denials, removals, and unsubscribes are intentionally silent for now —
 	 * the denial email is deferred (see #43). Do NOT add a deny/remove/
 	 * unsubscribe branch here until that copy is approved.
@@ -295,19 +306,27 @@ class Orbit_Emails {
 			return;
 		}
 
-		$subscription = Orbit_Subscription::get( (int) $id );
-		if ( ! $subscription ) {
-			return;
+		if ( function_exists( 'as_schedule_single_action' ) ) {
+			as_schedule_single_action(
+				time(),
+				self::HOOK_SEND_APPROVED,
+				array( 'subscription_id' => (int) $id ),
+				'orbit'
+			);
+		} else {
+			// Fallback: AS not loaded — should not happen in production.
+			self::dispatch_subscription_approved( (int) $id );
 		}
-
-		self::send_subscription_approved( $subscription );
 	}
 
 	/**
 	 * Action handler: a subscription was requested.
 	 *
 	 * Emails the poster only when the request is pending (require_approval);
-	 * an auto-approved subscription needs no poster action.
+	 * an auto-approved subscription needs no poster action. Defers the send
+	 * to ActionScheduler so the subscriber's HTTP request isn't blocked on
+	 * the poster's notification (see todo 119). Falls back to a synchronous
+	 * send only when AS isn't loaded.
 	 *
 	 * @param int $id Subscription ID.
 	 */
@@ -318,6 +337,50 @@ class Orbit_Emails {
 		}
 
 		if ( 'pending' !== $subscription->status ) {
+			return;
+		}
+
+		if ( function_exists( 'as_schedule_single_action' ) ) {
+			as_schedule_single_action(
+				time(),
+				self::HOOK_SEND_NEW_SUBSCRIBER,
+				array( 'subscription_id' => (int) $id ),
+				'orbit'
+			);
+		} else {
+			// Fallback: AS not loaded — should not happen in production.
+			self::dispatch_new_subscriber( (int) $id );
+		}
+	}
+
+	/**
+	 * ActionScheduler callback: send the deferred subscription-approved email.
+	 *
+	 * Re-loads the subscription by ID and no-ops if it's gone. Minor
+	 * staleness between enqueue and execution is acceptable.
+	 *
+	 * @param int $subscription_id Subscription ID.
+	 */
+	public static function dispatch_subscription_approved( $subscription_id ) {
+		$subscription = Orbit_Subscription::get( (int) $subscription_id );
+		if ( ! $subscription ) {
+			return;
+		}
+
+		self::send_subscription_approved( $subscription );
+	}
+
+	/**
+	 * ActionScheduler callback: send the deferred new-subscriber email.
+	 *
+	 * Re-loads the subscription by ID and no-ops if it's gone. Minor
+	 * staleness between enqueue and execution is acceptable.
+	 *
+	 * @param int $subscription_id Subscription ID.
+	 */
+	public static function dispatch_new_subscriber( $subscription_id ) {
+		$subscription = Orbit_Subscription::get( (int) $subscription_id );
+		if ( ! $subscription ) {
 			return;
 		}
 
