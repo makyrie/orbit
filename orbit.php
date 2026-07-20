@@ -99,6 +99,7 @@ require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-shortcodes.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-spam.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-signup.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-emails.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-mail.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-user-notifications.php';
 
 /**
@@ -287,6 +288,10 @@ add_action( 'init', 'orbit_maybe_upgrade', 0 );
  * legal-defense invariant (TCPA), not a soft convention.
  */
 Orbit_Consent::register_query_guard();
+
+// Disable SendGrid click/open tracking on our own sends (per message, not
+// account-wide) so transactional-email links stay clean and readable.
+Orbit_Mail::register();
 
 /**
  * Register ActionScheduler hooks and schedule recurring jobs.
