@@ -180,6 +180,7 @@ button.orbit-btn-link {
 
 .orbit-form-group input[type="text"],
 .orbit-form-group input[type="email"],
+.orbit-form-group input[type="tel"],
 .orbit-form-group input[type="number"],
 .orbit-form-group input[type="time"],
 .orbit-form-group input[type="datetime-local"],
@@ -201,7 +202,7 @@ button.orbit-btn-link {
 .orbit-form-group select:focus {
 	outline: none;
 	border-color: var(--orbit-color-primary);
-	box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+	box-shadow: 0 0 0 3px var(--orbit-color-border);
 }
 
 .orbit-form-group input[type="checkbox"] {
@@ -245,6 +246,26 @@ button.orbit-btn-link {
 }
 
 .orbit-required-mark {
+	color: var(--orbit-color-primary);
+}
+
+/* SMS / compliance legal disclosure — de-emphasized fine print. Rendered by
+ * Orbit_Compliance_UI::render_compliance_block() on the sign-up and subscribe
+ * forms, between the phone field and the consent checkboxes. A tinted,
+ * bordered box keeps the required legal text legible without letting it
+ * dominate the form. */
+.orbit-compliance-block {
+	margin: var(--orbit-spacing) 0;
+	padding: 0.75em 0.9em;
+	background-color: var(--orbit-color-bg-light);
+	border: 1px solid var(--orbit-color-border);
+	border-radius: var(--orbit-radius);
+	font-size: var(--orbit-font-size-sm);
+	line-height: 1.5;
+	color: var(--orbit-color-muted);
+}
+
+.orbit-compliance-block a {
 	color: var(--orbit-color-primary);
 }
 

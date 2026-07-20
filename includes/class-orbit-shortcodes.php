@@ -116,32 +116,24 @@ class Orbit_Shortcodes {
 		<p class="orbit-page-intro">
 			<?php esc_html_e( "A poster account lets you share what you're up to with the friends you invite. Two steps: this one, then a short profile so people know who they're subscribing to.", 'orbit' ); ?>
 		</p>
-		<p class="orbit-required-note">
-			<?php
-			echo wp_kses(
-				/* translators: %s is a red asterisk indicating the required-field marker. */
-				sprintf( __( 'Fields marked with %s are required.', 'orbit' ), '<span class="orbit-required-mark" aria-hidden="true">*</span>' ),
-				array( 'span' => array( 'class' => array(), 'aria-hidden' => array() ) )
-			);
-			?>
-		</p>
+		<?php echo self::render_required_note(); ?>
 		<form data-orbit-api="signup" method="post" class="orbit-form">
-			<p>
+			<div class="orbit-form-group">
 				<label for="orbit-signup-name">
 					<?php esc_html_e( 'Your name', 'orbit' ); ?>
 					<span class="orbit-required-mark" aria-hidden="true">*</span>
 				</label>
 				<input type="text" id="orbit-signup-name" name="display_name" required autocomplete="name">
-				<span class="orbit-field-help"><?php esc_html_e( "How you'll appear on activity cards and your public profile. You can change it later.", 'orbit' ); ?></span>
-			</p>
-			<p>
+				<p class="orbit-help"><?php esc_html_e( "How you'll appear on activity cards and your public profile. You can change it later.", 'orbit' ); ?></p>
+			</div>
+			<div class="orbit-form-group">
 				<label for="orbit-signup-email">
 					<?php esc_html_e( 'Email', 'orbit' ); ?>
 					<span class="orbit-required-mark" aria-hidden="true">*</span>
 				</label>
 				<input type="email" id="orbit-signup-email" name="email" required autocomplete="email">
-				<span class="orbit-field-help"><?php esc_html_e( 'Used to send you activity notifications and a link to set your password.', 'orbit' ); ?></span>
-			</p>
+				<p class="orbit-help"><?php esc_html_e( 'Used to send you activity notifications and a link to set your password.', 'orbit' ); ?></p>
+			</div>
 			<?php
 			// Phone capture + compliance disclosure + per-channel consent.
 			// Same building blocks the subscribe form uses (Phase 2b) so
@@ -153,7 +145,7 @@ class Orbit_Shortcodes {
 			?>
 			<?php Orbit_Spam::render_traps(); ?>
 			<p>
-				<button type="submit" class="orbit-btn orbit-btn-primary"><?php esc_html_e( 'Create account', 'orbit' ); ?></button>
+				<button type="submit" class="orbit-btn"><?php esc_html_e( 'Create account', 'orbit' ); ?></button>
 			</p>
 			<p class="orbit-form-footer">
 				<a href="<?php echo esc_url( $login_url ); ?>"><?php esc_html_e( 'Already have an account? Log in', 'orbit' ); ?></a>
