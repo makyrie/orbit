@@ -56,6 +56,42 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 		return Orbit_Profile::get( $profile_id );
 	}
 
+	/**
+	 * Assert an action is enqueued as an ASYNC job — one that runs via a
+	 * background loopback request within seconds — rather than a delayed
+	 * single action that waits for the next system-cron tick.
+	 *
+	 * ActionScheduler tags async actions with an ActionScheduler_NullSchedule
+	 * (no scheduled date), whereas a `time()`-scheduled single action carries
+	 * a concrete ActionScheduler_SimpleSchedule. Asserting on the schedule
+	 * type locks in the fast-dispatch intent, not just "the job exists".
+	 *
+	 * @param string $hook The action hook.
+	 * @param array  $args The action arguments.
+	 */
+	private function assert_action_enqueued_async( $hook, array $args ) {
+		$actions = as_get_scheduled_actions(
+			array(
+				'hook'   => $hook,
+				'args'   => $args,
+				'group'  => 'orbit',
+				'status' => ActionScheduler_Store::STATUS_PENDING,
+			)
+		);
+
+		$this->assertNotEmpty(
+			$actions,
+			"Expected a pending {$hook} action to be enqueued."
+		);
+
+		$action = reset( $actions );
+		$this->assertInstanceOf(
+			'ActionScheduler_NullSchedule',
+			$action->get_schedule(),
+			"Expected {$hook} to be dispatched as an async action (runs within seconds), not a delayed scheduled action."
+		);
+	}
+
 	// ---------------------------------------------------------------- //
 	// #45 — Welcome email
 	// ---------------------------------------------------------------- //
@@ -260,6 +296,13 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 			),
 			'Expected orbit_send_subscription_approved to be scheduled.'
 		);
+
+		// ...and enqueued ASYNC so it dispatches within seconds, not on the
+		// next ~15-minute system-cron tick.
+		$this->assert_action_enqueued_async(
+			Orbit_Emails::HOOK_SEND_APPROVED,
+			array( 'subscription_id' => (int) $sub_id )
+		);
 	}
 
 	/**
@@ -383,6 +426,13 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 				'orbit'
 			),
 			'Expected orbit_send_new_subscriber to be scheduled.'
+		);
+
+		// ...and enqueued ASYNC so it dispatches within seconds, not on the
+		// next ~15-minute system-cron tick.
+		$this->assert_action_enqueued_async(
+			Orbit_Emails::HOOK_SEND_NEW_SUBSCRIBER,
+			array( 'subscription_id' => (int) $sub_id )
 		);
 	}
 

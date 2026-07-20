@@ -313,9 +313,8 @@ class Orbit_Emails {
 			return;
 		}
 
-		if ( function_exists( 'as_schedule_single_action' ) ) {
-			as_schedule_single_action(
-				time(),
+		if ( function_exists( 'as_enqueue_async_action' ) ) {
+			as_enqueue_async_action(
 				self::HOOK_SEND_APPROVED,
 				array( 'subscription_id' => (int) $id ),
 				'orbit'
@@ -347,9 +346,8 @@ class Orbit_Emails {
 			return;
 		}
 
-		if ( function_exists( 'as_schedule_single_action' ) ) {
-			as_schedule_single_action(
-				time(),
+		if ( function_exists( 'as_enqueue_async_action' ) ) {
+			as_enqueue_async_action(
 				self::HOOK_SEND_NEW_SUBSCRIBER,
 				array( 'subscription_id' => (int) $id ),
 				'orbit'
