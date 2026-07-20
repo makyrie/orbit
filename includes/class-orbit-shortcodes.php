@@ -208,6 +208,24 @@ class Orbit_Shortcodes {
 
 		echo '<h1>' . esc_html__( 'Dashboard', 'orbit' ) . '</h1>';
 
+		// One-time welcome callout shown on the first dashboard load after a
+		// poster creates their profile (the REST create sets the
+		// `orbit_show_welcome` flag; see Orbit_REST_Profile::create_own_profile).
+		// We clear the flag unconditionally so it fires exactly once, then only
+		// render the callout when the viewer actually has a profile to build a
+		// share link from. When the callout shows we suppress the SMS
+		// onboarding banner for this one load so the first screen stays clean;
+		// the banner returns on subsequent visits.
+		$showed_welcome = false;
+		if ( get_user_meta( $user_id, 'orbit_show_welcome', true ) ) {
+			delete_user_meta( $user_id, 'orbit_show_welcome' );
+
+			if ( $own_profile ) {
+				echo self::render_welcome_callout( $own_profile );
+				$showed_welcome = true;
+			}
+		}
+
 		// One-time onboarding banner for users who haven't verified a phone
 		// yet. Dismissable per-user via the `orbit_dashboard_banner_dismissed`
 		// user_meta. Shown when:
@@ -225,7 +243,7 @@ class Orbit_Shortcodes {
 		// entirely; a verify-your-phone CTA can land elsewhere later (per
 		// todo 128). The banner body itself comes from
 		// Orbit_Messaging_Copy so the dormancy copy stays a one-flag flip.
-		if ( ! Orbit_Features::sms_enabled() && ! $has_verified_phone && ! $dismissed ) {
+		if ( ! $showed_welcome && ! Orbit_Features::sms_enabled() && ! $has_verified_phone && ! $dismissed ) {
 			$settings_link = '<a href="' . esc_url( home_url( '/settings/' ) ) . '">'
 				. esc_html__( 'verify your phone in Settings', 'orbit' )
 				. '</a>';
@@ -1255,35 +1273,45 @@ class Orbit_Shortcodes {
 	private static function create_profile_form() {
 		$user = wp_get_current_user();
 
+		$preview_slug = sanitize_title( $user->display_name );
+
 		ob_start();
 
 		echo '<div class="orbit-edit-profile">';
-		echo '<h1>' . esc_html__( 'Create Your Profile', 'orbit' ) . '</h1>';
-		echo '<p>' . esc_html__( 'Set up a profile to start sharing activities with your people.', 'orbit' ) . '</p>';
+		echo '<h1>' . esc_html__( 'Create your profile', 'orbit' ) . '</h1>';
+		echo '<p class="orbit-page-intro">' . esc_html__( "Last step. This is how you'll show up to the people you invite — your name, your link, and a line about what you're into. You can change any of it later.", 'orbit' ) . '</p>';
+
+		echo self::render_required_note();
+
 		echo '<form method="post" class="orbit-form" data-orbit-api="profiles/me">';
 
 		echo '<div class="orbit-form-group">';
-		echo '<label for="orbit-display-name">' . esc_html__( 'Display Name', 'orbit' ) . '</label>';
+		echo '<label for="orbit-display-name">' . esc_html__( 'Display name', 'orbit' ) . ' <span class="orbit-required-mark" aria-hidden="true">*</span></label>';
 		echo '<input type="text" id="orbit-display-name" name="display_name" value="' . esc_attr( $user->display_name ) . '" required>';
+		echo '<p class="orbit-help">' . esc_html__( "How you'll appear on activity cards and your public profile.", 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
-		echo '<label for="orbit-slug">' . esc_html__( 'URL Slug', 'orbit' ) . '</label>';
-		echo '<input type="text" id="orbit-slug" name="slug" value="' . esc_attr( sanitize_title( $user->display_name ) ) . '" required>';
-		echo '<p class="orbit-help">' . esc_html( home_url( '/@' ) ) . '<span id="orbit-slug-preview">' . esc_html( sanitize_title( $user->display_name ) ) . '</span></p>';
+		echo '<label for="orbit-slug">' . esc_html__( 'URL slug', 'orbit' ) . ' <span class="orbit-required-mark" aria-hidden="true">*</span></label>';
+		echo '<input type="text" id="orbit-slug" name="slug" value="' . esc_attr( $preview_slug ) . '" required>';
+		echo '<p class="orbit-help">' . esc_html__( "Your personal link to share with people you'd like to invite:", 'orbit' ) . ' <code>' . esc_html( home_url( '/@' ) ) . '<span id="orbit-slug-preview">' . esc_html( $preview_slug ) . '</span></code></p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-bio">' . esc_html__( 'Bio', 'orbit' ) . '</label>';
 		echo '<textarea id="orbit-bio" name="bio" rows="3" placeholder="' . esc_attr__( 'A short description of what you like to do', 'orbit' ) . '"></textarea>';
+		echo '<p class="orbit-help">' . esc_html__( 'A sentence or two so visitors recognize you. Shown on your public profile above your activities.', 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
-		echo '<label><input type="checkbox" name="require_approval" value="1" checked> ';
+		echo '<label class="orbit-checkbox-label"><input type="checkbox" name="require_approval" value="1" checked> ';
 		echo esc_html__( 'Require approval for new subscribers', 'orbit' ) . '</label>';
+		echo '<p class="orbit-help">' . esc_html__( 'When ticked, new subscribers wait until you approve them before they can see your activities. Untick to let anyone with your share link subscribe immediately.', 'orbit' ) . '</p>';
 		echo '</div>';
 
-		echo '<button type="submit" class="orbit-btn">' . esc_html__( 'Create Profile', 'orbit' ) . '</button>';
+		echo '<div class="orbit-form-actions">';
+		echo '<button type="submit" class="orbit-btn">' . esc_html__( 'Create profile', 'orbit' ) . '</button>';
+		echo '</div>';
 		echo '</form>';
 		echo '</div>';
 
@@ -1688,6 +1716,52 @@ class Orbit_Shortcodes {
 				echo '<p class="orbit-past-notice">' . esc_html__( 'This activity has passed.', 'orbit' ) . '</p>';
 			}
 		}
+
+		echo '</div>';
+
+		return ob_get_clean();
+	}
+
+	/**
+	 * One-time "you're all set up" welcome callout for a newly created poster.
+	 *
+	 * Rendered at the top of the dashboard on the first load after profile
+	 * creation (see Orbit_Shortcodes::dashboard). Hands the poster their share
+	 * link (with a Copy button, reusing the same copy component as the profile
+	 * editor) and a primary CTA to post their first activity.
+	 *
+	 * The visible heading and body copy are each wrapped in an apply_filters()
+	 * hook so a site can override the wording without replacing the markup,
+	 * consistent with how the transactional email bodies are handled.
+	 *
+	 * @param object $profile The viewer's profile row (must have slug + share_token).
+	 * @return string HTML markup for the callout.
+	 */
+	private static function render_welcome_callout( $profile ) {
+		$share_url = home_url( '/@' . $profile->slug . '/subscribe?token=' . $profile->share_token );
+
+		/** This filter is documented in this method's docblock. */
+		$heading = apply_filters( 'orbit_welcome_callout_heading', __( "You're all set up.", 'orbit' ), $profile );
+		/** This filter is documented in this method's docblock. */
+		$body = apply_filters( 'orbit_welcome_callout_body', __( "Share your personal link with the friends you'd like to invite — they subscribe with one click, and you choose who comes in. When you've got a plan, post your first activity.", 'orbit' ), $profile );
+
+		ob_start();
+
+		echo '<div class="orbit-welcome-callout" data-orbit-welcome-callout>';
+		echo '<h2>' . esc_html( $heading ) . '</h2>';
+		echo '<p>' . esc_html( $body ) . '</p>';
+
+		echo '<div class="orbit-form-group">';
+		echo '<label for="orbit-welcome-share-link">' . esc_html__( 'Your share link', 'orbit' ) . '</label>';
+		echo '<div class="orbit-share-link-row">';
+		echo '<input type="text" id="orbit-welcome-share-link" class="orbit-share-link-input" value="' . esc_attr( $share_url ) . '" readonly>';
+		echo '<button type="button" class="orbit-btn orbit-btn-sm" data-orbit-copy-target="#orbit-welcome-share-link" data-orbit-copy-label="' . esc_attr__( 'Copy', 'orbit' ) . '" data-orbit-copy-confirm="' . esc_attr__( 'Copied!', 'orbit' ) . '">' . esc_html__( 'Copy', 'orbit' ) . '</button>';
+		echo '</div>';
+		echo '</div>';
+
+		echo '<div class="orbit-form-actions">';
+		echo '<a href="' . esc_url( home_url( '/new-activity/' ) ) . '" class="orbit-btn">' . esc_html__( 'Post your first activity', 'orbit' ) . '</a>';
+		echo '</div>';
 
 		echo '</div>';
 

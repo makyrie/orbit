@@ -193,7 +193,20 @@ class Orbit_REST_Profile {
 
 		Orbit_Roles::upgrade_to_poster( $user_id );
 
-		return new WP_REST_Response( Orbit_Profile::get( $profile_id ), 201 );
+		// One-time flag so the dashboard can greet the new poster with a
+		// welcome callout on their next load (and only then). The dashboard
+		// shortcode deletes it after rendering, so it fires exactly once.
+		update_user_meta( $user_id, 'orbit_show_welcome', 1 );
+
+		// Hand the just-created poster off to their dashboard instead of
+		// leaving them on the profile editor. The JS form handler forwards
+		// to `redirect_url` when present (see assets/js/orbit-forms.js); the
+		// PATCH edit path returns no redirect and keeps its in-place behavior.
+		$profile               = Orbit_Profile::get( $profile_id );
+		$profile->message      = __( "You're all set up. Here's your dashboard.", 'orbit' );
+		$profile->redirect_url = esc_url_raw( home_url( '/dashboard/' ) );
+
+		return new WP_REST_Response( $profile, 201 );
 	}
 
 	/**

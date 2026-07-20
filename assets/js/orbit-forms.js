@@ -309,6 +309,23 @@
 					}
 					window.location.reload();
 				} else if ( endpoint === 'profiles/me' ) {
+					// Creating a profile (POST /profiles/me) hands the new
+					// poster off to their dashboard via a `redirect_url` in
+					// the success body — same contract as signup/subscribe.
+					// The PATCH edit path (profiles/<id>) returns no
+					// redirect_url and falls through to the in-place reload.
+					var meNextUrl = result && result.redirect_url;
+					if ( meNextUrl ) {
+						try {
+							var meParsed = new URL( meNextUrl, window.location.href );
+							if ( meParsed.origin === window.location.origin ) {
+								window.location.href = meNextUrl;
+								return;
+							}
+						} catch ( e ) {
+							// Fall through to reload on parse error.
+						}
+					}
 					window.location.reload();
 				}
 			} )
