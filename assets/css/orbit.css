@@ -662,14 +662,21 @@ h3.orbit-activity-title {
 	margin: var(--orbit-spacing) 0;
 }
 
-.orbit-btn-link {
+/* Outline-button treatment for the "View event details" CTA. This block
+ * used to be a bare `.orbit-btn-link` selector, which leaked its border and
+ * primary color onto every quiet inline link on the app surface (the Edit /
+ * Back / Approve / Dismiss text links defined above). Scope it to the
+ * activity-url CTA it was written for. The `<button>` combined links (phone
+ * change/resend in Settings) are intentionally border-less via
+ * `button.orbit-btn-link` above and are left untouched. */
+.orbit-activity-url .orbit-btn-link {
 	background-color: transparent;
 	color: var(--orbit-color-primary);
 	border: 2px solid var(--orbit-color-primary);
 }
 
-.orbit-btn-link:hover,
-.orbit-btn-link:focus {
+.orbit-activity-url .orbit-btn-link:hover,
+.orbit-activity-url .orbit-btn-link:focus {
 	background-color: var(--orbit-color-primary);
 	color: #fff;
 }
