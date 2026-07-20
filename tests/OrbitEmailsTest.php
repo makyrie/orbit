@@ -24,8 +24,33 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 		remove_all_filters( 'orbit_email_welcome_subscriber_body' );
 		remove_all_filters( 'orbit_email_subscription_approved_body' );
 		remove_all_filters( 'orbit_email_new_subscriber_body' );
+		remove_all_filters( 'orbit_email_welcome_poster_html' );
+		remove_all_filters( 'orbit_email_welcome_subscriber_html' );
+		remove_all_filters( 'orbit_email_subscription_approved_html' );
+		remove_all_filters( 'orbit_email_new_subscriber_html' );
+		remove_all_filters( 'orbit_email_footer_html' );
 
 		parent::tear_down();
+	}
+
+	/**
+	 * The multipart plaintext part (PHPMailer's AltBody).
+	 *
+	 * @param object $mailer The MockPHPMailer instance.
+	 * @return string
+	 */
+	private function alt_body( $mailer ) {
+		return (string) $mailer->AltBody; // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- PHPMailer API property.
+	}
+
+	/**
+	 * The multipart HTML part (PHPMailer's Body).
+	 *
+	 * @param object $mailer The MockPHPMailer instance.
+	 * @return string
+	 */
+	private function html_body( $mailer ) {
+		return (string) $mailer->Body; // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- PHPMailer API property.
 	}
 
 	/**
@@ -125,12 +150,23 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 		$sent = $mailer->get_sent();
 		$this->assertSame( 'pat@example.test', $sent->to[0][0] );
 		$this->assertSame( 'Welcome to Perihelion', $sent->subject );
-		$this->assertStringContainsString( 'Hi Pat Poster,', $sent->body );
-		$this->assertStringContainsString( 'friends you already have', $sent->body );
 
-		// A working set-your-password link addressed to this user.
-		$this->assertStringContainsString( 'wp-login.php?action=rp', $sent->body );
-		$this->assertStringContainsString( 'login=patposter', $sent->body );
+		// Multipart: the message advertises an HTML part.
+		$this->assertStringContainsString( 'multipart/alternative', $sent->header );
+
+		// Plaintext AltBody keeps the warm copy with the link inline.
+		$this->assertStringContainsString( 'Hi Pat Poster,', $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( 'friends you already have', $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( 'wp-login.php?action=rp', $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( 'login=patposter', $this->alt_body( $mailer ) );
+
+		// Branded HTML part: the serif wordmark and the set-password button
+		// carrying the same reset link (URL hidden in the button only).
+		$this->assertStringContainsString( 'Perihelion', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'Fraunces', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'Set your password', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'wp-login.php?action=rp', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'login=patposter', $this->html_body( $mailer ) );
 	}
 
 	/**
@@ -158,10 +194,18 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 
 		$sent = $mailer->get_sent();
 		$this->assertSame( 'Welcome to Perihelion', $sent->subject );
-		$this->assertStringContainsString( 'Hi Sam Subscriber,', $sent->body );
-		$this->assertStringContainsString( "Jordan Rivers's plans", $sent->body );
-		$this->assertStringContainsString( 'Jordan Rivers will get your request and approve it', $sent->body );
-		$this->assertStringContainsString( 'wp-login.php?action=rp', $sent->body );
+
+		// Plaintext AltBody names the poster.
+		$this->assertStringContainsString( 'Hi Sam Subscriber,', $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( "Jordan Rivers's plans", $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( 'Jordan Rivers will get your request and approve it', $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( 'wp-login.php?action=rp', $this->alt_body( $mailer ) );
+
+		// HTML part names the poster and carries the set-password button.
+		// (The apostrophe in "Rivers's" is HTML-escaped in the HTML part.)
+		$this->assertStringContainsString( 'Jordan Rivers', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'Set your password', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'wp-login.php?action=rp', $this->html_body( $mailer ) );
 	}
 
 	/**
@@ -191,8 +235,13 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 		$this->assertCount( 1, $mailer->mock_sent );
 
 		$sent = $mailer->get_sent();
-		$this->assertStringContainsString( 'hear about the people you follow', $sent->body );
-		$this->assertStringContainsString( "They'll get your request and approve it", $sent->body );
+		$this->assertStringContainsString( 'hear about the people you follow', $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( "They'll get your request and approve it", $this->alt_body( $mailer ) );
+
+		// HTML falls back to the poster-agnostic wording too. (The apostrophe
+		// in "They'll" is HTML-escaped in the HTML part.)
+		$this->assertStringContainsString( 'the people you follow', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'get your request and approve it', $this->html_body( $mailer ) );
 	}
 
 	/**
@@ -215,14 +264,18 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 		// No poster profile ID: signup (poster onboarding).
 		Orbit_User_Notifications::send_new_user_notification( $user_id );
 
-		$sent = tests_retrieve_phpmailer_instance()->get_sent();
-		// Poster copy, not subscriber copy.
-		$this->assertStringContainsString( 'friends you already have', $sent->body );
-		$this->assertStringNotContainsString( 'hear about', $sent->body );
+		$mailer = tests_retrieve_phpmailer_instance();
+		// Poster copy, not subscriber copy — in both parts.
+		$this->assertStringContainsString( 'friends you already have', $this->alt_body( $mailer ) );
+		$this->assertStringNotContainsString( 'hear about', $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( 'friends you already have', $this->html_body( $mailer ) );
+		$this->assertStringNotContainsString( 'hear about', $this->html_body( $mailer ) );
 	}
 
 	/**
-	 * The welcome body copy is overridable via its apply_filters() hook.
+	 * The welcome PLAINTEXT body copy is overridable via its apply_filters()
+	 * hook — the override lands in the multipart AltBody. The HTML part is
+	 * built independently and is unaffected by the plaintext filter.
 	 */
 	public function test_welcome_poster_body_is_filterable() {
 		reset_phpmailer_instance();
@@ -244,8 +297,42 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 
 		Orbit_User_Notifications::send_new_user_notification( $user_id );
 
-		$sent = tests_retrieve_phpmailer_instance()->get_sent();
-		$this->assertSame( 'CUSTOM POSTER BODY', trim( $sent->body ) );
+		$mailer = tests_retrieve_phpmailer_instance();
+		$this->assertSame( 'CUSTOM POSTER BODY', trim( $this->alt_body( $mailer ) ) );
+
+		// The HTML part still renders the branded template (not the override).
+		$this->assertStringContainsString( 'Set your password', $this->html_body( $mailer ) );
+	}
+
+	/**
+	 * The welcome HTML body copy is overridable via its own apply_filters()
+	 * hook — the override lands in the multipart HTML Body, leaving the
+	 * plaintext AltBody untouched.
+	 */
+	public function test_welcome_poster_html_is_filterable() {
+		reset_phpmailer_instance();
+
+		add_filter(
+			'orbit_email_welcome_poster_html',
+			static function () {
+				return '<p>CUSTOM POSTER HTML</p>';
+			}
+		);
+
+		$user_id = self::factory()->user->create(
+			array(
+				'role'       => 'orbit_subscriber',
+				'user_login' => 'filterposterhtml',
+				'user_email' => 'filter-html@example.test',
+			)
+		);
+
+		Orbit_User_Notifications::send_new_user_notification( $user_id );
+
+		$mailer = tests_retrieve_phpmailer_instance();
+		$this->assertStringContainsString( 'CUSTOM POSTER HTML', $this->html_body( $mailer ) );
+		// Plaintext AltBody keeps the default warm copy.
+		$this->assertStringContainsString( 'friends you already have', $this->alt_body( $mailer ) );
 	}
 
 	// ---------------------------------------------------------------- //
@@ -341,9 +428,17 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 		$sent = $mailer->get_sent();
 		$this->assertSame( 'lee@example.test', $sent->to[0][0] );
 		$this->assertSame( 'Robin Poster approved you on Perihelion', $sent->subject );
-		$this->assertStringContainsString( 'Hi Lee Subscriber,', $sent->body );
-		$this->assertStringContainsString( home_url( '/dashboard/' ), $sent->body );
-		$this->assertStringContainsString( 'saying nothing is a complete answer', $sent->body );
+		$this->assertStringContainsString( 'multipart/alternative', $sent->header );
+
+		// Plaintext AltBody: warm copy with the dashboard URL inline.
+		$this->assertStringContainsString( 'Hi Lee Subscriber,', $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( home_url( '/dashboard/' ), $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( 'saying nothing is a complete answer', $this->alt_body( $mailer ) );
+
+		// HTML part: the dashboard button carries the link, wordmark present.
+		$this->assertStringContainsString( 'Perihelion', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'Go to your dashboard', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( home_url( '/dashboard/' ), $this->html_body( $mailer ) );
 	}
 
 	/**
@@ -474,9 +569,16 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 		$poster = get_userdata( (int) $profile->user_id );
 		$this->assertSame( $poster->user_email, $sent->to[0][0] );
 		$this->assertSame( 'Kai Subscriber would like to follow your plans', $sent->subject );
-		$this->assertStringContainsString( 'Hi Dana Poster,', $sent->body );
-		$this->assertStringContainsString( home_url( '/subscribers/' ), $sent->body );
-		$this->assertStringContainsString( 'They added: "We met at the climbing gym."', $sent->body );
+
+		// Plaintext AltBody: warm copy, /subscribers/ link inline, note line.
+		$this->assertStringContainsString( 'Hi Dana Poster,', $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( home_url( '/subscribers/' ), $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( 'They added: "We met at the climbing gym."', $this->alt_body( $mailer ) );
+
+		// HTML part: the review button carries the link, note rendered.
+		$this->assertStringContainsString( 'Review the request', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( home_url( '/subscribers/' ), $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'We met at the climbing gym.', $this->html_body( $mailer ) );
 	}
 
 	/**
@@ -506,8 +608,11 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 
 		Orbit_Emails::dispatch_new_subscriber( $sub_id );
 
-		$sent = tests_retrieve_phpmailer_instance()->get_sent();
-		$this->assertStringNotContainsString( 'They added:', $sent->body );
-		$this->assertStringContainsString( 'Nico Subscriber asked to subscribe', $sent->body );
+		$mailer = tests_retrieve_phpmailer_instance();
+		// No note line in either part.
+		$this->assertStringNotContainsString( 'They added:', $this->alt_body( $mailer ) );
+		$this->assertStringNotContainsString( 'They added:', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'Nico Subscriber asked to subscribe', $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( 'Nico Subscriber asked to subscribe', $this->html_body( $mailer ) );
 	}
 }

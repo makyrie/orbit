@@ -31,10 +31,10 @@ class Orbit_Notifier {
 	 * constants means renaming a public hook is a one-line change and the
 	 * compiler will flag stale string references during refactors.
 	 */
-	const HOOK_NOTIFICATION_METHOD   = 'orbit_notification_method';
-	const HOOK_NOTIFICATION_SENT     = 'orbit_notification_sent';
-	const HOOK_NOTIFICATION_FAILED   = 'orbit_notification_failed';
-	const HOOK_NOTIFICATION_COERCED  = 'orbit_notification_coerced';
+	const HOOK_NOTIFICATION_METHOD  = 'orbit_notification_method';
+	const HOOK_NOTIFICATION_SENT    = 'orbit_notification_sent';
+	const HOOK_NOTIFICATION_FAILED  = 'orbit_notification_failed';
+	const HOOK_NOTIFICATION_COERCED = 'orbit_notification_coerced';
 
 	/**
 	 * Whitelist of accepted notification methods.
@@ -322,7 +322,7 @@ class Orbit_Notifier {
 			return new WP_Error( 'activity_not_found', __( 'Activity not found.', 'orbit' ) );
 		}
 
-		$profile = Orbit_Profile::get( $activity->profile_id );
+		$profile     = Orbit_Profile::get( $activity->profile_id );
 		$poster_name = $profile ? $profile->display_name : __( 'Someone', 'orbit' );
 
 		// Generate action token for this subscriber.
@@ -483,10 +483,97 @@ class Orbit_Notifier {
 			$message .= sprintf( __( 'Unsubscribe: %s', 'orbit' ), $unsub_url ) . "\n";
 		}
 
-		$headers = self::build_email_headers( $unsub_url );
-		$sent    = wp_mail( $user->user_email, $subject, $message, $headers );
+		// Build the branded HTML counterpart mirroring the plaintext copy.
+		// The action URL lives ONLY in the Respond button; the unsubscribe
+		// link and the "why you're getting this" line move to the footer.
+		$inner  = Orbit_Email_Template::paragraph( $opener );
+		$inner .= Orbit_Email_Template::heading( $activity->title );
+		if ( '' !== $tier_label ) {
+			$inner .= Orbit_Email_Template::paragraph_muted( $tier_label );
+		}
+		if ( $activity->description ) {
+			$inner .= Orbit_Email_Template::paragraph( $activity->description );
+		}
 
-		return $sent ? true : new WP_Error( 'email_failed', __( 'Failed to send email.', 'orbit' ) );
+		$meta = '';
+		if ( $activity->date_time ) {
+			/* translators: %s: activity date/time */
+			$meta .= sprintf( __( 'When: %s', 'orbit' ), $activity->date_time );
+		}
+		if ( $activity->location_name ) {
+			if ( '' !== $meta ) {
+				$meta .= "\n";
+			}
+			/* translators: %s: activity location */
+			$meta .= sprintf( __( 'Where: %s', 'orbit' ), $activity->location_name );
+		}
+		if ( '' !== $meta ) {
+			$inner .= Orbit_Email_Template::paragraph( $meta );
+		}
+
+		if ( $action_url ) {
+			$inner .= Orbit_Email_Template::paragraph( $invite );
+			$inner .= Orbit_Email_Template::button( __( 'Respond', 'orbit' ), $action_url );
+		}
+
+		$inner .= Orbit_Email_Template::paragraph_muted( $reassurance );
+
+		// Footer: the poster-specific "why you're getting this" line plus a
+		// visible one-click unsubscribe link.
+		$footer_html = esc_html( $footer ) . self::unsubscribe_footer_link( $unsub_url );
+		$html        = self::wrap_notification_html( $inner, $opener, $footer_html );
+
+		return Orbit_Emails::send_html(
+			$user->user_email,
+			$subject,
+			$html,
+			$message,
+			self::build_unsubscribe_headers( $unsub_url )
+		)
+			? true
+			: new WP_Error( 'email_failed', __( 'Failed to send email.', 'orbit' ) );
+	}
+
+	/**
+	 * Wrap notification-card inner HTML with a caller-supplied footer.
+	 *
+	 * The shared template footer (orbit_email_footer_html) is a generic
+	 * account line; activity + digest mail instead need their own footer (the
+	 * "why you're getting this" / manage-subscriptions line plus a visible
+	 * one-click unsubscribe link). This scopes a footer-filter override to a
+	 * single wrap() call so it never bleeds into other sends.
+	 *
+	 * @param string $inner       The rendered HTML card interior.
+	 * @param string $preheader   Inbox preview text.
+	 * @param string $footer_html The already-built (escaped) footer HTML.
+	 * @return string Full branded HTML document.
+	 */
+	protected static function wrap_notification_html( $inner, $preheader, $footer_html ) {
+		$override = static function () use ( $footer_html ) {
+			return $footer_html;
+		};
+
+		add_filter( 'orbit_email_footer_html', $override );
+		$html = Orbit_Email_Template::wrap( $inner, $preheader );
+		remove_filter( 'orbit_email_footer_html', $override );
+
+		return $html;
+	}
+
+	/**
+	 * Build the footer unsubscribe link markup.
+	 *
+	 * @param string $unsub_url One-click unsubscribe URL, or '' to omit.
+	 * @return string A leading `<br>` + Sienna "Unsubscribe" anchor, or ''.
+	 */
+	protected static function unsubscribe_footer_link( $unsub_url ) {
+		if ( '' === $unsub_url ) {
+			return '';
+		}
+
+		return '<br><a href="' . esc_url( $unsub_url ) . '" style="color:' . esc_attr( Orbit_Email_Template::COLOR_SIENNA ) . '; text-decoration:none;">'
+			. esc_html__( 'Unsubscribe', 'orbit' )
+			. '</a>';
 	}
 
 	/**
@@ -504,7 +591,7 @@ class Orbit_Notifier {
 		}
 
 		$log_table        = $wpdb->prefix . ORBIT_TABLE_NOTIFICATION_LOG;
-		$activities_table  = $wpdb->prefix . ORBIT_TABLE_ACTIVITIES;
+		$activities_table = $wpdb->prefix . ORBIT_TABLE_ACTIVITIES;
 
 		// Get queued digest items for this user.
 		$queued_items = $wpdb->get_results(
@@ -523,11 +610,18 @@ class Orbit_Notifier {
 		}
 
 		// Batch-load profiles for grouping.
-		$profile_ids  = array_unique( array_map( function ( $i ) { return (int) $i->profile_id; }, $queued_items ) );
+		$profile_ids  = array_unique(
+			array_map(
+				function ( $i ) {
+					return (int) $i->profile_id;
+				},
+				$queued_items
+			)
+		);
 		$profiles_map = Orbit_Profile::get_by_ids( $profile_ids );
 
 		// Batch-load subscriptions for action token generation.
-		$subscriptions = Orbit_Subscription::list(
+		$subscriptions  = Orbit_Subscription::list(
 			array(
 				'user_id'  => $user_id,
 				'status'   => 'approved',
@@ -566,8 +660,13 @@ class Orbit_Notifier {
 
 		$message = $opener . "\n\n";
 
+		// Branded HTML counterpart, built in lockstep with the plaintext so
+		// the two parts never drift.
+		$inner = Orbit_Email_Template::paragraph( $opener );
+
 		foreach ( $grouped as $poster_name => $items ) {
 			$message .= $poster_name . "\n";
+			$inner   .= Orbit_Email_Template::heading( $poster_name );
 
 			foreach ( $items as $item ) {
 				$subscription = isset( $sub_by_profile[ (int) $item->profile_id ] ) ? $sub_by_profile[ (int) $item->profile_id ] : null;
@@ -582,16 +681,33 @@ class Orbit_Notifier {
 
 				$message .= sprintf( "  %s — %s\n", $item->title, $tier_label );
 
+				$inner .= Orbit_Email_Template::paragraph(
+					sprintf( '%s — %s', $item->title, $tier_label )
+				);
+
+				$meta = '';
 				if ( $item->date_time ) {
 					$message .= sprintf( __( "  When: %s\n", 'orbit' ), $item->date_time );
+					/* translators: %s: activity date/time */
+					$meta .= sprintf( __( 'When: %s', 'orbit' ), $item->date_time );
 				}
 
 				if ( $item->location_name ) {
 					$message .= sprintf( __( "  Where: %s\n", 'orbit' ), $item->location_name );
+					if ( '' !== $meta ) {
+						$meta .= "\n";
+					}
+					/* translators: %s: activity location */
+					$meta .= sprintf( __( 'Where: %s', 'orbit' ), $item->location_name );
+				}
+
+				if ( '' !== $meta ) {
+					$inner .= Orbit_Email_Template::paragraph_muted( $meta );
 				}
 
 				if ( $action_url ) {
 					$message .= sprintf( __( "  Respond: %s\n", 'orbit' ), $action_url );
+					$inner   .= Orbit_Email_Template::link_paragraph( __( 'Respond', 'orbit' ), $action_url );
 				}
 
 				$message .= "\n";
@@ -609,6 +725,7 @@ class Orbit_Notifier {
 		);
 
 		$message .= $closer . "\n";
+		$inner   .= Orbit_Email_Template::paragraph_muted( $closer );
 
 		if ( ! empty( $subscriptions ) ) {
 			$message .= "\n" . __( 'Manage your subscriptions: ', 'orbit' ) . home_url( '/dashboard' ) . "\n";
@@ -631,15 +748,37 @@ class Orbit_Notifier {
 			$unsub_url   = home_url( '/unsubscribe/?token=' . rawurlencode( $unsub_token ) );
 		}
 
-		$headers = self::build_email_headers( $unsub_url );
-		$sent    = wp_mail( $user->user_email, $subject, $message, $headers );
+		// Footer: manage-subscriptions link (when the user has subscriptions)
+		// plus a visible one-click unsubscribe link.
+		$footer_html = '';
+		if ( ! empty( $subscriptions ) ) {
+			$footer_html = '<a href="' . esc_url( home_url( '/dashboard' ) ) . '" style="color:' . esc_attr( Orbit_Email_Template::COLOR_SIENNA ) . '; text-decoration:none;">'
+				. esc_html__( 'Manage your subscriptions', 'orbit' )
+				. '</a>';
+		}
+		$footer_html .= self::unsubscribe_footer_link( $unsub_url );
+
+		$html = self::wrap_notification_html( $inner, $opener, $footer_html );
+
+		$sent = Orbit_Emails::send_html(
+			$user->user_email,
+			$subject,
+			$html,
+			$message,
+			self::build_unsubscribe_headers( $unsub_url )
+		);
 
 		// Mark all queued items as sent or failed.
 		$status = $sent ? 'sent' : 'failed';
 		$now    = current_time( 'mysql', true );
 
 		// Bulk update all queued items in a single query.
-		$log_ids = array_map( function ( $item ) { return (int) $item->log_id; }, $queued_items );
+		$log_ids = array_map(
+			function ( $item ) {
+				return (int) $item->log_id;
+			},
+			$queued_items
+		);
 		if ( ! empty( $log_ids ) ) {
 			$placeholders = implode( ',', array_fill( 0, count( $log_ids ), '%d' ) );
 			$wpdb->query(
@@ -670,8 +809,8 @@ class Orbit_Notifier {
 	public static function process_cleanup() {
 		global $wpdb;
 
-		$table    = $wpdb->prefix . ORBIT_TABLE_NOTIFICATION_LOG;
-		$cutoff   = gmdate( 'Y-m-d H:i:s', time() - ( 90 * DAY_IN_SECONDS ) );
+		$table  = $wpdb->prefix . ORBIT_TABLE_NOTIFICATION_LOG;
+		$cutoff = gmdate( 'Y-m-d H:i:s', time() - ( 90 * DAY_IN_SECONDS ) );
 
 		$wpdb->query(
 			$wpdb->prepare(
@@ -993,10 +1132,10 @@ class Orbit_Notifier {
 		// Ensure preferences exist.
 		self::get_or_create_preferences( $user_id );
 
-		$table          = $wpdb->prefix . ORBIT_TABLE_NOTIFICATION_PREFERENCES;
-		$data           = array();
-		$formats        = array();
-		$set_cap_null   = false;
+		$table        = $wpdb->prefix . ORBIT_TABLE_NOTIFICATION_PREFERENCES;
+		$data         = array();
+		$formats      = array();
+		$set_cap_null = false;
 
 		foreach ( array( 'tier1_method', 'tier2_method', 'tier3_method' ) as $key ) {
 			if ( isset( $args[ $key ] ) && in_array( $args[ $key ], self::VALID_METHODS, true ) ) {
@@ -1107,9 +1246,9 @@ class Orbit_Notifier {
 		}
 
 		try {
-			$tz           = new DateTimeZone( $timezone );
-			$now          = new DateTime( 'now', $tz );
-			$digest_time  = new DateTime( 'today ' . $prefs->digest_time, $tz );
+			$tz          = new DateTimeZone( $timezone );
+			$now         = new DateTime( 'now', $tz );
+			$digest_time = new DateTime( 'today ' . $prefs->digest_time, $tz );
 
 			// If the digest time has already passed today, schedule for tomorrow.
 			if ( $digest_time <= $now ) {
@@ -1149,20 +1288,42 @@ class Orbit_Notifier {
 	 * @return array Headers array suitable for wp_mail().
 	 */
 	protected static function build_email_headers( $unsub_url ) {
-		$headers = array( 'Content-Type: text/plain; charset=UTF-8' );
+		return array_merge(
+			array( 'Content-Type: text/plain; charset=UTF-8' ),
+			self::build_unsubscribe_headers( $unsub_url )
+		);
+	}
 
-		if ( '' !== $unsub_url ) {
-			$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
-			if ( empty( $home_host ) ) {
-				// Defensive: home_url() should always parse, but if it
-				// doesn't, omit the mailto: rather than emit a broken one.
-				$headers[] = 'List-Unsubscribe: <' . $unsub_url . '>';
-			} else {
-				$mailto    = 'mailto:unsubscribe@' . $home_host . '?subject=unsubscribe';
-				$headers[] = 'List-Unsubscribe: <' . $unsub_url . '>, <' . $mailto . '>';
-			}
-			$headers[] = 'List-Unsubscribe-Post: List-Unsubscribe=One-Click';
+	/**
+	 * Build ONLY the RFC 8058 one-click unsubscribe headers.
+	 *
+	 * Content-Type-agnostic counterpart to build_email_headers(): returns just
+	 * the `List-Unsubscribe` / `List-Unsubscribe-Post` pair so they can be
+	 * passed through as extra headers to a multipart HTML send (where the
+	 * Content-Type becomes text/html) WITHOUT dropping the deliverability
+	 * headers Gmail/Yahoo require. When no unsubscribe URL is available the
+	 * array is empty.
+	 *
+	 * @param string $unsub_url Fully-qualified one-click unsubscribe URL,
+	 *                          or empty string to omit unsubscribe headers.
+	 * @return array List-Unsubscribe header lines (possibly empty).
+	 */
+	protected static function build_unsubscribe_headers( $unsub_url ) {
+		if ( '' === $unsub_url ) {
+			return array();
 		}
+
+		$headers   = array();
+		$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
+		if ( empty( $home_host ) ) {
+			// Defensive: home_url() should always parse, but if it
+			// doesn't, omit the mailto: rather than emit a broken one.
+			$headers[] = 'List-Unsubscribe: <' . $unsub_url . '>';
+		} else {
+			$mailto    = 'mailto:unsubscribe@' . $home_host . '?subject=unsubscribe';
+			$headers[] = 'List-Unsubscribe: <' . $unsub_url . '>, <' . $mailto . '>';
+		}
+		$headers[] = 'List-Unsubscribe-Post: List-Unsubscribe=One-Click';
 
 		return $headers;
 	}

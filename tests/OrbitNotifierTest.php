@@ -40,6 +40,7 @@ class OrbitNotifierTest extends WP_UnitTestCase {
 
 		// Remove any per-test filters added inline.
 		remove_all_filters( 'orbit_notification_method' );
+		remove_all_filters( 'orbit_email_footer_html' );
 		remove_all_filters( 'pre_http_request' );
 		remove_all_filters( 'pre_wp_mail' );
 		remove_all_filters( 'wp_mail' );
@@ -48,6 +49,26 @@ class OrbitNotifierTest extends WP_UnitTestCase {
 		remove_all_actions( 'orbit_notification_coerced' );
 
 		parent::tear_down();
+	}
+
+	/**
+	 * The multipart plaintext part (PHPMailer's AltBody).
+	 *
+	 * @param object $mailer The MockPHPMailer instance.
+	 * @return string
+	 */
+	private function alt_body( $mailer ) {
+		return (string) $mailer->AltBody; // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- PHPMailer API property.
+	}
+
+	/**
+	 * The multipart HTML part (PHPMailer's Body).
+	 *
+	 * @param object $mailer The MockPHPMailer instance.
+	 * @return string
+	 */
+	private function html_body( $mailer ) {
+		return (string) $mailer->Body; // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- PHPMailer API property.
 	}
 
 	/**
@@ -176,7 +197,7 @@ class OrbitNotifierTest extends WP_UnitTestCase {
 		delete_option( Orbit_Features::OPTION_SMS_ENABLED );
 		Orbit_Notifier::get_or_create_preferences( self::$user_id );
 
-		$fired = 0;
+		$fired         = 0;
 		$captured_user = null;
 		$captured_tier = null;
 		add_action(
@@ -497,18 +518,31 @@ class OrbitNotifierTest extends WP_UnitTestCase {
 		// Subject is "{poster}: {title}".
 		$this->assertSame( 'Poster: Saturday morning bike ride', $sent->subject );
 
-		// Body opens in Perihelion's voice, carries the activity, the RSVP
-		// invitation and link, the "silence is fine" reassurance, and the
-		// unsubscribe link.
-		$this->assertStringContainsString( 'just shared something on Perihelion', $sent->body );
-		$this->assertStringContainsString( 'Saturday morning bike ride', $sent->body );
-		$this->assertStringContainsString( 'Want in?', $sent->body );
-		$this->assertStringContainsString( '/activity/', $sent->body );
-		$this->assertStringContainsString( 'Saying nothing is always a fine answer', $sent->body );
-		$this->assertStringContainsString( 'Unsubscribe:', $sent->body );
-		$this->assertStringContainsString( '/unsubscribe/?token=', $sent->body );
+		// Multipart: the message advertises an HTML part.
+		$this->assertStringContainsString( 'multipart/alternative', $sent->header );
 
-		// RFC 8058 one-click unsubscribe headers (Gmail/Yahoo 2026 bulk-sender rules).
+		// Plaintext AltBody keeps the warm copy: opener, activity, RSVP
+		// invitation + link, the "silence is fine" reassurance, and the
+		// unsubscribe link inline.
+		$this->assertStringContainsString( 'just shared something on Perihelion', $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( 'Saturday morning bike ride', $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( 'Want in?', $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( '/activity/', $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( 'Saying nothing is always a fine answer', $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( 'Unsubscribe:', $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( '/unsubscribe/?token=', $this->alt_body( $mailer ) );
+
+		// Branded HTML part: wordmark, activity title, the Respond button
+		// carrying the action link, and the footer unsubscribe link.
+		$this->assertStringContainsString( 'Perihelion', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'Fraunces', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'Saturday morning bike ride', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'Respond', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( '/activity/', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( '/unsubscribe/?token=', $this->html_body( $mailer ) );
+
+		// RFC 8058 one-click unsubscribe headers (Gmail/Yahoo 2026 bulk-sender
+		// rules) survive the switch to a text/html Content-Type.
 		$this->assertStringContainsString( 'List-Unsubscribe:', $sent->header );
 		$this->assertStringContainsString(
 			'List-Unsubscribe-Post: List-Unsubscribe=One-Click',
@@ -631,30 +665,39 @@ class OrbitNotifierTest extends WP_UnitTestCase {
 			$sent->subject
 		);
 
-		// Warm opener.
+		// Multipart: the digest advertises an HTML part.
+		$this->assertStringContainsString( 'multipart/alternative', $sent->header );
+
+		$tier_labels = Orbit_Activity::get_tier_labels();
+
+		// Plaintext AltBody: warm opener, per-poster headers, each item's
+		// title + tier label, warm closer, manage link — and no ASCII divider.
 		$this->assertStringContainsString(
 			"Here's what the people you follow are up to",
-			$sent->body
+			$this->alt_body( $mailer )
 		);
+		$this->assertStringContainsString( 'Ada', $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( 'Grace', $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( 'Sunday farmers market', $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( 'Evening board games', $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( 'Weekend hiking trip', $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( $tier_labels[2], $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( 'silence is a complete answer', $this->alt_body( $mailer ) );
+		$this->assertStringContainsString( 'Manage your subscriptions:', $this->alt_body( $mailer ) );
+		$this->assertStringNotContainsString( '--- Ada ---', $this->alt_body( $mailer ) );
+		$this->assertStringNotContainsString( '--- Grace ---', $this->alt_body( $mailer ) );
 
-		// Per-poster headers present.
-		$this->assertStringContainsString( 'Ada', $sent->body );
-		$this->assertStringContainsString( 'Grace', $sent->body );
-
-		// Each item's title and tier label render.
-		$tier_labels = Orbit_Activity::get_tier_labels();
-		$this->assertStringContainsString( 'Sunday farmers market', $sent->body );
-		$this->assertStringContainsString( 'Evening board games', $sent->body );
-		$this->assertStringContainsString( 'Weekend hiking trip', $sent->body );
-		$this->assertStringContainsString( $tier_labels[2], $sent->body );
-
-		// Warm closer + manage link.
-		$this->assertStringContainsString( 'silence is a complete answer', $sent->body );
-		$this->assertStringContainsString( 'Manage your subscriptions:', $sent->body );
-
-		// The old `--- Name ---` ASCII divider is gone.
-		$this->assertStringNotContainsString( '--- Ada ---', $sent->body );
-		$this->assertStringNotContainsString( '--- Grace ---', $sent->body );
+		// Branded HTML part: wordmark, both poster headings, each activity,
+		// the warm closer, a Respond link, and the manage-subscriptions footer.
+		$this->assertStringContainsString( 'Perihelion', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'Fraunces', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'Ada', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'Grace', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'Sunday farmers market', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'Weekend hiking trip', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'Respond', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'silence is a complete answer', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'Manage your subscriptions', $this->html_body( $mailer ) );
 
 		// RFC 8058 one-click unsubscribe headers survive the rewrite.
 		$this->assertStringContainsString( 'List-Unsubscribe:', $sent->header );
