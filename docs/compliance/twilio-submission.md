@@ -14,18 +14,24 @@ does **not** gate the email-only trial.
 | Field | Value |
 |---|---|
 | Brand / DBA | Perihelion |
-| Legal entity | `<<LEGAL ENTITY NAME>>` |
-| Entity type | `<<SOLE PROP / LLC / etc.>>` |
-| EIN (if registered) | `<<EIN or "N/A — sole proprietor">>` |
-| Support email | `<<SUPPORT EMAIL, e.g. help@perihelion.social>>` |
+| Brand type | **Sole Proprietor** (individual, no EIN) |
+| Legal name | `<<YOUR LEGAL NAME>>` |
+| EIN | N/A — sole proprietor |
+| Address | `<<YOUR ADDRESS>>` |
+| OTP mobile (identity verification) | `<<PERSONAL MOBILE — receives the one-time code; not the sending number>>` |
+| Support email | `<<SUPPORT EMAIL, e.g. hi@perihelion.social>>` |
 | Support / website URL | https://perihelion.social/ |
-| Production 10DLC number | `<<PRODUCTION 10DLC NUMBER>>` |
+| Production 10DLC number | `<<PRODUCTION 10DLC NUMBER — e.g. +16194324434>>` |
+
+**Sole Proprietor constraints:** one campaign per brand; reduced carrier throughput
+(e.g. T-Mobile ~2,000 msgs/day) — ample for the trial; identity verified by an OTP
+sent to the personal mobile above.
 
 ## Campaign
 
 | Field | Value |
 |---|---|
-| Use case | **Low Volume Mixed** (creator-posted notifications + occasional service updates; expected <2k segments/day/carrier) |
+| Use case | **Sole Proprietor** (the dedicated use case for sole-prop brands — NOT "Low Volume Mixed", which is Standard-only) |
 | Privacy Policy URL | https://perihelion.social/privacy/ |
 | Terms URL | https://perihelion.social/terms/ |
 | Opt-in URL | https://perihelion.social/sign-up/ (also on `/subscribe/` and `/settings/`) |
