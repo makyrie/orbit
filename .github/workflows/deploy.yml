@@ -1,0 +1,75 @@
+name: Deploy plugin to production
+
+# Deploys the Orbit plugin to the A2 shared host over SSH.
+#
+# Composer runs here in CI (not on the shared host, whose memory limits make
+# composer unreliable), then the built tree — including vendor/, which holds the
+# runtime dep woocommerce/action-scheduler and is gitignored — is rsynced to the
+# production plugin directory. No activation step is needed: orbit_maybe_upgrade()
+# runs on the next page load and self-heals (table creation, consent-salt seed,
+# role registration) whenever ORBIT_VERSION advances.
+#
+# Non-sensitive config lives in repo Variables (Settings -> Secrets and variables
+# -> Actions -> Variables); only the private key is a Secret:
+#   vars.SSH_HOST     e.g. a2ss##.a2hosting.com
+#   vars.SSH_USER     cPanel username
+#   vars.SSH_PORT     A2 default is 7822 (not 22)
+#   vars.DEPLOY_PATH  /home/<user>/public_html/wp-content/plugins/orbit
+#   secrets.SSH_KEY   private half of a deploy-only ed25519 keypair
+
+on:
+  push:
+    tags: ['v*']            # deploy when you push a release tag, e.g. v1.8.1
+  workflow_dispatch:         # ...or run manually from the Actions tab
+    inputs:
+      dry_run:
+        description: 'Dry run (rsync -n: report changes, write nothing)'
+        type: boolean
+        default: true
+
+concurrency:                 # never let two deploys overlap
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'        # match the production PHP major/minor on A2
+
+      - name: Install runtime dependencies
+        run: composer install --no-dev --optimize-autoloader --no-interaction
+
+      - name: Add SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "${{ vars.SSH_PORT }}" -H "${{ vars.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy with rsync
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          DRY=""
+          if [ "$DRY_RUN" = "true" ]; then
+            DRY="-n"
+            echo "::warning::DRY RUN — reporting changes only, nothing will be written."
+          fi
+          rsync -az $DRY --delete \
+            -e "ssh -p ${{ vars.SSH_PORT }} -i ~/.ssh/id_ed25519" \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='.claude/' \
+            --exclude='tests/' \
+            --exclude='todos/' \
+            --exclude='docs/' \
+            --exclude='bin/' \
+            --exclude='phpunit.xml.dist' \
+            --exclude='.gitignore' \
+            ./ "${{ vars.SSH_USER }}@${{ vars.SSH_HOST }}:${{ vars.DEPLOY_PATH }}"

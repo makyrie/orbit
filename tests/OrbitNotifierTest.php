@@ -457,6 +457,61 @@ class OrbitNotifierTest extends WP_UnitTestCase {
 	}
 
 	/**
+	 * The immediate activity email a real subscriber receives is well-formed:
+	 * addressed to the subscriber, subject "{poster}: {title}", body carries
+	 * the activity title plus Respond and Unsubscribe links, and the RFC 8058
+	 * one-click unsubscribe headers are present so Gmail/Yahoo accept it.
+	 *
+	 * Unlike the sent/failed observability tests above, this one lets wp_mail()
+	 * run through WordPress's MockPHPMailer so we inspect the actual rendered
+	 * message rather than short-circuiting delivery. This is the pre-launch
+	 * guard against shipping a broken or headerless email to trial users.
+	 */
+	public function test_immediate_email_is_well_formed_with_unsubscribe_headers() {
+		reset_phpmailer_instance();
+
+		$profile_id  = $this->create_profile_with_owner( 'email-shape-poster' );
+		$activity_id = Orbit_Activity::create(
+			array(
+				'profile_id'  => $profile_id,
+				'tier'        => 2,
+				'title'       => 'Saturday morning bike ride',
+				'description' => 'Meet at the fountain.',
+			)
+		);
+		$this->assertIsInt( $activity_id );
+
+		$this->insert_approved_subscription( self::$user_id, $profile_id );
+
+		$result = Orbit_Notifier::send_immediate_email( self::$user_id, $activity_id );
+		$this->assertTrue( $result, 'send_immediate_email() should report success under MockPHPMailer.' );
+
+		$mailer = tests_retrieve_phpmailer_instance();
+		$sent   = $mailer->get_sent();
+		$this->assertNotFalse( $sent, 'Exactly one email must have been handed to the mailer.' );
+
+		// Addressed to the subscriber.
+		$subscriber = get_userdata( self::$user_id );
+		$this->assertSame( $subscriber->user_email, $sent->to[0][0] );
+
+		// Subject is "{poster}: {title}".
+		$this->assertSame( 'Poster: Saturday morning bike ride', $sent->subject );
+
+		// Body carries the activity and both actionable links.
+		$this->assertStringContainsString( 'Saturday morning bike ride', $sent->body );
+		$this->assertStringContainsString( 'Respond:', $sent->body );
+		$this->assertStringContainsString( 'Unsubscribe:', $sent->body );
+		$this->assertStringContainsString( '/unsubscribe/?token=', $sent->body );
+
+		// RFC 8058 one-click unsubscribe headers (Gmail/Yahoo 2026 bulk-sender rules).
+		$this->assertStringContainsString( 'List-Unsubscribe:', $sent->header );
+		$this->assertStringContainsString(
+			'List-Unsubscribe-Post: List-Unsubscribe=One-Click',
+			$sent->header
+		);
+	}
+
+	/**
 	 * cleanup_pending_phones() reaps unverified pending-phone meta older
 	 * than the configured max age and leaves fresh rows in place.
 	 *
