@@ -318,8 +318,6 @@ class Orbit_Shortcodes {
 			}
 		}
 
-		$tier_labels = Orbit_Activity::get_tier_labels();
-
 		// Batch-load profiles and response counts.
 		$needed_profile_ids = array_unique( array_map( function ( $a ) {
 			return (int) $a->profile_id;
@@ -339,9 +337,13 @@ class Orbit_Shortcodes {
 		$own_profile_id = $own_profile ? (int) $own_profile->id : 0;
 
 		foreach ( $activities as $activity ) {
-			$profile    = isset( $profiles_map[ (int) $activity->profile_id ] ) ? $profiles_map[ (int) $activity->profile_id ] : null;
-			$tier_label = isset( $tier_labels[ $activity->tier ] ) ? $tier_labels[ $activity->tier ] : '';
-			$is_mine    = $own_profile_id && (int) $activity->profile_id === $own_profile_id;
+			$profile = isset( $profiles_map[ (int) $activity->profile_id ] ) ? $profiles_map[ (int) $activity->profile_id ] : null;
+			$is_mine = $own_profile_id && (int) $activity->profile_id === $own_profile_id;
+			// First person on your own cards ("I'm going"); third person for
+			// everyone else ("Nadia is going"), so it never reads as your RSVP.
+			$tier_label = $is_mine
+				? Orbit_Activity::get_tier_label( $activity->tier )
+				: Orbit_Activity::get_tier_label( $activity->tier, $profile ? $profile->display_name : '' );
 
 			$card_class = 'orbit-activity-card';
 			if ( $is_mine ) {
@@ -1388,10 +1390,9 @@ class Orbit_Shortcodes {
 		if ( ! empty( $activities ) ) {
 			echo '<h2>' . esc_html__( 'Recent Activities', 'orbit' ) . '</h2>';
 
-			$tier_labels = Orbit_Activity::get_tier_labels();
-
 			foreach ( $activities as $activity ) {
-				$tier_label = isset( $tier_labels[ $activity->tier ] ) ? $tier_labels[ $activity->tier ] : '';
+				// The public profile is the poster's face to visitors — third person.
+				$tier_label = Orbit_Activity::get_tier_label( $activity->tier, $profile->display_name );
 
 				echo '<div class="orbit-activity-card">';
 				echo '<span class="orbit-tier-badge orbit-tier-' . esc_attr( $activity->tier ) . '">' . esc_html( $tier_label ) . '</span>';
@@ -1587,9 +1588,12 @@ class Orbit_Shortcodes {
 			}
 		}
 
-		$tier_labels = Orbit_Activity::get_tier_labels();
-
-		$tier_label = isset( $tier_labels[ $activity->tier ] ) ? $tier_labels[ $activity->tier ] : '';
+		// The poster viewing their own activity keeps their first-person voice;
+		// everyone else sees the third-person form ("Nadia is going — join in").
+		$is_owner   = $viewer_id && $profile && (int) $viewer_id === (int) $profile->user_id;
+		$tier_label = $is_owner
+			? Orbit_Activity::get_tier_label( $activity->tier )
+			: Orbit_Activity::get_tier_label( $activity->tier, $profile ? $profile->display_name : '' );
 
 		ob_start();
 

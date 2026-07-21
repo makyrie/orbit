@@ -423,14 +423,21 @@ class Orbit_Activity {
 		return array(
 			1 => array(
 				'label'       => __( 'Just an idea', 'orbit' ),
+				// Shown to everyone but the poster. Tier 1 carries no first-person
+				// voice, so the "other" form is identical.
+				'label_other' => __( 'Just an idea', 'orbit' ),
 				'description' => __( 'An open thought. Subscribers see it on their dashboard but get no notification.', 'orbit' ),
 			),
 			2 => array(
 				'label'       => __( "I'll go if you will", 'orbit' ),
+				/* translators: %s: poster display name */
+				'label_other' => __( '%s will go if you will', 'orbit' ),
 				'description' => __( "You're interested, but want company before committing. Subscribers get a low-priority alert.", 'orbit' ),
 			),
 			3 => array(
 				'label'       => __( "I'm going — join me", 'orbit' ),
+				/* translators: %s: poster display name */
+				'label_other' => __( '%s is going — join in', 'orbit' ),
 				'description' => __( "You're going for sure. Subscribers who opted in for this tier get a real-time alert.", 'orbit' ),
 			),
 		);
@@ -453,6 +460,72 @@ class Orbit_Activity {
 	 */
 	public static function get_tier_descriptions() {
 		return wp_list_pluck( self::get_tier_data(), 'description' );
+	}
+
+	/**
+	 * Get a single tier label in the voice appropriate to the viewer.
+	 *
+	 * Tier labels are written in the poster's first person ("I'm going — join
+	 * me"). That voice is correct only where the poster is composing or looking
+	 * at their own activity; shown to anyone else it misreads as the viewer's
+	 * own status ("wait, I never said I'm going"). Pass the poster's display
+	 * name to get the third-person form ("Nadia is going — join in"); omit it
+	 * for the poster's own surfaces.
+	 *
+	 * @param int         $tier        Tier number (1-3).
+	 * @param string|null $poster_name Poster display name for the third-person
+	 *                                 voice, or null/'' for the poster's own
+	 *                                 first-person voice.
+	 * @return string The tier label, or '' for an unknown tier.
+	 */
+	public static function get_tier_label( $tier, $poster_name = null ) {
+		$data = self::get_tier_data();
+		$tier = (int) $tier;
+
+		if ( ! isset( $data[ $tier ] ) ) {
+			return '';
+		}
+
+		if ( null === $poster_name || '' === $poster_name ) {
+			return $data[ $tier ]['label'];
+		}
+
+		$template = $data[ $tier ]['label_other'];
+
+		return false !== strpos( $template, '%s' )
+			? sprintf( $template, $poster_name )
+			: $template;
+	}
+
+	/**
+	 * Format a stored activity datetime for display.
+	 *
+	 * Activity datetimes are stored naively — the local clock time the poster
+	 * typed, with no timezone at save — so they are parsed as UTC purely so
+	 * PHP's DateTime can read them, then formatted without timezone shifting.
+	 * This is the canonical formatter used by the notification emails; the
+	 * front-end shortcodes keep their own twin for now.
+	 *
+	 * @param string $datetime Stored datetime string (Y-m-d H:i:s).
+	 * @param string $format   PHP date format. Default: full readable.
+	 * @return string Formatted date string, or '' when empty.
+	 */
+	public static function format_datetime( $datetime, $format = '' ) {
+		if ( empty( $datetime ) ) {
+			return '';
+		}
+
+		if ( ! $format ) {
+			$format = 'l, F j \a\t g:i A';
+		}
+
+		try {
+			$dt = new DateTime( $datetime, new DateTimeZone( 'UTC' ) );
+
+			return $dt->format( $format );
+		} catch ( Exception $e ) {
+			return $datetime;
+		}
 	}
 
 	/**
