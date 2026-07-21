@@ -77,6 +77,7 @@ require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-messaging-copy.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-compliance-ui.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-consent.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-token.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-share-code.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-profile.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-activity.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-subscription.php';
@@ -197,6 +198,38 @@ function orbit_maybe_upgrade() {
 		}
 	}
 }
+
+/**
+ * Add the memorable `share_code` column and backfill existing profiles.
+ *
+ * Runs once, guarded by an option, so it takes effect on the in-place-upload
+ * deploy without a plugin re-activation or an ORBIT_VERSION bump (which would
+ * spuriously re-stamp the consent policy version). Fresh installs already get
+ * the column via Orbit_Activator::create_tables().
+ */
+function orbit_migrate_share_codes() {
+	if ( '1' === get_option( 'orbit_share_codes_migrated', '' ) ) {
+		return;
+	}
+
+	global $wpdb;
+	$table = $wpdb->prefix . ORBIT_TABLE_PROFILES;
+
+	// Add the column + unique index if this install predates them.
+	$has_column = $wpdb->get_var( $wpdb->prepare( 'SHOW COLUMNS FROM `' . $table . '` LIKE %s', 'share_code' ) );
+	if ( ! $has_column ) {
+		$wpdb->query( 'ALTER TABLE `' . $table . '` ADD COLUMN share_code varchar(80) DEFAULT NULL, ADD UNIQUE KEY share_code (share_code)' );
+	}
+
+	// Backfill any profile missing a code.
+	$ids = $wpdb->get_col( "SELECT id FROM `{$table}` WHERE share_code IS NULL OR share_code = ''" );
+	foreach ( $ids as $id ) {
+		$wpdb->update( $table, array( 'share_code' => Orbit_Share_Code::generate() ), array( 'id' => (int) $id ) );
+	}
+
+	update_option( 'orbit_share_codes_migrated', '1' );
+}
+add_action( 'init', 'orbit_migrate_share_codes', 1 );
 
 /**
  * One-time migration to rename internal pages from `orbit-*` slugs to
