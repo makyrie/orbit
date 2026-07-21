@@ -26,15 +26,15 @@ class OrbitEmailTemplateTest extends WP_UnitTestCase {
 		$html = Orbit_Email_Template::wrap( '<p>INNER CONTENT</p>', 'Preview snippet' );
 
 		$this->assertStringContainsString( '<!DOCTYPE html>', $html );
-		// Paper background canvas.
-		$this->assertStringContainsString( '#F7F3ED', $html );
-		// White card with the Sienna hairline border + rounded corners.
-		$this->assertStringContainsString( 'border:1px solid rgba(156,75,48,0.15)', $html );
-		$this->assertStringContainsString( 'border-radius:14px', $html );
-		// The serif Sienna wordmark.
+		// Newsprint background canvas.
+		$this->assertStringContainsString( '#F0EEE6', $html );
+		// White card with the 2px ink hairline border + rounded corners.
+		$this->assertStringContainsString( 'border:2px solid #191A1D', $html );
+		$this->assertStringContainsString( 'border-radius:8px', $html );
+		// The uppercase ink wordmark.
 		$this->assertStringContainsString( 'Perihelion', $html );
-		$this->assertStringContainsString( 'Fraunces', $html );
-		$this->assertStringContainsString( '#9C4B30', $html );
+		$this->assertStringContainsString( 'Century Gothic', $html );
+		$this->assertStringContainsString( '#D8176E', $html );
 		// The inner content is present.
 		$this->assertStringContainsString( '<p>INNER CONTENT</p>', $html );
 	}
@@ -73,8 +73,8 @@ class OrbitEmailTemplateTest extends WP_UnitTestCase {
 	public function test_wordmark_is_isolated_serif_lockup() {
 		$mark = Orbit_Email_Template::wordmark();
 		$this->assertStringContainsString( 'Perihelion', $mark );
-		$this->assertStringContainsString( 'Fraunces', $mark );
-		$this->assertStringContainsString( '#9C4B30', $mark );
+		$this->assertStringContainsString( 'Century Gothic', $mark );
+		$this->assertStringContainsString( '#D8176E', $mark );
 	}
 
 	/**
@@ -89,7 +89,7 @@ class OrbitEmailTemplateTest extends WP_UnitTestCase {
 		$this->assertStringContainsString( '&amp;', $p );
 		$this->assertStringNotContainsString( ' & ', $p );
 		// Ink body color.
-		$this->assertStringContainsString( '#2A2A28', $p );
+		$this->assertStringContainsString( '#191A1D', $p );
 	}
 
 	/**
@@ -97,7 +97,7 @@ class OrbitEmailTemplateTest extends WP_UnitTestCase {
 	 */
 	public function test_paragraph_muted_uses_slate() {
 		$p = Orbit_Email_Template::paragraph_muted( 'Perihelion' );
-		$this->assertStringContainsString( '#5A5A55', $p );
+		$this->assertStringContainsString( '#54555C', $p );
 	}
 
 	/**
@@ -107,9 +107,10 @@ class OrbitEmailTemplateTest extends WP_UnitTestCase {
 	public function test_button_is_bulletproof_and_escapes_url() {
 		$button = Orbit_Email_Template::button( 'Set your password', 'https://orbit.local/wp-login.php?action=rp&key=ABC&login=casey' );
 
-		// Table-cell + bgcolor + rounded corners.
-		$this->assertStringContainsString( 'bgcolor="#9C4B30"', $button );
-		$this->assertStringContainsString( 'border-radius:9px', $button );
+		// Table-cell + deep-pink bgcolor + ink outline + rounded corners.
+		$this->assertStringContainsString( 'bgcolor="#D8176E"', $button );
+		$this->assertStringContainsString( 'border:2px solid #191A1D', $button );
+		$this->assertStringContainsString( 'border-radius:6px', $button );
 		// White anchor text.
 		$this->assertStringContainsString( 'color:#ffffff', $button );
 		$this->assertStringContainsString( 'Set your password', $button );
@@ -125,7 +126,7 @@ class OrbitEmailTemplateTest extends WP_UnitTestCase {
 	public function test_link_paragraph_renders_sienna_link() {
 		$link = Orbit_Email_Template::link_paragraph( 'Respond', 'https://orbit.local/activity/5?act=tok' );
 		$this->assertStringContainsString( 'Respond', $link );
-		$this->assertStringContainsString( '#9C4B30', $link );
+		$this->assertStringContainsString( '#D8176E', $link );
 		$this->assertStringContainsString( '/activity/5', $link );
 	}
 
@@ -134,7 +135,7 @@ class OrbitEmailTemplateTest extends WP_UnitTestCase {
 	 */
 	public function test_heading_renders_escaped_serif() {
 		$h = Orbit_Email_Template::heading( 'Saturday <ride>' );
-		$this->assertStringContainsString( 'Fraunces', $h );
+		$this->assertStringContainsString( 'Century Gothic', $h );
 		$this->assertStringContainsString( 'Saturday &lt;ride&gt;', $h );
 	}
 }

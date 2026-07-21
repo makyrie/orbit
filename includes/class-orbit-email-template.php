@@ -257,8 +257,8 @@ class Orbit_Email_Template {
 	 */
 	public static function button( $text, $url ) {
 		return '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 26px;">'
-			. '<tr><td align="center" bgcolor="' . esc_attr( self::COLOR_SIENNA ) . '" style="border-radius:9px;">'
-			. '<a href="' . esc_url( $url ) . '" style="display:inline-block; padding:14px 30px; font-family:' . esc_attr( self::FONT_SANS ) . '; font-size:16px; font-weight:600; line-height:1; color:#ffffff; text-decoration:none;">'
+			. '<tr><td align="center" bgcolor="' . esc_attr( self::COLOR_SIENNA ) . '" style="border-radius:6px; border:2px solid ' . esc_attr( self::COLOR_INK ) . ';">'
+			. '<a href="' . esc_url( $url ) . '" style="display:inline-block; padding:13px 28px; font-family:' . esc_attr( self::FONT_SANS ) . '; font-size:16px; font-weight:600; line-height:1; color:#ffffff; text-decoration:none;">'
 			. esc_html( $text )
 			. '</a>'
 			. '</td></tr>'

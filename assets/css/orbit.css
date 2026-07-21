@@ -928,6 +928,13 @@ h3.orbit-activity-title {
 	font-size: var(--orbit-font-size-sm);
 }
 
+/* On the Manage page the summary sits right under the "New Activity" action
+ * row; give it breathing room so the count doesn't crowd the button. (On
+ * Subscribers the summary has no button before it, so it's unaffected.) */
+.orbit-form-actions + .orbit-table-summary {
+	margin-top: var(--orbit-spacing);
+}
+
 /* A button that visually reads as a link — used for in-row Cancel
  * actions where matching the adjacent Edit anchor's appearance keeps
  * the row tidy. */

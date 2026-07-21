@@ -535,7 +535,7 @@ class OrbitNotifierTest extends WP_UnitTestCase {
 		// Branded HTML part: wordmark, activity title, the Respond button
 		// carrying the action link, and the footer unsubscribe link.
 		$this->assertStringContainsString( 'Perihelion', $this->html_body( $mailer ) );
-		$this->assertStringContainsString( 'Fraunces', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'Century Gothic', $this->html_body( $mailer ) );
 		$this->assertStringContainsString( 'Saturday morning bike ride', $this->html_body( $mailer ) );
 		$this->assertStringContainsString( 'Respond', $this->html_body( $mailer ) );
 		$this->assertStringContainsString( '/activity/', $this->html_body( $mailer ) );
@@ -596,8 +596,8 @@ class OrbitNotifierTest extends WP_UnitTestCase {
 
 	/**
 	 * The daily digest a subscriber receives is warm and well-formed:
-	 * subject "Your Perihelion digest", the "here's what the people you
-	 * follow are up to" opener, a clean per-poster header (no `--- Name ---`
+	 * a subject naming who posted and how many, the "here's what the people
+	 * you follow are up to" opener, a clean per-poster header (no `--- Name ---`
 	 * ASCII dividers), each queued item's title and tier label, the
 	 * "silence is a complete answer" closer, the manage-subscriptions link,
 	 * and the RFC 8058 one-click unsubscribe headers.
@@ -659,11 +659,12 @@ class OrbitNotifierTest extends WP_UnitTestCase {
 		$subscriber = get_userdata( self::$user_id );
 		$this->assertSame( $subscriber->user_email, $sent->to[0][0] );
 
-		// Sentence-case subject built from the site name (Perihelion).
-		$this->assertSame(
-			sprintf( 'Your %s digest', get_bloginfo( 'name' ) ),
-			$sent->subject
-		);
+		// Subject names who posted and how many, e.g. "Grace and Ada posted
+		// 3 activities". Poster order follows the tier-desc digest ordering,
+		// so assert on the parts rather than a fixed order.
+		$this->assertStringContainsString( 'Ada', $sent->subject );
+		$this->assertStringContainsString( 'Grace', $sent->subject );
+		$this->assertStringContainsString( '3 activities', $sent->subject );
 
 		// Multipart: the digest advertises an HTML part.
 		$this->assertStringContainsString( 'multipart/alternative', $sent->header );
@@ -687,15 +688,16 @@ class OrbitNotifierTest extends WP_UnitTestCase {
 		$this->assertStringNotContainsString( '--- Ada ---', $this->alt_body( $mailer ) );
 		$this->assertStringNotContainsString( '--- Grace ---', $this->alt_body( $mailer ) );
 
-		// Branded HTML part: wordmark, both poster headings, each activity,
-		// the warm closer, a Respond link, and the manage-subscriptions footer.
+		// Branded HTML part: wordmark, both poster headings, each activity as a
+		// tappable title linking to its page, the warm closer, and the
+		// manage-subscriptions footer.
 		$this->assertStringContainsString( 'Perihelion', $this->html_body( $mailer ) );
-		$this->assertStringContainsString( 'Fraunces', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'Century Gothic', $this->html_body( $mailer ) );
 		$this->assertStringContainsString( 'Ada', $this->html_body( $mailer ) );
 		$this->assertStringContainsString( 'Grace', $this->html_body( $mailer ) );
 		$this->assertStringContainsString( 'Sunday farmers market', $this->html_body( $mailer ) );
 		$this->assertStringContainsString( 'Weekend hiking trip', $this->html_body( $mailer ) );
-		$this->assertStringContainsString( 'Respond', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( '/activity/', $this->html_body( $mailer ) );
 		$this->assertStringContainsString( 'silence is a complete answer', $this->html_body( $mailer ) );
 		$this->assertStringContainsString( 'Manage your subscriptions', $this->html_body( $mailer ) );
 

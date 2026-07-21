@@ -174,7 +174,7 @@ class Orbit_Shortcodes {
 				array(
 					'redirect'       => $dashboard_url,
 					'form_id'        => 'orbit-loginform',
-					'label_username' => __( 'Username or email', 'orbit' ),
+					'label_username' => __( 'Email', 'orbit' ),
 					'label_password' => __( 'Password', 'orbit' ),
 					'label_log_in'   => __( 'Log in', 'orbit' ),
 					'remember'       => true,
@@ -1279,7 +1279,7 @@ class Orbit_Shortcodes {
 		echo '<input type="text" id="orbit-share-link" class="orbit-share-link-input" value="' . esc_attr( $share_url ) . '" readonly>';
 		echo '<button type="button" class="orbit-btn orbit-btn-sm" data-orbit-copy-target="#orbit-share-link" data-orbit-copy-label="' . esc_attr__( 'Copy', 'orbit' ) . '" data-orbit-copy-confirm="' . esc_attr__( 'Copied!', 'orbit' ) . '">' . esc_html__( 'Copy', 'orbit' ) . '</button>';
 		echo '</div>';
-		echo '<p class="orbit-help">' . esc_html__( 'Send this link to someone you want as a subscriber. The token in the link is theirs to redeem once.', 'orbit' ) . '</p>';
+		echo '<p class="orbit-help">' . esc_html__( "Send this link to the friends you'd like as subscribers — the same link works for everyone you share it with.", 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-actions">';
