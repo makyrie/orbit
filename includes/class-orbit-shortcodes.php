@@ -1096,7 +1096,7 @@ class Orbit_Shortcodes {
 		if ( empty( $subscriptions ) ) {
 			echo '<p>' . esc_html__( "No subscribers yet. Send your share link to people you'd like to invite — they'll be able to subscribe with one click and you'll see them here for approval.", 'orbit' ) . '</p>';
 
-			$share_url = home_url( '/@' . $profile->slug . '/subscribe?token=' . $profile->share_token );
+			$share_url = Orbit_Profile::share_url( $profile );
 			echo '<div class="orbit-form-group">';
 			echo '<label for="orbit-subscribers-share-link">' . esc_html__( 'Your share link', 'orbit' ) . '</label>';
 			echo '<div class="orbit-share-link-row">';
@@ -1236,7 +1236,7 @@ class Orbit_Shortcodes {
 		echo '<p class="orbit-help">' . esc_html__( 'When ticked, new subscribers wait until you approve them before they can see your activities. Untick to let anyone with your share link subscribe immediately.', 'orbit' ) . '</p>';
 		echo '</div>';
 
-		$share_url = home_url( '/@' . $profile->slug . '/subscribe?token=' . $profile->share_token );
+		$share_url = Orbit_Profile::share_url( $profile );
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-share-link">' . esc_html__( 'Share link', 'orbit' ) . '</label>';
 		echo '<div class="orbit-share-link-row">';
@@ -1351,7 +1351,7 @@ class Orbit_Shortcodes {
 			echo '<a class="orbit-btn orbit-btn-sm" href="' . esc_url( home_url( '/manage/' ) ) . '">' . esc_html__( 'Manage activities', 'orbit' ) . '</a>';
 			echo '</div>';
 		} elseif ( ! $is_approved && ! $is_pending ) {
-			$subscribe_url = home_url( '/@' . $profile->slug . '/subscribe?token=' . $profile->share_token );
+			$subscribe_url = Orbit_Profile::share_url( $profile );
 			echo '<p><a href="' . esc_url( $subscribe_url ) . '" class="orbit-btn">';
 			echo esc_html__( 'Subscribe', 'orbit' );
 			echo '</a></p>';
@@ -1733,7 +1733,7 @@ class Orbit_Shortcodes {
 		// Subscribe CTA for non-subscribers (not shown to the poster).
 		$is_own_activity = $viewer_id && $profile && (int) $profile->user_id === $viewer_id;
 		if ( ! $subscription && $profile && ! $is_own_activity ) {
-			$subscribe_url = home_url( '/@' . $profile->slug . '/subscribe?token=' . $profile->share_token );
+			$subscribe_url = Orbit_Profile::share_url( $profile );
 			echo '<p class="orbit-cta">';
 			echo esc_html( sprintf(
 				/* translators: %s: profile display name */
@@ -1809,7 +1809,7 @@ class Orbit_Shortcodes {
 	 * @return string HTML markup for the callout.
 	 */
 	private static function render_welcome_callout( $profile ) {
-		$share_url = home_url( '/@' . $profile->slug . '/subscribe?token=' . $profile->share_token );
+		$share_url = Orbit_Profile::share_url( $profile );
 
 		/** This filter is documented in this method's docblock. */
 		$heading = apply_filters( 'orbit_welcome_callout_heading', __( "You're all set up.", 'orbit' ), $profile );

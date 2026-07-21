@@ -185,6 +185,26 @@ class Orbit_Profile {
 	}
 
 	/**
+	 * The public invite URL for a profile — the memorable /hi/<code> link.
+	 *
+	 * This is the one door into an otherwise-private profile: it lands on the
+	 * subscribe request form, never on the person's whereabouts. Prefer the
+	 * memorable share code; fall back to the (opaque) share token only for a
+	 * profile row that predates the code backfill.
+	 *
+	 * @param object $profile Profile row (needs share_code, or slug+share_token).
+	 * @return string Absolute URL.
+	 */
+	public static function share_url( $profile ) {
+		if ( ! empty( $profile->share_code ) ) {
+			return home_url( '/hi/' . rawurlencode( $profile->share_code ) );
+		}
+
+		// Legacy fallback for any un-backfilled row.
+		return home_url( '/@' . $profile->slug . '/subscribe?token=' . rawurlencode( $profile->share_token ) );
+	}
+
+	/**
 	 * Get multiple profiles by IDs in a single query.
 	 *
 	 * @param array $ids Array of profile IDs.

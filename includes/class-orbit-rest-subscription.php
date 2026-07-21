@@ -231,7 +231,7 @@ class Orbit_REST_Subscription {
 				__( 'An account with this email already exists. Please log in first.', 'orbit' ),
 				array(
 					'status'    => 409,
-					'login_url' => wp_login_url( home_url( '/@' . $profile->slug . '/subscribe?token=' . $share_token ) ),
+					'login_url' => wp_login_url( Orbit_Profile::share_url( $profile ) ),
 				)
 			);
 		}
