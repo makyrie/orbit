@@ -461,17 +461,39 @@ function orbit_filter_nav_menu_items( $items ) {
 add_filter( 'wp_nav_menu_objects', 'orbit_filter_nav_menu_items' );
 
 /**
- * Give the login screen a cleaner URL and send logged-out visitors there.
+ * Give the login screen a clean /login/ URL and route logged-out visitors there.
  *
- * - `login_url` becomes `/login/` (a friendly alias handed off to
- *   wp-login.php), so shared/typed login links aren't WordPress-y.
- * - Logged-out visitors who hit a login-required app page (dashboard,
- *   settings, new-activity, …) are redirected to the login screen with a
- *   return-to, instead of rendering an in-page prompt. One login surface.
- *
- * Implemented on `template_redirect` (not a rewrite rule) so no rewrite flush
- * is needed on the in-place-upload production deploy.
+ * - /login/ is served by wp-login.php in place — the URL stays /login/ — via a
+ *   rewrite rule to a query var, with a self-healing one-time flush so the
+ *   in-place-upload deploy needs no plugin re-activation.
+ * - login_url and the login form's POST target both become /login/, so the
+ *   whole flow stays off wp-login.php.
+ * - Logged-out visitors who hit a login-required app page (dashboard, settings,
+ *   new-activity, …) are redirected to /login/ with a return-to. One surface.
  */
+add_action(
+	'init',
+	function () {
+		add_rewrite_rule( '^login/?$', 'index.php?orbit_login=1', 'top' );
+
+		// Self-healing flush: register the rule once after deploy without a
+		// plugin re-activation (prod deploys are in-place file uploads). Bump
+		// the stored value to re-flush if the rule ever changes.
+		if ( '1' !== get_option( 'orbit_login_rewrite', '' ) ) {
+			flush_rewrite_rules( false );
+			update_option( 'orbit_login_rewrite', '1' );
+		}
+	}
+);
+
+add_filter(
+	'query_vars',
+	function ( $vars ) {
+		$vars[] = 'orbit_login';
+		return $vars;
+	}
+);
+
 add_filter(
 	'login_url',
 	function ( $login_url, $redirect, $force_reauth ) {
@@ -488,30 +510,36 @@ add_filter(
 	3
 );
 
+// Keep the login form's POST on /login/ so the URL never flips to wp-login.php.
+add_filter(
+	'site_url',
+	function ( $url, $path, $scheme ) {
+		if ( 'login_post' === $scheme && is_string( $path ) && 0 === strpos( ltrim( $path, '/' ), 'wp-login.php' ) ) {
+			return home_url( '/login/' );
+		}
+		return $url;
+	},
+	10,
+	3
+);
+
 add_action(
 	'template_redirect',
 	function () {
-		// `/login/` alias → hand off to wp-login.php, preserving its own args
-		// (redirect_to, action=logout/lostpassword/rp, reauth, key, login).
-		// Uses the raw site_url so it never loops through the filtered login_url.
-		$path = untrailingslashit( (string) wp_parse_url( isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '', PHP_URL_PATH ) );
-		if ( '/login' === $path ) {
-			$target      = site_url( 'wp-login.php' );
-			$passthrough = array();
-			foreach ( array( 'redirect_to', 'action', 'reauth', 'key', 'login' ) as $arg ) {
-				if ( isset( $_GET[ $arg ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-					$passthrough[ $arg ] = rawurlencode( wp_unslash( $_GET[ $arg ] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-				}
-			}
-			if ( $passthrough ) {
-				$target = add_query_arg( $passthrough, $target );
-			}
-			wp_safe_redirect( $target );
+		// Serve wp-login.php in place at /login/ (GET renders the form, POST
+		// authenticates). Requiring it after WP is loaded is a no-op for
+		// wp-load (require_once guards); its own login logic then runs and exits.
+		if ( get_query_var( 'orbit_login' ) ) {
+			// wp-login.php is built as a top-level entry script; included here,
+			// a couple of the vars its form renderer reads aren't defined on
+			// this path. Seed them so the include doesn't emit notices.
+			$error      = '';
+			$user_login = '';
+			require ABSPATH . 'wp-login.php';
 			exit;
 		}
 
-		// Route logged-out visitors on login-required app pages to the login
-		// screen with a return-to.
+		// Route logged-out visitors on login-required app pages to /login/.
 		if ( ! is_user_logged_in() && is_page( orbit_get_internal_page_slugs() ) ) {
 			wp_safe_redirect( wp_login_url( get_permalink() ) );
 			exit;

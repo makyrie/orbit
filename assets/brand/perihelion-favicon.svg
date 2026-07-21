@@ -6,21 +6,21 @@
     A "simplified orbit" mark: a planet at its perihelion — the closest point
     of an orbit to the star it circles, which is what the name means.
 
-      - Tile   : solid Sienna, the brand accent, with rounded corners (rx=14).
-      - Orbit  : a Paper-white ring at 85% opacity, deliberately OFF-CENTER
+      - Tile   : solid brand Pink, with rounded corners (rx=14).
+      - Orbit  : a Newsprint ring at 85% opacity, deliberately OFF-CENTER
                  (cx/cy 34.1 vs the tile's 32) so the sun sits at the orbit's
                  focus rather than its geometric center — a true eccentric orbit.
-      - Sun    : the honey disc, anchored at the tile center (32,32).
-      - Planet : the Paper-white disc at 10:30, sitting on the ring at its
-                 nearest approach to the sun (perihelion). The near gap is
-                 smaller than the far sweep — the eccentricity is real.
+      - Sun    : the Honey disc, anchored at the tile center (32,32).
+      - Planet : the Ink disc at 10:30, sitting on the ring at its nearest
+                 approach to the sun (perihelion). The near gap is smaller than
+                 the far sweep — the eccentricity is real.
 
-    Brand tokens: Sienna #9C4B30, Paper #F7F3ED, Honey #E7B25A.
-    This SVG is the source of truth; the deployed PNG (WordPress Site Icon,
-    subsite 49 media library) is rasterized from it at 512x512.
+    Community Press tokens: Pink #FF3D8B, Newsprint #F0EEE6, Honey #FFD400,
+    Ink #191A1D. This SVG is the source of truth; the deployed PNG (WordPress
+    Site Icon) is rasterized from it at 512x512.
   -->
-  <rect width="64" height="64" rx="14" fill="#9C4B30"/>
-  <circle cx="34.1" cy="34.1" r="18" fill="none" stroke="#F7F3ED" stroke-opacity="0.85" stroke-width="3.4"/>
-  <circle cx="32" cy="32" r="6" fill="#E7B25A"/>
-  <circle cx="21.4" cy="21.4" r="5" fill="#F7F3ED"/>
+  <rect width="64" height="64" rx="14" fill="#FF3D8B"/>
+  <circle cx="34.1" cy="34.1" r="18" fill="none" stroke="#F0EEE6" stroke-opacity="0.85" stroke-width="3.4"/>
+  <circle cx="32" cy="32" r="6" fill="#FFD400"/>
+  <circle cx="21.4" cy="21.4" r="5" fill="#191A1D"/>
 </svg>

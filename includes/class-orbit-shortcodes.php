@@ -240,13 +240,11 @@ class Orbit_Shortcodes {
 		$has_verified_phone = (bool) get_user_meta( $user_id, 'orbit_phone_verified', true );
 		$dismissed          = (bool) get_user_meta( $user_id, 'orbit_dashboard_banner_dismissed', true );
 
-		// Gate on Orbit_Features::sms_enabled() so the "as soon as our SMS
-		// program launches" copy doesn't keep rendering after SMS goes
-		// live. Post-launch the banner disappears for unverified users
-		// entirely; a verify-your-phone CTA can land elsewhere later (per
-		// todo 128). The banner body itself comes from
-		// Orbit_Messaging_Copy so the dormancy copy stays a one-flag flip.
-		if ( ! $showed_welcome && ! Orbit_Features::sms_enabled() && ! $has_verified_phone && ! $dismissed ) {
+		// Only nudge phone verification once SMS is actually live — pre-launch
+		// the verify form is hidden (it can't send over the unapproved A2P
+		// number), so the nudge would point at a dead end. Post-launch,
+		// unverified subscribers get the reminder.
+		if ( ! $showed_welcome && Orbit_Features::sms_enabled() && ! $has_verified_phone && ! $dismissed ) {
 			$settings_link = '<a href="' . esc_url( home_url( '/settings/' ) ) . '">'
 				. esc_html__( 'verify your phone in Settings', 'orbit' )
 				. '</a>';
