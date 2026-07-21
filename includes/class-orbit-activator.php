@@ -293,7 +293,10 @@ class Orbit_Activator {
 			'sign-up'       => array(
 				'title'    => 'Sign Up',
 				'content'  => '[orbit_sign_up]',
-				'template' => '',
+				// Use the app template like every other shortcode page. The
+				// default page template renders the WP post title as an <h1>
+				// above the shortcode's own heading — two H1s on one page.
+				'template' => 'page-app',
 			),
 			'why'           => array(
 				'title'     => 'Why this exists',

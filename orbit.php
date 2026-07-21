@@ -17,7 +17,7 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Plugin constants.
  */
-define( 'ORBIT_VERSION', '1.9.4' );
+define( 'ORBIT_VERSION', '1.9.8' );
 define( 'ORBIT_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ORBIT_PLUGIN_FILE', __FILE__ );
 
@@ -101,6 +101,7 @@ require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-rest-signup.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-email-template.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-emails.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-mail.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-account-emails.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-user-notifications.php';
 
 /**
@@ -293,6 +294,7 @@ Orbit_Consent::register_query_guard();
 // Disable SendGrid click/open tracking on our own sends (per message, not
 // account-wide) so transactional-email links stay clean and readable.
 Orbit_Mail::register();
+Orbit_Account_Emails::register();
 
 /**
  * Register ActionScheduler hooks and schedule recurring jobs.
@@ -397,6 +399,21 @@ function orbit_enqueue_scripts() {
 	);
 }
 add_action( 'wp_enqueue_scripts', 'orbit_enqueue_scripts' );
+
+/**
+ * Hide the WordPress admin toolbar for everyone who can't manage the site.
+ *
+ * Perihelion's posters and subscribers live entirely on the front end. The
+ * black WP bar ("Howdy", "My Sites", "About WordPress"…) leaks the underlying
+ * plumbing and has no place in the experience; the app provides its own nav
+ * and Log out. True site admins keep the bar.
+ */
+add_filter(
+	'show_admin_bar',
+	function ( $show ) {
+		return current_user_can( 'manage_options' ) ? $show : false;
+	}
+);
 
 /**
  * Hide Orbit's internal pages from navigation menus.

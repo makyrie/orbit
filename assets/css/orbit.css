@@ -625,22 +625,29 @@ h3.orbit-activity-title {
 	border-radius: var(--orbit-radius-sm);
 }
 
-/* Tier 1 — "Just an idea": sage-tinted surface */
-.orbit-tier-1 {
-	background-color: var(--orbit-color-bg-success);
-	color: var(--orbit-color-success);
-}
+/*
+ * Tier badges are a single-hue (sienna) intensity ramp, NOT a traffic light.
+ * Commitment escalates from a barely-there tint (an open idea) to a solid,
+ * inverted chip (a firm plan) — quiet -> loud in one brand color, with no
+ * green/amber/red "priority" or "error" semantics.
+ */
 
-/* Tier 2 — "I'll go if you will": sienna-tinted surface */
-.orbit-tier-2 {
-	background-color: var(--orbit-color-bg-error);
+/* Tier 1 — "Just an idea": faintest sienna wash */
+.orbit-tier-1 {
+	background-color: rgba(156, 75, 48, 0.08);
 	color: var(--orbit-color-primary);
 }
 
-/* Tier 3 — "I'm going — join me": honey-tinted surface */
+/* Tier 2 — "I'll go if you will": medium sienna tint */
+.orbit-tier-2 {
+	background-color: rgba(156, 75, 48, 0.18);
+	color: var(--orbit-color-primary);
+}
+
+/* Tier 3 — "I'm going — join me": solid sienna, inverted (firmest) */
 .orbit-tier-3 {
-	background-color: var(--orbit-color-bg-notice);
-	color: var(--orbit-color-warning);
+	background-color: var(--orbit-color-primary);
+	color: #ffffff;
 }
 
 /* ---- Activity Detail ---- */

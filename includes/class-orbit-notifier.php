@@ -334,8 +334,7 @@ class Orbit_Notifier {
 			$action_url = "\n" . home_url( '/activity/' . $activity_id . '?act=' . rawurlencode( $token ) );
 		}
 
-		$tier_labels = Orbit_Activity::get_tier_labels();
-		$tier_label  = isset( $tier_labels[ $activity->tier ] ) ? $tier_labels[ $activity->tier ] : '';
+		$tier_label = Orbit_Activity::get_tier_label( $activity->tier );
 
 		$body = sprintf(
 			"%s: %s\n%s%s",
@@ -381,8 +380,7 @@ class Orbit_Notifier {
 			$unsub_url   = home_url( '/unsubscribe/?token=' . rawurlencode( $unsub_token ) );
 		}
 
-		$tier_labels = Orbit_Activity::get_tier_labels();
-		$tier_label  = isset( $tier_labels[ $activity->tier ] ) ? $tier_labels[ $activity->tier ] : '';
+		$tier_label = Orbit_Activity::get_tier_label( $activity->tier );
 
 		$subject = sprintf(
 			/* translators: 1: poster name, 2: activity title */
@@ -418,8 +416,14 @@ class Orbit_Notifier {
 			$message .= "\n" . $activity->description . "\n";
 		}
 
+		$when_display = '';
 		if ( $activity->date_time ) {
-			$message .= "\n" . sprintf( __( 'When: %s', 'orbit' ), $activity->date_time );
+			$when_display = Orbit_Activity::format_datetime( $activity->date_time );
+			if ( $activity->date_flexible ) {
+				/* translators: %s: humanized activity date */
+				$when_display = sprintf( __( '%s (approximate)', 'orbit' ), $when_display );
+			}
+			$message .= "\n" . sprintf( __( 'When: %s', 'orbit' ), $when_display );
 		}
 
 		if ( $activity->location_name ) {
@@ -496,9 +500,9 @@ class Orbit_Notifier {
 		}
 
 		$meta = '';
-		if ( $activity->date_time ) {
+		if ( '' !== $when_display ) {
 			/* translators: %s: activity date/time */
-			$meta .= sprintf( __( 'When: %s', 'orbit' ), $activity->date_time );
+			$meta .= sprintf( __( 'When: %s', 'orbit' ), $when_display );
 		}
 		if ( $activity->location_name ) {
 			if ( '' !== $meta ) {
@@ -646,7 +650,6 @@ class Orbit_Notifier {
 		}
 
 		// Build digest message.
-		$tier_labels = Orbit_Activity::get_tier_labels();
 
 		/**
 		 * Filter the digest opening line.
@@ -677,7 +680,7 @@ class Orbit_Notifier {
 					$action_url = home_url( '/activity/' . $item->activity_id . '?act=' . rawurlencode( $token ) );
 				}
 
-				$tier_label = isset( $tier_labels[ $item->tier ] ) ? $tier_labels[ $item->tier ] : '';
+				$tier_label = Orbit_Activity::get_tier_label( $item->tier );
 
 				$message .= sprintf( "  %s — %s\n", $item->title, $tier_label );
 
@@ -687,9 +690,14 @@ class Orbit_Notifier {
 
 				$meta = '';
 				if ( $item->date_time ) {
-					$message .= sprintf( __( "  When: %s\n", 'orbit' ), $item->date_time );
+					$item_when = Orbit_Activity::format_datetime( $item->date_time );
+					if ( $item->date_flexible ) {
+						/* translators: %s: humanized activity date */
+						$item_when = sprintf( __( '%s (approximate)', 'orbit' ), $item_when );
+					}
+					$message .= sprintf( __( "  When: %s\n", 'orbit' ), $item_when );
 					/* translators: %s: activity date/time */
-					$meta .= sprintf( __( 'When: %s', 'orbit' ), $item->date_time );
+					$meta .= sprintf( __( 'When: %s', 'orbit' ), $item_when );
 				}
 
 				if ( $item->location_name ) {

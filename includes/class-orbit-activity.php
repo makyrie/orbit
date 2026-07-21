@@ -329,12 +329,20 @@ class Orbit_Activity {
 		$orderby         = in_array( $args['orderby'], $allowed_orderby, true ) ? $args['orderby'] : 'created_at';
 		$order           = 'ASC' === strtoupper( $args['order'] ) ? 'ASC' : 'DESC';
 
+		// When sorting by date_time, push undated activities (date_time IS NULL)
+		// to the end rather than letting MySQL's null-first ASC crowd the top.
+		// Mirrors list_by_profile_ids() so the dashboard and the public profile
+		// present activities in the same soonest-first order.
+		$order_clause = 'date_time' === $orderby
+			? "date_time IS NULL, date_time {$order}"
+			: "{$orderby} {$order}";
+
 		$offset   = max( 0, ( absint( $args['page'] ) - 1 ) * absint( $args['per_page'] ) );
 		$per_page = absint( $args['per_page'] );
 
 		$where_clause = implode( ' AND ', $where );
 
-		$sql = "SELECT * FROM {$table} WHERE {$where_clause} ORDER BY {$orderby} {$order} LIMIT %d OFFSET %d";
+		$sql = "SELECT * FROM {$table} WHERE {$where_clause} ORDER BY {$order_clause} LIMIT %d OFFSET %d";
 
 		$values[] = $per_page;
 		$values[] = $offset;
@@ -422,15 +430,21 @@ class Orbit_Activity {
 	private static function get_tier_data() {
 		return array(
 			1 => array(
+				// First-person 'label' is the poster's compose/marketing voice;
+				// 'label_badge' is the neutral, poster-independent tag shown on
+				// every display surface (cards, activity page, emails).
 				'label'       => __( 'Just an idea', 'orbit' ),
+				'label_badge' => __( 'Musing', 'orbit' ),
 				'description' => __( 'An open thought. Subscribers see it on their dashboard but get no notification.', 'orbit' ),
 			),
 			2 => array(
 				'label'       => __( "I'll go if you will", 'orbit' ),
+				'label_badge' => __( 'Tempted', 'orbit' ),
 				'description' => __( "You're interested, but want company before committing. Subscribers get a low-priority alert.", 'orbit' ),
 			),
 			3 => array(
 				'label'       => __( "I'm going — join me", 'orbit' ),
+				'label_badge' => __( 'Planned', 'orbit' ),
 				'description' => __( "You're going for sure. Subscribers who opted in for this tier get a real-time alert.", 'orbit' ),
 			),
 		);
@@ -453,6 +467,59 @@ class Orbit_Activity {
 	 */
 	public static function get_tier_descriptions() {
 		return wp_list_pluck( self::get_tier_data(), 'description' );
+	}
+
+	/**
+	 * Get the neutral, poster-independent badge label for a tier
+	 * (Musing / Tempted / Planned).
+	 *
+	 * This is the tag shown on every display surface — dashboard and profile
+	 * cards, the activity page, and the notification emails. It deliberately
+	 * says nothing in the first person and names no one, so it can't be
+	 * misread as the viewer's own RSVP and its length never depends on a
+	 * poster's name. The poster's first-person voice ("I'm going — join me")
+	 * lives only on the compose forms (get_tier_labels()) and the marketing
+	 * copy.
+	 *
+	 * @param int $tier Tier number (1-3).
+	 * @return string The badge label, or '' for an unknown tier.
+	 */
+	public static function get_tier_label( $tier ) {
+		$data = self::get_tier_data();
+		$tier = (int) $tier;
+
+		return isset( $data[ $tier ] ) ? $data[ $tier ]['label_badge'] : '';
+	}
+
+	/**
+	 * Format a stored activity datetime for display.
+	 *
+	 * Activity datetimes are stored naively — the local clock time the poster
+	 * typed, with no timezone at save — so they are parsed as UTC purely so
+	 * PHP's DateTime can read them, then formatted without timezone shifting.
+	 * This is the canonical formatter used by the notification emails; the
+	 * front-end shortcodes keep their own twin for now.
+	 *
+	 * @param string $datetime Stored datetime string (Y-m-d H:i:s).
+	 * @param string $format   PHP date format. Default: full readable.
+	 * @return string Formatted date string, or '' when empty.
+	 */
+	public static function format_datetime( $datetime, $format = '' ) {
+		if ( empty( $datetime ) ) {
+			return '';
+		}
+
+		if ( ! $format ) {
+			$format = 'l, F j \a\t g:i A';
+		}
+
+		try {
+			$dt = new DateTime( $datetime, new DateTimeZone( 'UTC' ) );
+
+			return $dt->format( $format );
+		} catch ( Exception $e ) {
+			return $datetime;
+		}
 	}
 
 	/**

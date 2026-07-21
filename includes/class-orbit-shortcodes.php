@@ -318,8 +318,6 @@ class Orbit_Shortcodes {
 			}
 		}
 
-		$tier_labels = Orbit_Activity::get_tier_labels();
-
 		// Batch-load profiles and response counts.
 		$needed_profile_ids = array_unique( array_map( function ( $a ) {
 			return (int) $a->profile_id;
@@ -339,9 +337,9 @@ class Orbit_Shortcodes {
 		$own_profile_id = $own_profile ? (int) $own_profile->id : 0;
 
 		foreach ( $activities as $activity ) {
-			$profile    = isset( $profiles_map[ (int) $activity->profile_id ] ) ? $profiles_map[ (int) $activity->profile_id ] : null;
-			$tier_label = isset( $tier_labels[ $activity->tier ] ) ? $tier_labels[ $activity->tier ] : '';
+			$profile = isset( $profiles_map[ (int) $activity->profile_id ] ) ? $profiles_map[ (int) $activity->profile_id ] : null;
 			$is_mine    = $own_profile_id && (int) $activity->profile_id === $own_profile_id;
+			$tier_label = Orbit_Activity::get_tier_label( $activity->tier );
 
 			$card_class = 'orbit-activity-card';
 			if ( $is_mine ) {
@@ -425,8 +423,6 @@ class Orbit_Shortcodes {
 		$user_id = get_current_user_id();
 		$prefs   = Orbit_Notifier::get_or_create_preferences( $user_id );
 
-		$tier_labels = Orbit_Activity::get_tier_labels();
-
 		ob_start();
 
 		$method_labels = array(
@@ -459,7 +455,7 @@ class Orbit_Shortcodes {
 			$current = $prefs->$key;
 
 			echo '<div class="orbit-setting-row">';
-			echo '<label>' . esc_html( $tier_labels[ $tier ] ) . '</label>';
+			echo '<label>' . esc_html( Orbit_Activity::get_tier_label( $tier ) ) . '</label>';
 			echo '<select name="' . esc_attr( $key ) . '">';
 
 			foreach ( $method_labels as $method => $label ) {
@@ -759,7 +755,6 @@ class Orbit_Shortcodes {
 			// Batch-load response counts.
 			$activity_ids    = array_map( function ( $a ) { return (int) $a->id; }, $activities );
 			$response_counts = Orbit_Response::count_by_activity_ids( $activity_ids );
-			$tier_labels     = Orbit_Activity::get_tier_labels();
 			$status_labels   = Orbit_Activity::get_status_labels();
 
 			$activity_counts = array( 'active' => 0, 'cancelled' => 0, 'past' => 0 );
@@ -791,7 +786,7 @@ class Orbit_Shortcodes {
 
 			foreach ( $activities as $activity ) {
 				$response_count = isset( $response_counts[ $activity->id ]['total'] ) ? $response_counts[ $activity->id ]['total'] : 0;
-				$tier_label     = isset( $tier_labels[ (int) $activity->tier ] ) ? $tier_labels[ (int) $activity->tier ] : '';
+				$tier_label     = Orbit_Activity::get_tier_label( (int) $activity->tier );
 				$is_active      = 'active' === $activity->status;
 				$status_label   = $is_active ? '' : ( $status_labels[ $activity->status ] ?? '' );
 				$card_class     = 'orbit-card';
@@ -1381,17 +1376,16 @@ class Orbit_Shortcodes {
 				'profile_id' => $profile->id,
 				'status'     => 'active',
 				'per_page'   => 10,
-				'order'      => 'DESC',
+				'orderby'    => 'date_time',
+				'order'      => 'ASC',
 			)
 		);
 
 		if ( ! empty( $activities ) ) {
-			echo '<h2>' . esc_html__( 'Recent Activities', 'orbit' ) . '</h2>';
-
-			$tier_labels = Orbit_Activity::get_tier_labels();
+			echo '<h2>' . esc_html__( 'Activities', 'orbit' ) . '</h2>';
 
 			foreach ( $activities as $activity ) {
-				$tier_label = isset( $tier_labels[ $activity->tier ] ) ? $tier_labels[ $activity->tier ] : '';
+				$tier_label = Orbit_Activity::get_tier_label( $activity->tier );
 
 				echo '<div class="orbit-activity-card">';
 				echo '<span class="orbit-tier-badge orbit-tier-' . esc_attr( $activity->tier ) . '">' . esc_html( $tier_label ) . '</span>';
@@ -1587,9 +1581,7 @@ class Orbit_Shortcodes {
 			}
 		}
 
-		$tier_labels = Orbit_Activity::get_tier_labels();
-
-		$tier_label = isset( $tier_labels[ $activity->tier ] ) ? $tier_labels[ $activity->tier ] : '';
+		$tier_label = Orbit_Activity::get_tier_label( $activity->tier );
 
 		ob_start();
 
@@ -1696,10 +1688,10 @@ class Orbit_Shortcodes {
 				$going_class = $my_response && 'going' === $my_response->response ? ' orbit-btn-active' : '';
 				$maybe_class = $my_response && 'maybe' === $my_response->response ? ' orbit-btn-active' : '';
 
-				echo '<button class="orbit-btn orbit-btn-going' . esc_attr( $going_class ) . '" data-response="going">';
+				echo '<button type="button" class="orbit-btn orbit-btn-going' . esc_attr( $going_class ) . '" data-response="going" aria-pressed="' . ( $going_class ? 'true' : 'false' ) . '">';
 				echo esc_html__( "I'm going", 'orbit' ) . '</button> ';
 
-				echo '<button class="orbit-btn orbit-btn-maybe' . esc_attr( $maybe_class ) . '" data-response="maybe">';
+				echo '<button type="button" class="orbit-btn orbit-btn-maybe' . esc_attr( $maybe_class ) . '" data-response="maybe" aria-pressed="' . ( $maybe_class ? 'true' : 'false' ) . '">';
 				echo esc_html__( 'Maybe', 'orbit' ) . '</button>';
 
 				if ( $my_response ) {
