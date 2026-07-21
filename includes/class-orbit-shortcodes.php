@@ -1376,12 +1376,13 @@ class Orbit_Shortcodes {
 				'profile_id' => $profile->id,
 				'status'     => 'active',
 				'per_page'   => 10,
-				'order'      => 'DESC',
+				'orderby'    => 'date_time',
+				'order'      => 'ASC',
 			)
 		);
 
 		if ( ! empty( $activities ) ) {
-			echo '<h2>' . esc_html__( 'Recent Activities', 'orbit' ) . '</h2>';
+			echo '<h2>' . esc_html__( 'Activities', 'orbit' ) . '</h2>';
 
 			foreach ( $activities as $activity ) {
 				$tier_label = Orbit_Activity::get_tier_label( $activity->tier );
@@ -1687,10 +1688,10 @@ class Orbit_Shortcodes {
 				$going_class = $my_response && 'going' === $my_response->response ? ' orbit-btn-active' : '';
 				$maybe_class = $my_response && 'maybe' === $my_response->response ? ' orbit-btn-active' : '';
 
-				echo '<button class="orbit-btn orbit-btn-going' . esc_attr( $going_class ) . '" data-response="going">';
+				echo '<button type="button" class="orbit-btn orbit-btn-going' . esc_attr( $going_class ) . '" data-response="going" aria-pressed="' . ( $going_class ? 'true' : 'false' ) . '">';
 				echo esc_html__( "I'm going", 'orbit' ) . '</button> ';
 
-				echo '<button class="orbit-btn orbit-btn-maybe' . esc_attr( $maybe_class ) . '" data-response="maybe">';
+				echo '<button type="button" class="orbit-btn orbit-btn-maybe' . esc_attr( $maybe_class ) . '" data-response="maybe" aria-pressed="' . ( $maybe_class ? 'true' : 'false' ) . '">';
 				echo esc_html__( 'Maybe', 'orbit' ) . '</button>';
 
 				if ( $my_response ) {

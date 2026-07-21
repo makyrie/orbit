@@ -403,8 +403,10 @@
 					// Update active state.
 					buttons.forEach( function ( btn ) {
 						btn.classList.remove( 'orbit-btn-active' );
+						if ( btn.hasAttribute( 'aria-pressed' ) ) { btn.setAttribute( 'aria-pressed', 'false' ); }
 					} );
 					button.classList.add( 'orbit-btn-active' );
+						button.setAttribute( 'aria-pressed', 'true' );
 
 					// Show retract button if not already present.
 					if ( ! container.querySelector( '.orbit-btn-retract' ) ) {
@@ -884,5 +886,26 @@
 		} else {
 			fallback();
 		}
+	} );
+	/**
+	 * Live-update the "your personal link" preview as the slug is edited on
+	 * the create-profile form (#66). The preview is server-rendered once from
+	 * the display-name-derived slug; without this it stays wrong the moment a
+	 * user customizes their handle.
+	 */
+	document.addEventListener( 'input', function ( e ) {
+		if ( ! e.target || e.target.id !== 'orbit-slug' ) {
+			return;
+		}
+		var preview = document.getElementById( 'orbit-slug-preview' );
+		if ( ! preview ) {
+			return;
+		}
+		// Approximate WordPress sanitize_title(): lowercase, collapse any run
+		// of non-alphanumerics to a single hyphen, and trim leading/trailing.
+		preview.textContent = e.target.value
+			.toLowerCase()
+			.replace( /[^a-z0-9]+/g, '-' )
+			.replace( /^-+|-+$/g, '' );
 	} );
 } )();

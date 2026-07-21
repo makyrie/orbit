@@ -329,12 +329,20 @@ class Orbit_Activity {
 		$orderby         = in_array( $args['orderby'], $allowed_orderby, true ) ? $args['orderby'] : 'created_at';
 		$order           = 'ASC' === strtoupper( $args['order'] ) ? 'ASC' : 'DESC';
 
+		// When sorting by date_time, push undated activities (date_time IS NULL)
+		// to the end rather than letting MySQL's null-first ASC crowd the top.
+		// Mirrors list_by_profile_ids() so the dashboard and the public profile
+		// present activities in the same soonest-first order.
+		$order_clause = 'date_time' === $orderby
+			? "date_time IS NULL, date_time {$order}"
+			: "{$orderby} {$order}";
+
 		$offset   = max( 0, ( absint( $args['page'] ) - 1 ) * absint( $args['per_page'] ) );
 		$per_page = absint( $args['per_page'] );
 
 		$where_clause = implode( ' AND ', $where );
 
-		$sql = "SELECT * FROM {$table} WHERE {$where_clause} ORDER BY {$orderby} {$order} LIMIT %d OFFSET %d";
+		$sql = "SELECT * FROM {$table} WHERE {$where_clause} ORDER BY {$order_clause} LIMIT %d OFFSET %d";
 
 		$values[] = $per_page;
 		$values[] = $offset;
