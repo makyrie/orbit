@@ -1296,8 +1296,8 @@ class Orbit_Shortcodes {
 
 		echo '<div class="orbit-form-group">';
 		echo '<label class="orbit-checkbox-label"><input type="checkbox" name="require_approval" value="1" checked> ';
-		echo esc_html__( 'Require approval for new subscribers', 'orbit' ) . '</label>';
-		echo '<p class="orbit-help">' . esc_html__( 'When ticked, new subscribers wait until you approve them before they can see your activities. Untick to let anyone with your share link subscribe immediately.', 'orbit' ) . '</p>';
+		echo esc_html__( 'Review each subscriber before they can see your activities', 'orbit' ) . '</label>';
+		echo '<p class="orbit-help">' . esc_html__( "On by default. Untick only if you trust everyone you'll give the link to — then anyone who has it gets in the moment they subscribe, no review. You can re-tick this anytime.", 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-actions">';

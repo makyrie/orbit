@@ -176,10 +176,10 @@ class OrbitOnboardingTest extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Create your profile', $output );
 		$this->assertStringNotContainsString( 'Create Your Profile', $output );
 
-		// Intro paragraph + required note + require-approval help text.
+		// Intro paragraph + required note + review-each-subscriber help text.
 		$this->assertStringContainsString( 'Last step. This is how you&#039;ll show up', $output );
 		$this->assertStringContainsString( 'orbit-form-required-note', $output );
-		$this->assertStringContainsString( 'new subscribers wait until you approve them', $output );
+		$this->assertStringContainsString( 'Review each subscriber before they can see your activities', $output );
 
 		// Live slug preview is preserved.
 		$this->assertStringContainsString( 'id="orbit-slug-preview"', $output );
