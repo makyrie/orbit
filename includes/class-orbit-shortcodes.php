@@ -162,39 +162,11 @@ class Orbit_Shortcodes {
 	 * @return string HTML output.
 	 */
 	public static function dashboard( $atts ) {
+		// Logged-out visitors are redirected to the login screen before this
+		// renders (see the template_redirect gate in orbit.php); this prompt is
+		// a belt-and-suspenders fallback consistent with the other app pages.
 		if ( ! is_user_logged_in() ) {
-			$dashboard_url = home_url( '/dashboard/' );
-
-			ob_start();
-			echo '<div class="orbit-login-embed">';
-			echo '<h1>' . esc_html__( 'Your dashboard', 'orbit' ) . '</h1>';
-			echo '<p class="orbit-page-intro">' . esc_html__( 'Log in to see upcoming activities from the people you follow.', 'orbit' ) . '</p>';
-
-			wp_login_form(
-				array(
-					'redirect'       => $dashboard_url,
-					'form_id'        => 'orbit-loginform',
-					'label_username' => __( 'Email', 'orbit' ),
-					'label_password' => __( 'Password', 'orbit' ),
-					'label_log_in'   => __( 'Log in', 'orbit' ),
-					'remember'       => true,
-				)
-			);
-
-			echo '<p class="orbit-login-embed__meta">';
-			echo '<a href="' . esc_url( wp_lostpassword_url( $dashboard_url ) ) . '">' . esc_html__( 'Lost your password?', 'orbit' ) . '</a>';
-			echo '</p>';
-
-			echo '<p class="orbit-login-embed__alt">';
-			printf(
-				/* translators: %s: link to the sign-up page */
-				esc_html__( 'New to Perihelion? %s', 'orbit' ),
-				'<a href="' . esc_url( home_url( '/sign-up/' ) ) . '">' . esc_html__( 'Create an account', 'orbit' ) . '</a>'
-			);
-			echo '</p>';
-			echo '</div>';
-
-			return ob_get_clean();
+			return self::login_prompt( __( 'Please log in to view your dashboard.', 'orbit' ) );
 		}
 
 		$user_id = get_current_user_id();
@@ -552,25 +524,19 @@ class Orbit_Shortcodes {
 		echo '<div class="orbit-phone-verification">';
 		echo '<h2>' . esc_html__( 'Phone number', 'orbit' ) . ' <span class="orbit-section-tag">' . esc_html__( 'optional', 'orbit' ) . '</span></h2>';
 
-		// Status banner — visible at the top of the block so the user knows
-		// what verifying their phone right now will (or won't) do.
-		if ( ! $sms_live ) {
+		// Verification sends the code over the same SMS channel as
+		// notifications, so it can't work until SMS is live — the A2P number
+		// can't send pre-launch. Explain the state and stop, rather than
+		// showing a "Send code" button that would just error.
+		if ( ! $sms_live || ! $twilio_configured ) {
 			echo '<div class="orbit-notice orbit-notice-info">';
-			echo esc_html__( "Verifying your phone now lets you receive SMS notifications as soon as the program launches. Until then, we'll send everything by email.", 'orbit' );
-			echo '</div>';
-		} else {
-			echo '<p class="orbit-help">' . esc_html__( 'Only needed if you want SMS notifications for any of the tiers below. We use it only to send activity alerts you opt into.', 'orbit' ) . '</p>';
-		}
-
-		if ( ! $twilio_configured ) {
-			// During the dormant phase Twilio creds may not be configured
-			// yet. The plan: don't hide the surface — explain the state.
-			echo '<div class="orbit-notice orbit-notice-warning">';
-			echo esc_html__( "Phone verification will be available once SMS is live. You'll be notified by email when that happens.", 'orbit' );
+			echo esc_html__( "Phone verification will be available once SMS notifications go live. Until then we send everything by email — we'll let you know when it's ready.", 'orbit' );
 			echo '</div>';
 			echo '</div>';
 			return ob_get_clean();
 		}
+
+		echo '<p class="orbit-help">' . esc_html__( 'Only needed if you want SMS notifications for any of the tiers below. We use it only to send activity alerts you opt into.', 'orbit' ) . '</p>';
 
 		// State: verified.
 		if ( $has_verified ) {

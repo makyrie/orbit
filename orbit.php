@@ -461,6 +461,65 @@ function orbit_filter_nav_menu_items( $items ) {
 add_filter( 'wp_nav_menu_objects', 'orbit_filter_nav_menu_items' );
 
 /**
+ * Give the login screen a cleaner URL and send logged-out visitors there.
+ *
+ * - `login_url` becomes `/login/` (a friendly alias handed off to
+ *   wp-login.php), so shared/typed login links aren't WordPress-y.
+ * - Logged-out visitors who hit a login-required app page (dashboard,
+ *   settings, new-activity, …) are redirected to the login screen with a
+ *   return-to, instead of rendering an in-page prompt. One login surface.
+ *
+ * Implemented on `template_redirect` (not a rewrite rule) so no rewrite flush
+ * is needed on the in-place-upload production deploy.
+ */
+add_filter(
+	'login_url',
+	function ( $login_url, $redirect, $force_reauth ) {
+		$url = home_url( '/login/' );
+		if ( ! empty( $redirect ) ) {
+			$url = add_query_arg( 'redirect_to', rawurlencode( $redirect ), $url );
+		}
+		if ( $force_reauth ) {
+			$url = add_query_arg( 'reauth', '1', $url );
+		}
+		return $url;
+	},
+	10,
+	3
+);
+
+add_action(
+	'template_redirect',
+	function () {
+		// `/login/` alias → hand off to wp-login.php, preserving its own args
+		// (redirect_to, action=logout/lostpassword/rp, reauth, key, login).
+		// Uses the raw site_url so it never loops through the filtered login_url.
+		$path = untrailingslashit( (string) wp_parse_url( isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '', PHP_URL_PATH ) );
+		if ( '/login' === $path ) {
+			$target      = site_url( 'wp-login.php' );
+			$passthrough = array();
+			foreach ( array( 'redirect_to', 'action', 'reauth', 'key', 'login' ) as $arg ) {
+				if ( isset( $_GET[ $arg ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+					$passthrough[ $arg ] = rawurlencode( wp_unslash( $_GET[ $arg ] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+				}
+			}
+			if ( $passthrough ) {
+				$target = add_query_arg( $passthrough, $target );
+			}
+			wp_safe_redirect( $target );
+			exit;
+		}
+
+		// Route logged-out visitors on login-required app pages to the login
+		// screen with a return-to.
+		if ( ! is_user_logged_in() && is_page( orbit_get_internal_page_slugs() ) ) {
+			wp_safe_redirect( wp_login_url( get_permalink() ) );
+			exit;
+		}
+	}
+);
+
+/**
  * Filter FSE page-list blocks (used by block themes like Twenty Twenty-Five).
  *
  * @param WP_Post[] $pages Array of page objects.

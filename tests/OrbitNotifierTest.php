@@ -384,6 +384,71 @@ class OrbitNotifierTest extends WP_UnitTestCase {
 	}
 
 	/**
+	 * A subscriber who has hit their SMS daily cap overflows to the digest
+	 * instead of receiving another text — the per-recipient message-ceiling
+	 * guardrail. With SMS live, a verified sms-preferring subscriber whose cap
+	 * is already met for the day must be routed to a queued digest row.
+	 */
+	public function test_sms_cap_reached_routes_to_digest() {
+		global $wpdb;
+
+		// SMS must be live, or the kill-switch coerces sms -> email before the
+		// cap check is ever reached.
+		update_option( Orbit_Features::OPTION_SMS_ENABLED, '1' );
+
+		$profile_id  = $this->create_profile_with_owner( 'cap-poster' );
+		$activity_id = Orbit_Activity::create(
+			array(
+				'profile_id' => $profile_id,
+				'tier'       => 1,
+				'title'      => 'Capped fan-out',
+			)
+		);
+		$this->assertIsInt( $activity_id );
+
+		$uid = self::factory()->user->create( array( 'role' => 'subscriber' ) );
+		$this->insert_approved_subscription( $uid, $profile_id );
+
+		// Route tier-1 to SMS with a verified phone and a cap of one per day.
+		Orbit_Notifier::update_preferences(
+			$uid,
+			array(
+				'tier1_method'  => 'sms',
+				'sms_daily_cap' => 1,
+			)
+		);
+		update_user_meta( $uid, 'orbit_phone_verified', '1' );
+
+		// One SMS already logged today meets the cap of 1.
+		$log_table = $wpdb->prefix . ORBIT_TABLE_NOTIFICATION_LOG;
+		$wpdb->insert(
+			$log_table,
+			array(
+				'user_id'     => $uid,
+				'activity_id' => $activity_id,
+				'method'      => 'sms',
+				'status'      => 'sent',
+				'created_at'  => current_time( 'mysql', true ),
+			),
+			array( '%d', '%d', '%s', '%s', '%s' )
+		);
+
+		Orbit_Notifier::process_dispatch( $activity_id );
+
+		// The capped subscriber's notification overflowed to the digest.
+		$digest_rows = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM {$log_table} WHERE activity_id = %d AND user_id = %d AND method = 'digest'",
+				$activity_id,
+				$uid
+			)
+		);
+		$this->assertSame( 1, $digest_rows, 'A subscriber at their SMS daily cap must overflow to the digest.' );
+
+		delete_option( Orbit_Features::OPTION_SMS_ENABLED );
+	}
+
+	/**
 	 * `orbit_notification_sent` fires with the expected positional args
 	 * (including the new idempotency_key tail arg) when email handoff
 	 * succeeds.
