@@ -600,7 +600,7 @@ class Orbit_Notifier {
 		// Get queued digest items for this user.
 		$queued_items = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT nl.id AS log_id, nl.activity_id, a.title, a.tier, a.date_time, a.profile_id, a.description, a.location_name
+				"SELECT nl.id AS log_id, nl.activity_id, a.title, a.tier, a.date_time, a.date_flexible, a.profile_id, a.description, a.location_name
 				FROM {$log_table} nl
 				INNER JOIN {$activities_table} a ON nl.activity_id = a.id
 				WHERE nl.user_id = %d AND nl.method = 'digest' AND nl.status = 'queued'
@@ -669,56 +669,45 @@ class Orbit_Notifier {
 
 		foreach ( $grouped as $poster_name => $items ) {
 			$message .= $poster_name . "\n";
-			$inner   .= Orbit_Email_Template::heading( $poster_name );
+			$inner   .= Orbit_Email_Template::section_label( $poster_name );
 
 			foreach ( $items as $item ) {
 				$subscription = isset( $sub_by_profile[ (int) $item->profile_id ] ) ? $sub_by_profile[ (int) $item->profile_id ] : null;
-				$action_url   = '';
 
+				// Tap target: the activity page, carrying the action token when
+				// we have one so a subscriber can respond straight from the tap.
 				if ( $subscription ) {
 					$token      = Orbit_Token::generate_action_token( $subscription->subscription_secret, $item->activity_id, $subscription->id );
 					$action_url = home_url( '/activity/' . $item->activity_id . '?act=' . rawurlencode( $token ) );
+				} else {
+					$action_url = home_url( '/activity/' . $item->activity_id );
 				}
 
 				$tier_label = Orbit_Activity::get_tier_label( $item->tier );
 
-				$message .= sprintf( "  %s — %s\n", $item->title, $tier_label );
-
-				$inner .= Orbit_Email_Template::paragraph(
-					sprintf( '%s — %s', $item->title, $tier_label )
-				);
-
-				$meta = '';
+				// Compact "Tier · When · Where" meta, built once for both parts.
+				$meta_parts = array( $tier_label );
 				if ( $item->date_time ) {
 					$item_when = Orbit_Activity::format_datetime( $item->date_time );
 					if ( $item->date_flexible ) {
 						/* translators: %s: humanized activity date */
 						$item_when = sprintf( __( '%s (approximate)', 'orbit' ), $item_when );
 					}
-					$message .= sprintf( __( "  When: %s\n", 'orbit' ), $item_when );
-					/* translators: %s: activity date/time */
-					$meta .= sprintf( __( 'When: %s', 'orbit' ), $item_when );
+					$meta_parts[] = $item_when;
 				}
-
 				if ( $item->location_name ) {
-					$message .= sprintf( __( "  Where: %s\n", 'orbit' ), $item->location_name );
-					if ( '' !== $meta ) {
-						$meta .= "\n";
-					}
-					/* translators: %s: activity location */
-					$meta .= sprintf( __( 'Where: %s', 'orbit' ), $item->location_name );
+					$meta_parts[] = $item->location_name;
 				}
+				$meta_text = implode( ' · ', $meta_parts );
 
-				if ( '' !== $meta ) {
-					$inner .= Orbit_Email_Template::paragraph_muted( $meta );
-				}
+				// HTML: a tappable title + one compact meta line.
+				$inner .= Orbit_Email_Template::title_link( $item->title, $action_url );
+				$inner .= Orbit_Email_Template::meta_line( $meta_text );
 
-				if ( $action_url ) {
-					$message .= sprintf( __( "  Respond: %s\n", 'orbit' ), $action_url );
-					$inner   .= Orbit_Email_Template::link_paragraph( __( 'Respond', 'orbit' ), $action_url );
-				}
-
-				$message .= "\n";
+				// Plaintext counterpart.
+				$message .= sprintf( "  %s\n", $item->title );
+				$message .= sprintf( "  %s\n", $meta_text );
+				$message .= sprintf( "  %s\n\n", $action_url );
 			}
 		}
 
@@ -739,10 +728,36 @@ class Orbit_Notifier {
 			$message .= "\n" . __( 'Manage your subscriptions: ', 'orbit' ) . home_url( '/dashboard' ) . "\n";
 		}
 
+		// Subject names who posted and how many, so the inbox line is useful
+		// on its own: "Nadia posted 3 activities" / "Nadia, Theo and 2 others…".
+		$poster_names   = array_keys( $grouped );
+		$poster_count   = count( $poster_names );
+		$activity_count = count( $queued_items );
+
+		if ( 1 === $poster_count ) {
+			$who = $poster_names[0];
+		} elseif ( 2 === $poster_count ) {
+			$who = sprintf(
+				/* translators: 1: first poster name, 2: second poster name */
+				__( '%1$s and %2$s', 'orbit' ),
+				$poster_names[0],
+				$poster_names[1]
+			);
+		} else {
+			$others = $poster_count - 2;
+			$who    = sprintf(
+				/* translators: 1: two comma-separated poster names, 2: number of additional posters */
+				_n( '%1$s and %2$d other', '%1$s and %2$d others', $others, 'orbit' ),
+				implode( ', ', array_slice( $poster_names, 0, 2 ) ),
+				$others
+			);
+		}
+
 		$subject = sprintf(
-			/* translators: %s: site name */
-			__( 'Your %s digest', 'orbit' ),
-			get_bloginfo( 'name' )
+			/* translators: 1: who posted (names), 2: number of activities */
+			_n( '%1$s posted %2$d activity', '%1$s posted %2$d activities', $activity_count, 'orbit' ),
+			$who,
+			$activity_count
 		);
 
 		// Pick any of the user's subscriptions to host the unsubscribe
