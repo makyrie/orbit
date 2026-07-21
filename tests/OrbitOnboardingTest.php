@@ -111,11 +111,13 @@ class OrbitOnboardingTest extends WP_UnitTestCase {
 		$output = Orbit_Shortcodes::dashboard( array() );
 
 		// Heading (esc_html escapes the apostrophe), share link (with unique
-		// id), and the primary CTA.
+		// id), and the primary CTA. The invite link is now the memorable
+		// /hi/<code> URL, not the raw share token.
 		$heading = esc_html( "You're all set up." );
 		$this->assertStringContainsString( $heading, $output );
 		$this->assertStringContainsString( 'orbit-welcome-share-link', $output );
-		$this->assertStringContainsString( $profile->share_token, $output );
+		$this->assertStringContainsString( Orbit_Profile::share_url( $profile ), $output );
+		$this->assertStringContainsString( '/hi/' . $profile->share_code, $output );
 		$this->assertStringContainsString( 'Post your first activity', $output );
 		$this->assertStringContainsString( esc_url( home_url( '/new-activity/' ) ), $output );
 

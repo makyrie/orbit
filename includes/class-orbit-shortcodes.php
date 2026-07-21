@@ -124,7 +124,7 @@ class Orbit_Shortcodes {
 					<span class="orbit-required-mark" aria-hidden="true">*</span>
 				</label>
 				<input type="text" id="orbit-signup-name" name="display_name" required autocomplete="name">
-				<p class="orbit-help"><?php esc_html_e( "How you'll appear on activity cards and your public profile. You can change it later.", 'orbit' ); ?></p>
+				<p class="orbit-help"><?php esc_html_e( "How you'll appear on activity cards and your profile. You can change it later.", 'orbit' ); ?></p>
 			</div>
 			<div class="orbit-form-group">
 				<label for="orbit-signup-email">
@@ -1215,35 +1215,36 @@ class Orbit_Shortcodes {
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-display-name">' . esc_html__( 'Display name', 'orbit' ) . ' <span class="orbit-required-mark" aria-hidden="true">*</span></label>';
 		echo '<input type="text" id="orbit-display-name" name="display_name" value="' . esc_attr( $profile->display_name ) . '" required>';
-		echo '<p class="orbit-help">' . esc_html__( "How you'll appear on activity cards and your public profile.", 'orbit' ) . '</p>';
+		echo '<p class="orbit-help">' . esc_html__( "How you'll appear on activity cards and your profile.", 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-slug">' . esc_html__( 'URL slug', 'orbit' ) . ' <span class="orbit-required-mark" aria-hidden="true">*</span></label>';
 		echo '<input type="text" id="orbit-slug" name="slug" value="' . esc_attr( $profile->slug ) . '" required>';
-		echo '<p class="orbit-help">' . esc_html__( 'Your profile URL is', 'orbit' ) . ' <code>' . esc_html( home_url( '/@' . $profile->slug ) ) . '</code>.</p>';
+		echo '<p class="orbit-help">' . esc_html__( 'Your subscribers see your activities at', 'orbit' ) . ' <code>' . esc_html( home_url( '/@' . $profile->slug ) ) . '</code>' . esc_html__( '. It stays private — only you and people you approve can open it.', 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-bio">' . esc_html__( 'Bio', 'orbit' ) . '</label>';
 		echo '<textarea id="orbit-bio" name="bio" rows="3">' . esc_textarea( $profile->bio ) . '</textarea>';
-		echo '<p class="orbit-help">' . esc_html__( 'A sentence or two so visitors recognize you. Shown on your public profile above your activities.', 'orbit' ) . '</p>';
+		echo '<p class="orbit-help">' . esc_html__( 'A sentence or two so the people you invite recognize you. Shown at the top of your profile, above your activities.', 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
 		echo '<label class="orbit-checkbox-label"><input type="checkbox" name="require_approval" value="1" ' . checked( $profile->require_approval, 1, false ) . '> ';
-		echo esc_html__( 'Require approval for new subscribers', 'orbit' ) . '</label>';
-		echo '<p class="orbit-help">' . esc_html__( 'When ticked, new subscribers wait until you approve them before they can see your activities. Untick to let anyone with your share link subscribe immediately.', 'orbit' ) . '</p>';
+		echo esc_html__( 'Review each subscriber before they can see your activities', 'orbit' ) . '</label>';
+		echo '<p class="orbit-help">' . esc_html__( "On by default. Untick only if you trust everyone you'll give the link to — then anyone who has it gets in the moment they subscribe, no review. You can re-tick this anytime.", 'orbit' ) . '</p>';
 		echo '</div>';
 
 		$share_url = Orbit_Profile::share_url( $profile );
 		echo '<div class="orbit-form-group">';
-		echo '<label for="orbit-share-link">' . esc_html__( 'Share link', 'orbit' ) . '</label>';
+		echo '<label for="orbit-share-link">' . esc_html__( 'Your invite link', 'orbit' ) . '</label>';
 		echo '<div class="orbit-share-link-row">';
 		echo '<input type="text" id="orbit-share-link" class="orbit-share-link-input" value="' . esc_attr( $share_url ) . '" readonly>';
 		echo '<button type="button" class="orbit-btn orbit-btn-sm" data-orbit-copy-target="#orbit-share-link" data-orbit-copy-label="' . esc_attr__( 'Copy', 'orbit' ) . '" data-orbit-copy-confirm="' . esc_attr__( 'Copied!', 'orbit' ) . '">' . esc_html__( 'Copy', 'orbit' ) . '</button>';
+		echo '<button type="button" class="orbit-btn orbit-btn-sm orbit-btn-secondary" data-orbit-reroll-share-code="' . esc_attr( $profile->id ) . '" data-orbit-reroll-confirm="' . esc_attr__( 'Get a new link? The current one will stop working — anyone you already gave it to keeps their access.', 'orbit' ) . '">' . esc_html__( 'New link', 'orbit' ) . '</button>';
 		echo '</div>';
-		echo '<p class="orbit-help">' . esc_html__( "Send this link to the friends you'd like as subscribers — the same link works for everyone you share it with.", 'orbit' ) . '</p>';
+		echo '<p class="orbit-help">' . esc_html__( "This is the only way in — send it to the friends you'd like as subscribers. It's a memorable link you can read aloud, and the same one works for everyone. Approving subscribers is still how you decide who's in. If a link ever ends up somewhere you didn't intend, tap New link to retire it.", 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-actions">';
@@ -1278,7 +1279,7 @@ class Orbit_Shortcodes {
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-display-name">' . esc_html__( 'Display name', 'orbit' ) . ' <span class="orbit-required-mark" aria-hidden="true">*</span></label>';
 		echo '<input type="text" id="orbit-display-name" name="display_name" value="' . esc_attr( $user->display_name ) . '" required>';
-		echo '<p class="orbit-help">' . esc_html__( "How you'll appear on activity cards and your public profile.", 'orbit' ) . '</p>';
+		echo '<p class="orbit-help">' . esc_html__( "How you'll appear on activity cards and your profile.", 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
@@ -1290,7 +1291,7 @@ class Orbit_Shortcodes {
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-bio">' . esc_html__( 'Bio', 'orbit' ) . '</label>';
 		echo '<textarea id="orbit-bio" name="bio" rows="3" placeholder="' . esc_attr__( 'A short description of what you like to do', 'orbit' ) . '"></textarea>';
-		echo '<p class="orbit-help">' . esc_html__( 'A sentence or two so visitors recognize you. Shown on your public profile above your activities.', 'orbit' ) . '</p>';
+		echo '<p class="orbit-help">' . esc_html__( 'A sentence or two so the people you invite recognize you. Shown at the top of your profile, above your activities.', 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';

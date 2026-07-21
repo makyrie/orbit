@@ -325,7 +325,7 @@ class Orbit_Routes {
 	 * @param object $profile Profile row.
 	 * @return bool
 	 */
-	private static function viewer_can_see_profile( $profile ) {
+	public static function viewer_can_see_profile( $profile ) {
 		if ( ! is_user_logged_in() ) {
 			return false;
 		}
@@ -404,6 +404,20 @@ class Orbit_Routes {
 	 * @param string $code The share code.
 	 */
 	private static function handle_hi_route( $code ) {
+		// Anti-enumeration: cap lookups per source IP. A human opening a link
+		// they were given never trips this; a script walking the code space
+		// does. On limit we 404 rather than 429 — consistent with the route's
+		// "reveal nothing" stance, so a limited request is indistinguishable
+		// from an unknown code.
+		$ip = Orbit_Client_IP::get();
+		$allowed = '' === $ip
+			? Orbit_Rate_Limiter::attempt( 'hi_lookup_anon', '_anon', 10, MINUTE_IN_SECONDS )
+			: Orbit_Rate_Limiter::attempt( 'hi_lookup', $ip, 30, MINUTE_IN_SECONDS );
+		if ( ! $allowed ) {
+			self::not_found();
+			return;
+		}
+
 		$profile = Orbit_Profile::get_by_share_code( sanitize_text_field( wp_unslash( $code ) ) );
 
 		if ( ! $profile ) {
@@ -456,7 +470,7 @@ class Orbit_Routes {
 	 * @param object $activity Activity row.
 	 * @return bool
 	 */
-	private static function viewer_can_see_activity( $activity ) {
+	public static function viewer_can_see_activity( $activity ) {
 		$profile = Orbit_Profile::get( (int) $activity->profile_id );
 		if ( ! $profile ) {
 			return false;
