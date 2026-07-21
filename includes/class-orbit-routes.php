@@ -222,6 +222,7 @@ class Orbit_Routes {
 	public static function is_app_route() {
 		return (bool) (
 			get_query_var( 'orbit_profile_slug' )
+			|| get_query_var( 'orbit_hi_code' )
 			|| get_query_var( 'orbit_activity_id' )
 			|| get_query_var( 'orbit_unsubscribe' )
 		);
