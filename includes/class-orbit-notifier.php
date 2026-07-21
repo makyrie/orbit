@@ -334,8 +334,7 @@ class Orbit_Notifier {
 			$action_url = "\n" . home_url( '/activity/' . $activity_id . '?act=' . rawurlencode( $token ) );
 		}
 
-		$tier_labels = Orbit_Activity::get_tier_labels();
-		$tier_label  = isset( $tier_labels[ $activity->tier ] ) ? $tier_labels[ $activity->tier ] : '';
+		$tier_label = Orbit_Activity::get_tier_label( $activity->tier );
 
 		$body = sprintf(
 			"%s: %s\n%s%s",
@@ -381,9 +380,7 @@ class Orbit_Notifier {
 			$unsub_url   = home_url( '/unsubscribe/?token=' . rawurlencode( $unsub_token ) );
 		}
 
-		// The recipient is always a subscriber (never the poster), so the tier
-		// label speaks in the poster's third person: "Nadia is going — join in".
-		$tier_label = Orbit_Activity::get_tier_label( $activity->tier, $poster_name );
+		$tier_label = Orbit_Activity::get_tier_label( $activity->tier );
 
 		$subject = sprintf(
 			/* translators: 1: poster name, 2: activity title */
@@ -683,8 +680,7 @@ class Orbit_Notifier {
 					$action_url = home_url( '/activity/' . $item->activity_id . '?act=' . rawurlencode( $token ) );
 				}
 
-				// Digest is grouped by poster, so speak in their third person.
-				$tier_label = Orbit_Activity::get_tier_label( $item->tier, $poster_name );
+				$tier_label = Orbit_Activity::get_tier_label( $item->tier );
 
 				$message .= sprintf( "  %s — %s\n", $item->title, $tier_label );
 

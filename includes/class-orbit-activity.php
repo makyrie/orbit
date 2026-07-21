@@ -422,22 +422,21 @@ class Orbit_Activity {
 	private static function get_tier_data() {
 		return array(
 			1 => array(
+				// First-person 'label' is the poster's compose/marketing voice;
+				// 'label_badge' is the neutral, poster-independent tag shown on
+				// every display surface (cards, activity page, emails).
 				'label'       => __( 'Just an idea', 'orbit' ),
-				// Shown to everyone but the poster. Tier 1 carries no first-person
-				// voice, so the "other" form is identical.
-				'label_other' => __( 'Just an idea', 'orbit' ),
+				'label_badge' => __( 'Musing', 'orbit' ),
 				'description' => __( 'An open thought. Subscribers see it on their dashboard but get no notification.', 'orbit' ),
 			),
 			2 => array(
 				'label'       => __( "I'll go if you will", 'orbit' ),
-				/* translators: %s: poster display name */
-				'label_other' => __( '%s will go if you will', 'orbit' ),
+				'label_badge' => __( 'Tempted', 'orbit' ),
 				'description' => __( "You're interested, but want company before committing. Subscribers get a low-priority alert.", 'orbit' ),
 			),
 			3 => array(
 				'label'       => __( "I'm going — join me", 'orbit' ),
-				/* translators: %s: poster display name */
-				'label_other' => __( '%s is going — join in', 'orbit' ),
+				'label_badge' => __( 'Planned', 'orbit' ),
 				'description' => __( "You're going for sure. Subscribers who opted in for this tier get a real-time alert.", 'orbit' ),
 			),
 		);
@@ -463,38 +462,25 @@ class Orbit_Activity {
 	}
 
 	/**
-	 * Get a single tier label in the voice appropriate to the viewer.
+	 * Get the neutral, poster-independent badge label for a tier
+	 * (Musing / Tempted / Planned).
 	 *
-	 * Tier labels are written in the poster's first person ("I'm going — join
-	 * me"). That voice is correct only where the poster is composing or looking
-	 * at their own activity; shown to anyone else it misreads as the viewer's
-	 * own status ("wait, I never said I'm going"). Pass the poster's display
-	 * name to get the third-person form ("Nadia is going — join in"); omit it
-	 * for the poster's own surfaces.
+	 * This is the tag shown on every display surface — dashboard and profile
+	 * cards, the activity page, and the notification emails. It deliberately
+	 * says nothing in the first person and names no one, so it can't be
+	 * misread as the viewer's own RSVP and its length never depends on a
+	 * poster's name. The poster's first-person voice ("I'm going — join me")
+	 * lives only on the compose forms (get_tier_labels()) and the marketing
+	 * copy.
 	 *
-	 * @param int         $tier        Tier number (1-3).
-	 * @param string|null $poster_name Poster display name for the third-person
-	 *                                 voice, or null/'' for the poster's own
-	 *                                 first-person voice.
-	 * @return string The tier label, or '' for an unknown tier.
+	 * @param int $tier Tier number (1-3).
+	 * @return string The badge label, or '' for an unknown tier.
 	 */
-	public static function get_tier_label( $tier, $poster_name = null ) {
+	public static function get_tier_label( $tier ) {
 		$data = self::get_tier_data();
 		$tier = (int) $tier;
 
-		if ( ! isset( $data[ $tier ] ) ) {
-			return '';
-		}
-
-		if ( null === $poster_name || '' === $poster_name ) {
-			return $data[ $tier ]['label'];
-		}
-
-		$template = $data[ $tier ]['label_other'];
-
-		return false !== strpos( $template, '%s' )
-			? sprintf( $template, $poster_name )
-			: $template;
+		return isset( $data[ $tier ] ) ? $data[ $tier ]['label_badge'] : '';
 	}
 
 	/**
