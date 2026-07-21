@@ -747,7 +747,9 @@ class OrbitNotifierTest extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Sunday farmers market', $this->alt_body( $mailer ) );
 		$this->assertStringContainsString( 'Evening board games', $this->alt_body( $mailer ) );
 		$this->assertStringContainsString( 'Weekend hiking trip', $this->alt_body( $mailer ) );
-		$this->assertStringContainsString( $tier_labels[2], $this->alt_body( $mailer ) );
+		// The digest shows the neutral badge label (Tempted), not the poster's
+		// first-person "I'll go if you will" phrasing.
+		$this->assertStringContainsString( Orbit_Activity::get_tier_label( 2 ), $this->alt_body( $mailer ) );
 		$this->assertStringContainsString( 'silence is a complete answer', $this->alt_body( $mailer ) );
 		$this->assertStringContainsString( 'Manage your subscriptions:', $this->alt_body( $mailer ) );
 		$this->assertStringNotContainsString( '--- Ada ---', $this->alt_body( $mailer ) );

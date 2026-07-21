@@ -74,7 +74,8 @@ class OrbitEmailTemplateTest extends WP_UnitTestCase {
 		$mark = Orbit_Email_Template::wordmark();
 		$this->assertStringContainsString( 'Perihelion', $mark );
 		$this->assertStringContainsString( 'Century Gothic', $mark );
-		$this->assertStringContainsString( '#D8176E', $mark );
+		// The wordmark is uppercase Ink (not the pink accent) in Community Press.
+		$this->assertStringContainsString( '#191A1D', $mark );
 	}
 
 	/**
