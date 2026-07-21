@@ -408,6 +408,16 @@
 					button.classList.add( 'orbit-btn-active' );
 						button.setAttribute( 'aria-pressed', 'true' );
 
+					// Keep the RSVP status line in sync with the new choice.
+					var statusLine = container.parentNode
+						&& container.parentNode.querySelector( '.orbit-my-response, .orbit-rsvp-prompt' );
+					if ( statusLine ) {
+						statusLine.className = 'orbit-my-response orbit-my-response--' + response;
+						statusLine.textContent = response === 'going'
+							? orbitForms.strings.statusGoing
+							: orbitForms.strings.statusMaybe;
+					}
+
 					// Show retract button if not already present.
 					if ( ! container.querySelector( '.orbit-btn-retract' ) ) {
 						var retractBtn = document.createElement( 'button' );

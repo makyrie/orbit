@@ -1416,7 +1416,12 @@ class Orbit_Shortcodes {
 
 		if ( ! empty( $activities ) ) {
 			foreach ( $activities as $activity ) {
-				echo self::render_profile_activity_card( $activity, $is_approved );
+				$my_response = null;
+				if ( $is_approved && $subscription ) {
+					$resp        = Orbit_Response::get_by_activity_and_subscription( $activity->id, $subscription->id );
+					$my_response = $resp ? $resp->response : null;
+				}
+				echo self::render_profile_activity_card( $activity, $is_approved, false, $my_response );
 			}
 		} elseif ( $is_owner ) {
 			echo '<p class="orbit-empty">' . esc_html__( 'You have no upcoming activities yet. Post one from Manage activities.', 'orbit' ) . '</p>';
@@ -1460,12 +1465,16 @@ class Orbit_Shortcodes {
 	 * Shared by the "Upcoming" and "Past" lists so both stay in sync. Past
 	 * cards carry the `orbit-card--past` modifier for muted styling.
 	 *
-	 * @param object $activity    Activity row.
-	 * @param bool   $is_approved Whether the viewer is an approved subscriber.
-	 * @param bool   $is_past     Whether to render with past (muted) treatment.
+	 * @param object      $activity    Activity row.
+	 * @param bool        $is_approved Whether the viewer is an approved subscriber.
+	 * @param bool        $is_past     Whether to render with past (muted) treatment.
+	 * @param string|null $my_response The viewer's own RSVP for this activity
+	 *                                 ('going'|'maybe'), or null. Shown as a chip
+	 *                                 on upcoming cards so subscribers can see at
+	 *                                 a glance which activities they've replied to.
 	 * @return string Card HTML.
 	 */
-	private static function render_profile_activity_card( $activity, $is_approved, $is_past = false ) {
+	private static function render_profile_activity_card( $activity, $is_approved, $is_past = false, $my_response = null ) {
 		$tier_label = Orbit_Activity::get_tier_label( $activity->tier );
 		$card_class = 'orbit-activity-card';
 
@@ -1477,7 +1486,7 @@ class Orbit_Shortcodes {
 
 		echo '<div class="' . esc_attr( $card_class ) . '">';
 		echo '<span class="orbit-tier-badge orbit-tier-' . esc_attr( $activity->tier ) . '">' . esc_html( $tier_label ) . '</span>';
-		echo '<h3><a href="' . esc_url( home_url( '/activity/' . $activity->id ) ) . '">';
+		echo '<h3 class="orbit-activity-title"><a href="' . esc_url( home_url( '/activity/' . $activity->id ) ) . '">';
 		echo esc_html( $activity->title );
 		echo '</a></h3>';
 
@@ -1494,6 +1503,16 @@ class Orbit_Shortcodes {
 		// Location address only for approved subscribers.
 		if ( $is_approved && $activity->location_address ) {
 			echo '<p class="orbit-location-address">' . esc_html( $activity->location_address ) . '</p>';
+		}
+
+		// The viewer's own RSVP, so upcoming activities they've replied to are
+		// obvious in the list (past cards omit it — it's history).
+		if ( $my_response && ! $is_past ) {
+			$response_label = 'going' === $my_response
+				? __( "You're going", 'orbit' )
+				: __( 'You said maybe', 'orbit' );
+			echo '<p class="orbit-my-response orbit-my-response--' . esc_attr( $my_response ) . '">'
+				. esc_html( $response_label ) . '</p>';
 		}
 
 		echo '</div>';
@@ -1767,6 +1786,18 @@ class Orbit_Shortcodes {
 			$is_past     = 'past' === $activity->status;
 
 			if ( ! $is_past ) {
+				// Current RSVP status line, so "what did I say?" is answered in
+				// words before the user has to read it off the buttons.
+				if ( $my_response ) {
+					$status_label = 'going' === $my_response->response
+						? __( "You're going", 'orbit' )
+						: __( 'You said maybe', 'orbit' );
+					echo '<p class="orbit-my-response orbit-my-response--' . esc_attr( $my_response->response ) . '">'
+						. esc_html( $status_label ) . '</p>';
+				} else {
+					echo '<p class="orbit-rsvp-prompt">' . esc_html__( 'Are you going?', 'orbit' ) . '</p>';
+				}
+
 				echo '<div class="orbit-response-buttons" data-activity-id="' . esc_attr( $activity->id ) . '" data-subscription-id="' . esc_attr( $subscription->id ) . '">';
 
 				$going_class = $my_response && 'going' === $my_response->response ? ' orbit-btn-active' : '';
