@@ -163,7 +163,38 @@ class Orbit_Shortcodes {
 	 */
 	public static function dashboard( $atts ) {
 		if ( ! is_user_logged_in() ) {
-			return self::login_prompt( __( 'Please log in to view your dashboard.', 'orbit' ) );
+			$dashboard_url = home_url( '/dashboard/' );
+
+			ob_start();
+			echo '<div class="orbit-login-embed">';
+			echo '<h1>' . esc_html__( 'Your dashboard', 'orbit' ) . '</h1>';
+			echo '<p class="orbit-page-intro">' . esc_html__( 'Log in to see upcoming activities from the people you follow.', 'orbit' ) . '</p>';
+
+			wp_login_form(
+				array(
+					'redirect'       => $dashboard_url,
+					'form_id'        => 'orbit-loginform',
+					'label_username' => __( 'Username or email', 'orbit' ),
+					'label_password' => __( 'Password', 'orbit' ),
+					'label_log_in'   => __( 'Log in', 'orbit' ),
+					'remember'       => true,
+				)
+			);
+
+			echo '<p class="orbit-login-embed__meta">';
+			echo '<a href="' . esc_url( wp_lostpassword_url( $dashboard_url ) ) . '">' . esc_html__( 'Lost your password?', 'orbit' ) . '</a>';
+			echo '</p>';
+
+			echo '<p class="orbit-login-embed__alt">';
+			printf(
+				/* translators: %s: link to the sign-up page */
+				esc_html__( 'New to Perihelion? %s', 'orbit' ),
+				'<a href="' . esc_url( home_url( '/sign-up/' ) ) . '">' . esc_html__( 'Create an account', 'orbit' ) . '</a>'
+			);
+			echo '</p>';
+			echo '</div>';
+
+			return ob_get_clean();
 		}
 
 		$user_id = get_current_user_id();

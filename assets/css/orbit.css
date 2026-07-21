@@ -228,6 +228,7 @@ button.orbit-btn-link {
 	display: block;
 	width: 100%;
 	padding: 0.5em 0.75em;
+	font-family: inherit; /* textareas default to the UA monospace otherwise */
 	font-size: 1rem;
 	line-height: 1.5;
 	border: var(--orbit-border-width) solid var(--orbit-color-border);
@@ -337,10 +338,21 @@ button.orbit-btn-link {
 	align-items: stretch;
 }
 
+/* Read-only share-link field. Brought in line with the designed form fields
+ * (same ink-ruled frame + body font) rather than the old monospace treatment
+ * — the Copy button is the interaction, and the surrounding UI already says
+ * "Share link". Swap font-family back to a monospace stack if the link should
+ * read as a raw machine value. */
 .orbit-share-link-input {
 	flex: 1;
-	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+	min-width: 0;
+	padding: 0.5em 0.75em;
+	font-family: inherit;
 	font-size: var(--orbit-font-size-sm);
+	border: var(--orbit-border-width) solid var(--orbit-color-border);
+	border-radius: var(--orbit-radius);
+	background-color: var(--orbit-color-surface);
+	box-sizing: border-box;
 }
 
 .orbit-danger-zone {
@@ -500,6 +512,35 @@ button.orbit-btn-link {
 .orbit-profile .orbit-activity-card:hover {
 	transform: translateY(-2px);
 	box-shadow: var(--orbit-shadow-lift);
+}
+
+/*
+ * Whole-card click: an activity card is a single target that navigates to its
+ * detail page. The title's link stays the real, accessible anchor; its
+ * ::after stretches over the card so a click anywhere follows it. Other
+ * interactive elements inside the card (the poster-name link, response
+ * buttons) are lifted above the overlay so they remain independently
+ * clickable, and text stays selectable outside the overlay's reach.
+ */
+.orbit-activity-card {
+	position: relative;
+}
+
+.orbit-activity-card .orbit-activity-title a::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+}
+
+.orbit-activity-card a:not(.orbit-activity-title a),
+.orbit-activity-card button {
+	position: relative;
+	z-index: 2;
+}
+
+.orbit-activity-card .orbit-activity-title a:hover {
+	text-decoration: underline;
 }
 
 /* Card list wrapper — vertical stack of cards. */

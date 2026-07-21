@@ -756,6 +756,34 @@
 	} );
 
 	/**
+	 * Phone number formatting helper. When a phone field loses focus, normalize
+	 * its value toward E.164: keep an optional leading "+", then digits only —
+	 * dropping spaces, dashes, parentheses, and stray characters. Pasting a
+	 * prettily formatted number like "+1 (555) 123-4567" lands as
+	 * "+15551234567". The country code is left to the user (the field's help
+	 * text asks for it), so no digits are ever invented.
+	 */
+	document.addEventListener( 'focusout', function ( e ) {
+		var input = e.target;
+		if ( ! input || ! input.matches || ! input.matches( 'input[type="tel"]' ) ) {
+			return;
+		}
+
+		var raw = input.value.trim();
+		if ( ! raw ) {
+			return;
+		}
+
+		var hasPlus = raw.charAt( 0 ) === '+';
+		var digits  = raw.replace( /[^0-9]/g, '' );
+		var normalized = digits ? ( hasPlus ? '+' : '' ) + digits : '';
+
+		if ( normalized !== input.value ) {
+			input.value = normalized;
+		}
+	} );
+
+	/**
 	 * Phone-input → SMS-consent gate. The SMS opt-in checkbox is
 	 * disabled by default and becomes enabled only when the phone field
 	 * has non-empty content. Server-side, if `consent_sms=1` arrives
