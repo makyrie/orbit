@@ -1370,7 +1370,7 @@ class Orbit_Shortcodes {
 			echo '</button></p>';
 		}
 
-		// Show active activities.
+		// Upcoming activities (everything not yet marked past).
 		$activities = Orbit_Activity::list(
 			array(
 				'profile_id' => $profile->id,
@@ -1381,35 +1381,88 @@ class Orbit_Shortcodes {
 			)
 		);
 
+		echo '<h2>' . esc_html__( 'Upcoming', 'orbit' ) . '</h2>';
+
 		if ( ! empty( $activities ) ) {
-			echo '<h2>' . esc_html__( 'Activities', 'orbit' ) . '</h2>';
-
 			foreach ( $activities as $activity ) {
-				$tier_label = Orbit_Activity::get_tier_label( $activity->tier );
-
-				echo '<div class="orbit-activity-card">';
-				echo '<span class="orbit-tier-badge orbit-tier-' . esc_attr( $activity->tier ) . '">' . esc_html( $tier_label ) . '</span>';
-				echo '<h3><a href="' . esc_url( home_url( '/activity/' . $activity->id ) ) . '">';
-				echo esc_html( $activity->title );
-				echo '</a></h3>';
-
-				if ( $activity->date_time ) {
-					echo '<p class="orbit-activity-date">' . esc_html( self::format_datetime( $activity->date_time ) ) . '</p>';
-				} else {
-					echo '<p class="orbit-activity-date orbit-activity-date--undated">' . esc_html__( 'No date set', 'orbit' ) . '</p>';
-				}
-
-				if ( $activity->location_name ) {
-					echo '<p>' . esc_html( $activity->location_name ) . '</p>';
-				}
-
-				// Location address only for approved subscribers.
-				if ( $is_approved && $activity->location_address ) {
-					echo '<p class="orbit-location-address">' . esc_html( $activity->location_address ) . '</p>';
-				}
-
-				echo '</div>';
+				echo self::render_profile_activity_card( $activity, $is_approved );
 			}
+		} elseif ( $is_owner ) {
+			echo '<p class="orbit-empty">' . esc_html__( 'You have no upcoming activities yet. Post one from Manage activities.', 'orbit' ) . '</p>';
+		} elseif ( ! $is_approved && ! $is_pending ) {
+			echo '<p class="orbit-empty">' . esc_html( sprintf(
+				/* translators: %s: profile display name */
+				__( 'No upcoming plans right now. Subscribe to hear when %s posts something new.', 'orbit' ),
+				$profile->display_name
+			) ) . '</p>';
+		} else {
+			echo '<p class="orbit-empty">' . esc_html__( 'No upcoming plans right now.', 'orbit' ) . '</p>';
+		}
+
+		// Past activities — most recent first, shown muted below the upcoming list.
+		$past_activities = Orbit_Activity::list(
+			array(
+				'profile_id' => $profile->id,
+				'status'     => 'past',
+				'per_page'   => 5,
+				'orderby'    => 'date_time',
+				'order'      => 'DESC',
+			)
+		);
+
+		if ( ! empty( $past_activities ) ) {
+			echo '<h2 class="orbit-past-heading">' . esc_html__( 'Past', 'orbit' ) . '</h2>';
+
+			foreach ( $past_activities as $activity ) {
+				echo self::render_profile_activity_card( $activity, $is_approved, true );
+			}
+		}
+
+		echo '</div>';
+
+		return ob_get_clean();
+	}
+
+	/**
+	 * Render a single activity card for the public profile.
+	 *
+	 * Shared by the "Upcoming" and "Past" lists so both stay in sync. Past
+	 * cards carry the `orbit-card--past` modifier for muted styling.
+	 *
+	 * @param object $activity    Activity row.
+	 * @param bool   $is_approved Whether the viewer is an approved subscriber.
+	 * @param bool   $is_past     Whether to render with past (muted) treatment.
+	 * @return string Card HTML.
+	 */
+	private static function render_profile_activity_card( $activity, $is_approved, $is_past = false ) {
+		$tier_label = Orbit_Activity::get_tier_label( $activity->tier );
+		$card_class = 'orbit-activity-card';
+
+		if ( $is_past ) {
+			$card_class .= ' orbit-card--past';
+		}
+
+		ob_start();
+
+		echo '<div class="' . esc_attr( $card_class ) . '">';
+		echo '<span class="orbit-tier-badge orbit-tier-' . esc_attr( $activity->tier ) . '">' . esc_html( $tier_label ) . '</span>';
+		echo '<h3><a href="' . esc_url( home_url( '/activity/' . $activity->id ) ) . '">';
+		echo esc_html( $activity->title );
+		echo '</a></h3>';
+
+		if ( $activity->date_time ) {
+			echo '<p class="orbit-activity-date">' . esc_html( self::format_datetime( $activity->date_time ) ) . '</p>';
+		} else {
+			echo '<p class="orbit-activity-date orbit-activity-date--undated">' . esc_html__( 'No date set', 'orbit' ) . '</p>';
+		}
+
+		if ( $activity->location_name ) {
+			echo '<p>' . esc_html( $activity->location_name ) . '</p>';
+		}
+
+		// Location address only for approved subscribers.
+		if ( $is_approved && $activity->location_address ) {
+			echo '<p class="orbit-location-address">' . esc_html( $activity->location_address ) . '</p>';
 		}
 
 		echo '</div>';
