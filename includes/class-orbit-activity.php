@@ -435,17 +435,17 @@ class Orbit_Activity {
 				// every display surface (cards, activity page, emails).
 				'label'       => __( 'Just an idea', 'orbit' ),
 				'label_badge' => __( 'Musing', 'orbit' ),
-				'description' => __( 'An open thought. Subscribers see it on their dashboard but get no notification.', 'orbit' ),
+				'description' => __( 'An open thought, no pressure. By default it shows on subscribers\' dashboards and in their daily digest — never a ping. Each subscriber can tune how they hear about each tier in their settings.', 'orbit' ),
 			),
 			2 => array(
 				'label'       => __( "I'll go if you will", 'orbit' ),
 				'label_badge' => __( 'Tempted', 'orbit' ),
-				'description' => __( "You're interested, but want company before committing. Subscribers get a low-priority alert.", 'orbit' ),
+				'description' => __( "You're interested but want company before committing. Subscribers get the same calm daily-digest heads-up as a musing — the difference is the signal: you'll come if they do.", 'orbit' ),
 			),
 			3 => array(
 				'label'       => __( "I'm going — join me", 'orbit' ),
 				'label_badge' => __( 'Planned', 'orbit' ),
-				'description' => __( "You're going for sure. Subscribers who opted in for this tier get a real-time alert.", 'orbit' ),
+				'description' => __( "You're going for sure. Subscribers get an email right away — and a text once SMS is live — unless they've turned this tier down.", 'orbit' ),
 			),
 		);
 	}
