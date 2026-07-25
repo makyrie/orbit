@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Perihelion
  * Description: Person-centric social activity tool. Subscribe to people, get notified about their activities, respond with lightweight going/maybe actions.
- * Version:     1.9.4
+ * Version:     1.9.9
  * Author:      Perihelion
  * License:     GPL-2.0-or-later
  * Text Domain: orbit
@@ -17,7 +17,7 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Plugin constants.
  */
-define( 'ORBIT_VERSION', '1.9.8' );
+define( 'ORBIT_VERSION', '1.9.9' );
 define( 'ORBIT_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ORBIT_PLUGIN_FILE', __FILE__ );
 
@@ -77,6 +77,7 @@ require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-messaging-copy.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-compliance-ui.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-consent.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-token.php';
+require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-share-code.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-profile.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-activity.php';
 require_once ORBIT_PLUGIN_DIR . 'includes/class-orbit-subscription.php';
@@ -197,6 +198,38 @@ function orbit_maybe_upgrade() {
 		}
 	}
 }
+
+/**
+ * Add the memorable `share_code` column and backfill existing profiles.
+ *
+ * Runs once, guarded by an option, so it takes effect on the in-place-upload
+ * deploy without a plugin re-activation or an ORBIT_VERSION bump (which would
+ * spuriously re-stamp the consent policy version). Fresh installs already get
+ * the column via Orbit_Activator::create_tables().
+ */
+function orbit_migrate_share_codes() {
+	if ( '1' === get_option( 'orbit_share_codes_migrated', '' ) ) {
+		return;
+	}
+
+	global $wpdb;
+	$table = $wpdb->prefix . ORBIT_TABLE_PROFILES;
+
+	// Add the column + unique index if this install predates them.
+	$has_column = $wpdb->get_var( $wpdb->prepare( 'SHOW COLUMNS FROM `' . $table . '` LIKE %s', 'share_code' ) );
+	if ( ! $has_column ) {
+		$wpdb->query( 'ALTER TABLE `' . $table . '` ADD COLUMN share_code varchar(80) DEFAULT NULL, ADD UNIQUE KEY share_code (share_code)' );
+	}
+
+	// Backfill any profile missing a code.
+	$ids = $wpdb->get_col( "SELECT id FROM `{$table}` WHERE share_code IS NULL OR share_code = ''" );
+	foreach ( $ids as $id ) {
+		$wpdb->update( $table, array( 'share_code' => Orbit_Share_Code::generate() ), array( 'id' => (int) $id ) );
+	}
+
+	update_option( 'orbit_share_codes_migrated', '1' );
+}
+add_action( 'init', 'orbit_migrate_share_codes', 1 );
 
 /**
  * One-time migration to rename internal pages from `orbit-*` slugs to
@@ -356,6 +389,7 @@ function orbit_enqueue_scripts() {
 	$dominated_by_orbit = is_page( orbit_get_internal_page_slugs() ) || is_page( 'sign-up' );
 
 	$is_orbit_route = get_query_var( 'orbit_profile_slug' )
+		|| get_query_var( 'orbit_hi_code' )
 		|| get_query_var( 'orbit_activity_id' )
 		|| get_query_var( 'orbit_unsubscribe' );
 
@@ -389,6 +423,8 @@ function orbit_enqueue_scripts() {
 			'strings'   => array(
 				'success'            => __( 'Saved successfully.', 'orbit' ),
 				'responseSaved'      => __( 'Response saved.', 'orbit' ),
+				'statusGoing'        => __( "You're going", 'orbit' ),
+				'statusMaybe'        => __( 'You said maybe', 'orbit' ),
 				'confirmCancel'      => __( 'Are you sure you want to cancel this activity?', 'orbit' ),
 				'confirmUnsubscribe' => __( 'Are you sure you want to unsubscribe?', 'orbit' ),
 				'retract'            => __( 'Cancel RSVP', 'orbit' ),
@@ -457,6 +493,93 @@ function orbit_filter_nav_menu_items( $items ) {
 	);
 }
 add_filter( 'wp_nav_menu_objects', 'orbit_filter_nav_menu_items' );
+
+/**
+ * Give the login screen a clean /login/ URL and route logged-out visitors there.
+ *
+ * - /login/ is served by wp-login.php in place — the URL stays /login/ — via a
+ *   rewrite rule to a query var, with a self-healing one-time flush so the
+ *   in-place-upload deploy needs no plugin re-activation.
+ * - login_url and the login form's POST target both become /login/, so the
+ *   whole flow stays off wp-login.php.
+ * - Logged-out visitors who hit a login-required app page (dashboard, settings,
+ *   new-activity, …) are redirected to /login/ with a return-to. One surface.
+ */
+add_action(
+	'init',
+	function () {
+		add_rewrite_rule( '^login/?$', 'index.php?orbit_login=1', 'top' );
+
+		// Self-healing flush: register the rule once after deploy without a
+		// plugin re-activation (prod deploys are in-place file uploads). Bump
+		// the stored value to re-flush if the rule ever changes.
+		if ( '1' !== get_option( 'orbit_login_rewrite', '' ) ) {
+			flush_rewrite_rules( false );
+			update_option( 'orbit_login_rewrite', '1' );
+		}
+	}
+);
+
+add_filter(
+	'query_vars',
+	function ( $vars ) {
+		$vars[] = 'orbit_login';
+		return $vars;
+	}
+);
+
+add_filter(
+	'login_url',
+	function ( $login_url, $redirect, $force_reauth ) {
+		$url = home_url( '/login/' );
+		if ( ! empty( $redirect ) ) {
+			$url = add_query_arg( 'redirect_to', rawurlencode( $redirect ), $url );
+		}
+		if ( $force_reauth ) {
+			$url = add_query_arg( 'reauth', '1', $url );
+		}
+		return $url;
+	},
+	10,
+	3
+);
+
+// Keep the login form's POST on /login/ so the URL never flips to wp-login.php.
+add_filter(
+	'site_url',
+	function ( $url, $path, $scheme ) {
+		if ( 'login_post' === $scheme && is_string( $path ) && 0 === strpos( ltrim( $path, '/' ), 'wp-login.php' ) ) {
+			return home_url( '/login/' );
+		}
+		return $url;
+	},
+	10,
+	3
+);
+
+add_action(
+	'template_redirect',
+	function () {
+		// Serve wp-login.php in place at /login/ (GET renders the form, POST
+		// authenticates). Requiring it after WP is loaded is a no-op for
+		// wp-load (require_once guards); its own login logic then runs and exits.
+		if ( get_query_var( 'orbit_login' ) ) {
+			// wp-login.php is built as a top-level entry script; included here,
+			// a couple of the vars its form renderer reads aren't defined on
+			// this path. Seed them so the include doesn't emit notices.
+			$error      = '';
+			$user_login = '';
+			require ABSPATH . 'wp-login.php';
+			exit;
+		}
+
+		// Route logged-out visitors on login-required app pages to /login/.
+		if ( ! is_user_logged_in() && is_page( orbit_get_internal_page_slugs() ) ) {
+			wp_safe_redirect( wp_login_url( get_permalink() ) );
+			exit;
+		}
+	}
+);
 
 /**
  * Filter FSE page-list blocks (used by block themes like Twenty Twenty-Five).

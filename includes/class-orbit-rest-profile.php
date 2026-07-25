@@ -97,6 +97,16 @@ class Orbit_REST_Profile {
 
 		register_rest_route(
 			$ns,
+			'/profiles/(?P<id>\d+)/reroll-share-code',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( __CLASS__, 'reroll_share_code' ),
+				'permission_callback' => array( __CLASS__, 'can_manage_profile_or_admin' ),
+			)
+		);
+
+		register_rest_route(
+			$ns,
 			'/status',
 			array(
 				'methods'             => 'GET',
@@ -263,6 +273,34 @@ class Orbit_REST_Profile {
 			array(
 				'share_token' => $result,
 				'message'     => __( 'Share token regenerated.', 'orbit' ),
+			),
+			200
+		);
+	}
+
+	/**
+	 * Reroll a profile's memorable share code.
+	 *
+	 * Mints a fresh /hi/<code> link and retires the old one, so a code that
+	 * ever feels off — or leaked past where the owner wants it — can be
+	 * replaced without touching the @handle or any approved subscribers.
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return WP_REST_Response|WP_Error Response with the new code + link.
+	 */
+	public static function reroll_share_code( $request ) {
+		$id     = (int) $request->get_param( 'id' );
+		$result = Orbit_Profile::reroll_share_code( $id );
+
+		if ( is_wp_error( $result ) ) {
+			return new WP_Error( $result->get_error_code(), $result->get_error_message(), array( 'status' => 400 ) );
+		}
+
+		return new WP_REST_Response(
+			array(
+				'share_code' => $result,
+				'share_url'  => home_url( '/hi/' . rawurlencode( $result ) ),
+				'message'    => __( 'Your share link was refreshed. The old one no longer works.', 'orbit' ),
 			),
 			200
 		);

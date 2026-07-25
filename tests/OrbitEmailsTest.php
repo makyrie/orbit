@@ -163,7 +163,7 @@ class OrbitEmailsTest extends WP_UnitTestCase {
 		// Branded HTML part: the serif wordmark and the set-password button
 		// carrying the same reset link (URL hidden in the button only).
 		$this->assertStringContainsString( 'Perihelion', $this->html_body( $mailer ) );
-		$this->assertStringContainsString( 'Fraunces', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'Century Gothic', $this->html_body( $mailer ) );
 		$this->assertStringContainsString( 'Set your password', $this->html_body( $mailer ) );
 		$this->assertStringContainsString( 'wp-login.php?action=rp', $this->html_body( $mailer ) );
 		$this->assertStringContainsString( 'login=patposter', $this->html_body( $mailer ) );

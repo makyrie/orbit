@@ -124,7 +124,7 @@ class Orbit_Shortcodes {
 					<span class="orbit-required-mark" aria-hidden="true">*</span>
 				</label>
 				<input type="text" id="orbit-signup-name" name="display_name" required autocomplete="name">
-				<p class="orbit-help"><?php esc_html_e( "How you'll appear on activity cards and your public profile. You can change it later.", 'orbit' ); ?></p>
+				<p class="orbit-help"><?php esc_html_e( "How you'll appear on activity cards and your profile. You can change it later.", 'orbit' ); ?></p>
 			</div>
 			<div class="orbit-form-group">
 				<label for="orbit-signup-email">
@@ -162,6 +162,9 @@ class Orbit_Shortcodes {
 	 * @return string HTML output.
 	 */
 	public static function dashboard( $atts ) {
+		// Logged-out visitors are redirected to the login screen before this
+		// renders (see the template_redirect gate in orbit.php); this prompt is
+		// a belt-and-suspenders fallback consistent with the other app pages.
 		if ( ! is_user_logged_in() ) {
 			return self::login_prompt( __( 'Please log in to view your dashboard.', 'orbit' ) );
 		}
@@ -237,13 +240,11 @@ class Orbit_Shortcodes {
 		$has_verified_phone = (bool) get_user_meta( $user_id, 'orbit_phone_verified', true );
 		$dismissed          = (bool) get_user_meta( $user_id, 'orbit_dashboard_banner_dismissed', true );
 
-		// Gate on Orbit_Features::sms_enabled() so the "as soon as our SMS
-		// program launches" copy doesn't keep rendering after SMS goes
-		// live. Post-launch the banner disappears for unverified users
-		// entirely; a verify-your-phone CTA can land elsewhere later (per
-		// todo 128). The banner body itself comes from
-		// Orbit_Messaging_Copy so the dormancy copy stays a one-flag flip.
-		if ( ! $showed_welcome && ! Orbit_Features::sms_enabled() && ! $has_verified_phone && ! $dismissed ) {
+		// Only nudge phone verification once SMS is actually live — pre-launch
+		// the verify form is hidden (it can't send over the unapproved A2P
+		// number), so the nudge would point at a dead end. Post-launch,
+		// unverified subscribers get the reminder.
+		if ( ! $showed_welcome && Orbit_Features::sms_enabled() && ! $has_verified_phone && ! $dismissed ) {
 			$settings_link = '<a href="' . esc_url( home_url( '/settings/' ) ) . '">'
 				. esc_html__( 'verify your phone in Settings', 'orbit' )
 				. '</a>';
@@ -521,25 +522,19 @@ class Orbit_Shortcodes {
 		echo '<div class="orbit-phone-verification">';
 		echo '<h2>' . esc_html__( 'Phone number', 'orbit' ) . ' <span class="orbit-section-tag">' . esc_html__( 'optional', 'orbit' ) . '</span></h2>';
 
-		// Status banner — visible at the top of the block so the user knows
-		// what verifying their phone right now will (or won't) do.
-		if ( ! $sms_live ) {
+		// Verification sends the code over the same SMS channel as
+		// notifications, so it can't work until SMS is live — the A2P number
+		// can't send pre-launch. Explain the state and stop, rather than
+		// showing a "Send code" button that would just error.
+		if ( ! $sms_live || ! $twilio_configured ) {
 			echo '<div class="orbit-notice orbit-notice-info">';
-			echo esc_html__( "Verifying your phone now lets you receive SMS notifications as soon as the program launches. Until then, we'll send everything by email.", 'orbit' );
-			echo '</div>';
-		} else {
-			echo '<p class="orbit-help">' . esc_html__( 'Only needed if you want SMS notifications for any of the tiers below. We use it only to send activity alerts you opt into.', 'orbit' ) . '</p>';
-		}
-
-		if ( ! $twilio_configured ) {
-			// During the dormant phase Twilio creds may not be configured
-			// yet. The plan: don't hide the surface — explain the state.
-			echo '<div class="orbit-notice orbit-notice-warning">';
-			echo esc_html__( "Phone verification will be available once SMS is live. You'll be notified by email when that happens.", 'orbit' );
+			echo esc_html__( "Phone verification will be available once SMS notifications go live. Until then we send everything by email — we'll let you know when it's ready.", 'orbit' );
 			echo '</div>';
 			echo '</div>';
 			return ob_get_clean();
 		}
+
+		echo '<p class="orbit-help">' . esc_html__( 'Only needed if you want SMS notifications for any of the tiers below. We use it only to send activity alerts you opt into.', 'orbit' ) . '</p>';
 
 		// State: verified.
 		if ( $has_verified ) {
@@ -1101,7 +1096,7 @@ class Orbit_Shortcodes {
 		if ( empty( $subscriptions ) ) {
 			echo '<p>' . esc_html__( "No subscribers yet. Send your share link to people you'd like to invite — they'll be able to subscribe with one click and you'll see them here for approval.", 'orbit' ) . '</p>';
 
-			$share_url = home_url( '/@' . $profile->slug . '/subscribe?token=' . $profile->share_token );
+			$share_url = Orbit_Profile::share_url( $profile );
 			echo '<div class="orbit-form-group">';
 			echo '<label for="orbit-subscribers-share-link">' . esc_html__( 'Your share link', 'orbit' ) . '</label>';
 			echo '<div class="orbit-share-link-row">';
@@ -1220,35 +1215,36 @@ class Orbit_Shortcodes {
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-display-name">' . esc_html__( 'Display name', 'orbit' ) . ' <span class="orbit-required-mark" aria-hidden="true">*</span></label>';
 		echo '<input type="text" id="orbit-display-name" name="display_name" value="' . esc_attr( $profile->display_name ) . '" required>';
-		echo '<p class="orbit-help">' . esc_html__( "How you'll appear on activity cards and your public profile.", 'orbit' ) . '</p>';
+		echo '<p class="orbit-help">' . esc_html__( "How you'll appear on activity cards and your profile.", 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-slug">' . esc_html__( 'URL slug', 'orbit' ) . ' <span class="orbit-required-mark" aria-hidden="true">*</span></label>';
 		echo '<input type="text" id="orbit-slug" name="slug" value="' . esc_attr( $profile->slug ) . '" required>';
-		echo '<p class="orbit-help">' . esc_html__( 'Your profile URL is', 'orbit' ) . ' <code>' . esc_html( home_url( '/@' . $profile->slug ) ) . '</code>.</p>';
+		echo '<p class="orbit-help">' . esc_html__( 'Your subscribers see your activities at', 'orbit' ) . ' <code>' . esc_html( home_url( '/@' . $profile->slug ) ) . '</code>' . esc_html__( '. It stays private — only you and people you approve can open it.', 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-bio">' . esc_html__( 'Bio', 'orbit' ) . '</label>';
 		echo '<textarea id="orbit-bio" name="bio" rows="3">' . esc_textarea( $profile->bio ) . '</textarea>';
-		echo '<p class="orbit-help">' . esc_html__( 'A sentence or two so visitors recognize you. Shown on your public profile above your activities.', 'orbit' ) . '</p>';
+		echo '<p class="orbit-help">' . esc_html__( 'A sentence or two so the people you invite recognize you. Shown at the top of your profile, above your activities.', 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
 		echo '<label class="orbit-checkbox-label"><input type="checkbox" name="require_approval" value="1" ' . checked( $profile->require_approval, 1, false ) . '> ';
-		echo esc_html__( 'Require approval for new subscribers', 'orbit' ) . '</label>';
-		echo '<p class="orbit-help">' . esc_html__( 'When ticked, new subscribers wait until you approve them before they can see your activities. Untick to let anyone with your share link subscribe immediately.', 'orbit' ) . '</p>';
+		echo esc_html__( 'Review each subscriber before they can see your activities', 'orbit' ) . '</label>';
+		echo '<p class="orbit-help">' . esc_html__( "On by default. Untick only if you trust everyone you'll give the link to — then anyone who has it gets in the moment they subscribe, no review. You can re-tick this anytime.", 'orbit' ) . '</p>';
 		echo '</div>';
 
-		$share_url = home_url( '/@' . $profile->slug . '/subscribe?token=' . $profile->share_token );
+		$share_url = Orbit_Profile::share_url( $profile );
 		echo '<div class="orbit-form-group">';
-		echo '<label for="orbit-share-link">' . esc_html__( 'Share link', 'orbit' ) . '</label>';
+		echo '<label for="orbit-share-link">' . esc_html__( 'Your invite link', 'orbit' ) . '</label>';
 		echo '<div class="orbit-share-link-row">';
 		echo '<input type="text" id="orbit-share-link" class="orbit-share-link-input" value="' . esc_attr( $share_url ) . '" readonly>';
 		echo '<button type="button" class="orbit-btn orbit-btn-sm" data-orbit-copy-target="#orbit-share-link" data-orbit-copy-label="' . esc_attr__( 'Copy', 'orbit' ) . '" data-orbit-copy-confirm="' . esc_attr__( 'Copied!', 'orbit' ) . '">' . esc_html__( 'Copy', 'orbit' ) . '</button>';
+		echo '<button type="button" class="orbit-btn orbit-btn-sm orbit-btn-secondary" data-orbit-reroll-share-code="' . esc_attr( $profile->id ) . '" data-orbit-reroll-confirm="' . esc_attr__( 'Get a new link? The current one will stop working — anyone you already gave it to keeps their access.', 'orbit' ) . '">' . esc_html__( 'New link', 'orbit' ) . '</button>';
 		echo '</div>';
-		echo '<p class="orbit-help">' . esc_html__( 'Send this link to someone you want as a subscriber. The token in the link is theirs to redeem once.', 'orbit' ) . '</p>';
+		echo '<p class="orbit-help">' . esc_html__( "This is the only way in — send it to the friends you'd like as subscribers. It's a memorable link you can read aloud, and the same one works for everyone. Approving subscribers is still how you decide who's in. If a link ever ends up somewhere you didn't intend, tap New link to retire it.", 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-actions">';
@@ -1283,7 +1279,7 @@ class Orbit_Shortcodes {
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-display-name">' . esc_html__( 'Display name', 'orbit' ) . ' <span class="orbit-required-mark" aria-hidden="true">*</span></label>';
 		echo '<input type="text" id="orbit-display-name" name="display_name" value="' . esc_attr( $user->display_name ) . '" required>';
-		echo '<p class="orbit-help">' . esc_html__( "How you'll appear on activity cards and your public profile.", 'orbit' ) . '</p>';
+		echo '<p class="orbit-help">' . esc_html__( "How you'll appear on activity cards and your profile.", 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
@@ -1295,13 +1291,13 @@ class Orbit_Shortcodes {
 		echo '<div class="orbit-form-group">';
 		echo '<label for="orbit-bio">' . esc_html__( 'Bio', 'orbit' ) . '</label>';
 		echo '<textarea id="orbit-bio" name="bio" rows="3" placeholder="' . esc_attr__( 'A short description of what you like to do', 'orbit' ) . '"></textarea>';
-		echo '<p class="orbit-help">' . esc_html__( 'A sentence or two so visitors recognize you. Shown on your public profile above your activities.', 'orbit' ) . '</p>';
+		echo '<p class="orbit-help">' . esc_html__( 'A sentence or two so the people you invite recognize you. Shown at the top of your profile, above your activities.', 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-group">';
 		echo '<label class="orbit-checkbox-label"><input type="checkbox" name="require_approval" value="1" checked> ';
-		echo esc_html__( 'Require approval for new subscribers', 'orbit' ) . '</label>';
-		echo '<p class="orbit-help">' . esc_html__( 'When ticked, new subscribers wait until you approve them before they can see your activities. Untick to let anyone with your share link subscribe immediately.', 'orbit' ) . '</p>';
+		echo esc_html__( 'Review each subscriber before they can see your activities', 'orbit' ) . '</label>';
+		echo '<p class="orbit-help">' . esc_html__( "On by default. Untick only if you trust everyone you'll give the link to — then anyone who has it gets in the moment they subscribe, no review. You can re-tick this anytime.", 'orbit' ) . '</p>';
 		echo '</div>';
 
 		echo '<div class="orbit-form-actions">';
@@ -1356,7 +1352,7 @@ class Orbit_Shortcodes {
 			echo '<a class="orbit-btn orbit-btn-sm" href="' . esc_url( home_url( '/manage/' ) ) . '">' . esc_html__( 'Manage activities', 'orbit' ) . '</a>';
 			echo '</div>';
 		} elseif ( ! $is_approved && ! $is_pending ) {
-			$subscribe_url = home_url( '/@' . $profile->slug . '/subscribe?token=' . $profile->share_token );
+			$subscribe_url = Orbit_Profile::share_url( $profile );
 			echo '<p><a href="' . esc_url( $subscribe_url ) . '" class="orbit-btn">';
 			echo esc_html__( 'Subscribe', 'orbit' );
 			echo '</a></p>';
@@ -1370,7 +1366,7 @@ class Orbit_Shortcodes {
 			echo '</button></p>';
 		}
 
-		// Show active activities.
+		// Upcoming activities (everything not yet marked past).
 		$activities = Orbit_Activity::list(
 			array(
 				'profile_id' => $profile->id,
@@ -1381,35 +1377,107 @@ class Orbit_Shortcodes {
 			)
 		);
 
+		echo '<h2>' . esc_html__( 'Upcoming', 'orbit' ) . '</h2>';
+
 		if ( ! empty( $activities ) ) {
-			echo '<h2>' . esc_html__( 'Activities', 'orbit' ) . '</h2>';
-
 			foreach ( $activities as $activity ) {
-				$tier_label = Orbit_Activity::get_tier_label( $activity->tier );
-
-				echo '<div class="orbit-activity-card">';
-				echo '<span class="orbit-tier-badge orbit-tier-' . esc_attr( $activity->tier ) . '">' . esc_html( $tier_label ) . '</span>';
-				echo '<h3><a href="' . esc_url( home_url( '/activity/' . $activity->id ) ) . '">';
-				echo esc_html( $activity->title );
-				echo '</a></h3>';
-
-				if ( $activity->date_time ) {
-					echo '<p class="orbit-activity-date">' . esc_html( self::format_datetime( $activity->date_time ) ) . '</p>';
-				} else {
-					echo '<p class="orbit-activity-date orbit-activity-date--undated">' . esc_html__( 'No date set', 'orbit' ) . '</p>';
+				$my_response = null;
+				if ( $is_approved && $subscription ) {
+					$resp        = Orbit_Response::get_by_activity_and_subscription( $activity->id, $subscription->id );
+					$my_response = $resp ? $resp->response : null;
 				}
-
-				if ( $activity->location_name ) {
-					echo '<p>' . esc_html( $activity->location_name ) . '</p>';
-				}
-
-				// Location address only for approved subscribers.
-				if ( $is_approved && $activity->location_address ) {
-					echo '<p class="orbit-location-address">' . esc_html( $activity->location_address ) . '</p>';
-				}
-
-				echo '</div>';
+				echo self::render_profile_activity_card( $activity, $is_approved, false, $my_response );
 			}
+		} elseif ( $is_owner ) {
+			echo '<p class="orbit-empty">' . esc_html__( 'You have no upcoming activities yet. Post one from Manage activities.', 'orbit' ) . '</p>';
+		} elseif ( ! $is_approved && ! $is_pending ) {
+			echo '<p class="orbit-empty">' . esc_html( sprintf(
+				/* translators: %s: profile display name */
+				__( 'No upcoming plans right now. Subscribe to hear when %s posts something new.', 'orbit' ),
+				$profile->display_name
+			) ) . '</p>';
+		} else {
+			echo '<p class="orbit-empty">' . esc_html__( 'No upcoming plans right now.', 'orbit' ) . '</p>';
+		}
+
+		// Past activities — most recent first, shown muted below the upcoming list.
+		$past_activities = Orbit_Activity::list(
+			array(
+				'profile_id' => $profile->id,
+				'status'     => 'past',
+				'per_page'   => 5,
+				'orderby'    => 'date_time',
+				'order'      => 'DESC',
+			)
+		);
+
+		if ( ! empty( $past_activities ) ) {
+			echo '<h2 class="orbit-past-heading">' . esc_html__( 'Past', 'orbit' ) . '</h2>';
+
+			foreach ( $past_activities as $activity ) {
+				echo self::render_profile_activity_card( $activity, $is_approved, true );
+			}
+		}
+
+		echo '</div>';
+
+		return ob_get_clean();
+	}
+
+	/**
+	 * Render a single activity card for the public profile.
+	 *
+	 * Shared by the "Upcoming" and "Past" lists so both stay in sync. Past
+	 * cards carry the `orbit-card--past` modifier for muted styling.
+	 *
+	 * @param object      $activity    Activity row.
+	 * @param bool        $is_approved Whether the viewer is an approved subscriber.
+	 * @param bool        $is_past     Whether to render with past (muted) treatment.
+	 * @param string|null $my_response The viewer's own RSVP for this activity
+	 *                                 ('going'|'maybe'), or null. Shown as a chip
+	 *                                 on upcoming cards so subscribers can see at
+	 *                                 a glance which activities they've replied to.
+	 * @return string Card HTML.
+	 */
+	private static function render_profile_activity_card( $activity, $is_approved, $is_past = false, $my_response = null ) {
+		$tier_label = Orbit_Activity::get_tier_label( $activity->tier );
+		$card_class = 'orbit-activity-card';
+
+		if ( $is_past ) {
+			$card_class .= ' orbit-card--past';
+		}
+
+		ob_start();
+
+		echo '<div class="' . esc_attr( $card_class ) . '">';
+		echo '<span class="orbit-tier-badge orbit-tier-' . esc_attr( $activity->tier ) . '">' . esc_html( $tier_label ) . '</span>';
+		echo '<h3 class="orbit-activity-title"><a href="' . esc_url( home_url( '/activity/' . $activity->id ) ) . '">';
+		echo esc_html( $activity->title );
+		echo '</a></h3>';
+
+		if ( $activity->date_time ) {
+			echo '<p class="orbit-activity-date">' . esc_html( self::format_datetime( $activity->date_time ) ) . '</p>';
+		} else {
+			echo '<p class="orbit-activity-date orbit-activity-date--undated">' . esc_html__( 'No date set', 'orbit' ) . '</p>';
+		}
+
+		if ( $activity->location_name ) {
+			echo '<p>' . esc_html( $activity->location_name ) . '</p>';
+		}
+
+		// Location address only for approved subscribers.
+		if ( $is_approved && $activity->location_address ) {
+			echo '<p class="orbit-location-address">' . esc_html( $activity->location_address ) . '</p>';
+		}
+
+		// The viewer's own RSVP, so upcoming activities they've replied to are
+		// obvious in the list (past cards omit it — it's history).
+		if ( $my_response && ! $is_past ) {
+			$response_label = 'going' === $my_response
+				? __( "You're going", 'orbit' )
+				: __( 'You said maybe', 'orbit' );
+			echo '<p class="orbit-my-response orbit-my-response--' . esc_attr( $my_response ) . '">'
+				. esc_html( $response_label ) . '</p>';
 		}
 
 		echo '</div>';
@@ -1666,7 +1734,7 @@ class Orbit_Shortcodes {
 		// Subscribe CTA for non-subscribers (not shown to the poster).
 		$is_own_activity = $viewer_id && $profile && (int) $profile->user_id === $viewer_id;
 		if ( ! $subscription && $profile && ! $is_own_activity ) {
-			$subscribe_url = home_url( '/@' . $profile->slug . '/subscribe?token=' . $profile->share_token );
+			$subscribe_url = Orbit_Profile::share_url( $profile );
 			echo '<p class="orbit-cta">';
 			echo esc_html( sprintf(
 				/* translators: %s: profile display name */
@@ -1683,6 +1751,18 @@ class Orbit_Shortcodes {
 			$is_past     = 'past' === $activity->status;
 
 			if ( ! $is_past ) {
+				// Current RSVP status line, so "what did I say?" is answered in
+				// words before the user has to read it off the buttons.
+				if ( $my_response ) {
+					$status_label = 'going' === $my_response->response
+						? __( "You're going", 'orbit' )
+						: __( 'You said maybe', 'orbit' );
+					echo '<p class="orbit-my-response orbit-my-response--' . esc_attr( $my_response->response ) . '">'
+						. esc_html( $status_label ) . '</p>';
+				} else {
+					echo '<p class="orbit-rsvp-prompt">' . esc_html__( 'Are you going?', 'orbit' ) . '</p>';
+				}
+
 				echo '<div class="orbit-response-buttons" data-activity-id="' . esc_attr( $activity->id ) . '" data-subscription-id="' . esc_attr( $subscription->id ) . '">';
 
 				$going_class = $my_response && 'going' === $my_response->response ? ' orbit-btn-active' : '';
@@ -1730,7 +1810,7 @@ class Orbit_Shortcodes {
 	 * @return string HTML markup for the callout.
 	 */
 	private static function render_welcome_callout( $profile ) {
-		$share_url = home_url( '/@' . $profile->slug . '/subscribe?token=' . $profile->share_token );
+		$share_url = Orbit_Profile::share_url( $profile );
 
 		/** This filter is documented in this method's docblock. */
 		$heading = apply_filters( 'orbit_welcome_callout_heading', __( "You're all set up.", 'orbit' ), $profile );

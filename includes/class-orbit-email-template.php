@@ -37,16 +37,22 @@ class Orbit_Email_Template {
 	 * template reads from one source and #62's logo swap / any future re-skin
 	 * is a localized edit.
 	 */
-	const COLOR_PAPER     = '#F7F3ED';
+	const COLOR_PAPER     = '#F0EEE6'; // newsprint canvas
 	const COLOR_CARD      = '#ffffff';
-	const COLOR_SIENNA    = '#9C4B30';
-	const COLOR_INK       = '#2A2A28';
-	const COLOR_SLATE     = '#5A5A55';
+	const COLOR_SIENNA    = '#D8176E'; // brand accent — deep pink (name kept; used for links/buttons/wordmark)
+	const COLOR_INK       = '#191A1D';
+	const COLOR_SLATE     = '#54555C';
 	const COLOR_FOOTER    = '#8A8A82';
-	const COLOR_CARD_EDGE = 'rgba(156,75,48,0.15)';
+	const COLOR_CARD_EDGE = '#191A1D'; // ink hairline
 
-	const FONT_SERIF = "Fraunces,Georgia,'Times New Roman',serif";
-	const FONT_SANS  = "Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+	/*
+	 * Both faces are now sans — the Community Press redesign dropped serifs.
+	 * Webfonts (Jost / Work Sans) don't load reliably in email, so these are
+	 * email-safe stacks: a geometric display face (FONT_SERIF, name kept) that
+	 * evokes Jost, and a neutral body face (FONT_SANS).
+	 */
+	const FONT_SERIF = "'Century Gothic','Futura','Trebuchet MS',Helvetica,Arial,sans-serif";
+	const FONT_SANS  = "'Helvetica Neue',Helvetica,Arial,sans-serif";
 
 	/**
 	 * Wrap assembled inner HTML in the full branded email document.
@@ -104,7 +110,7 @@ class Orbit_Email_Template {
 			// Wordmark.
 			. '<tr><td style="padding:4px 8px 22px;">' . self::wordmark() . '</td></tr>'
 			// Card.
-			. '<tr><td style="background-color:' . esc_attr( self::COLOR_CARD ) . '; border:1px solid ' . esc_attr( self::COLOR_CARD_EDGE ) . '; border-radius:14px; padding:40px 40px 36px;">'
+			. '<tr><td style="background-color:' . esc_attr( self::COLOR_CARD ) . '; border:2px solid ' . esc_attr( self::COLOR_CARD_EDGE ) . '; border-radius:8px; padding:40px 40px 36px;">'
 			. $inner_html
 			. '</td></tr>'
 			// Footer.
@@ -126,7 +132,7 @@ class Orbit_Email_Template {
 	 * @return string Wordmark HTML.
 	 */
 	public static function wordmark() {
-		return '<span style="font-family:' . esc_attr( self::FONT_SERIF ) . '; font-size:23px; font-weight:600; color:' . esc_attr( self::COLOR_SIENNA ) . '; letter-spacing:0.2px;">'
+		return '<span style="font-family:' . esc_attr( self::FONT_SERIF ) . '; font-size:22px; font-weight:700; color:' . esc_attr( self::COLOR_INK ) . '; letter-spacing:1px; text-transform:uppercase;">'
 			. esc_html__( 'Perihelion', 'orbit' )
 			. '</span>';
 	}
@@ -174,8 +180,50 @@ class Orbit_Email_Template {
 	 * @return string Heading HTML.
 	 */
 	public static function heading( $text ) {
-		return '<p style="margin:0 0 10px; font-family:' . esc_attr( self::FONT_SERIF ) . '; font-size:19px; font-weight:600; line-height:1.35; color:' . esc_attr( self::COLOR_INK ) . ';">'
+		return '<p style="margin:0 0 10px; font-family:' . esc_attr( self::FONT_SERIF ) . '; font-size:20px; font-weight:700; line-height:1.3; color:' . esc_attr( self::COLOR_INK ) . ';">'
 			. esc_html( $text )
+			. '</p>';
+	}
+
+	/**
+	 * An uppercase eyebrow used to head a section — e.g. a poster's name above
+	 * their activities in the digest. Paired with an ink hairline above it so
+	 * each poster's block reads as a distinct group.
+	 *
+	 * @param string $text Plain text. Escaped internally.
+	 * @return string Section-label HTML.
+	 */
+	public static function section_label( $text ) {
+		return '<p style="margin:26px 0 12px; padding-top:20px; border-top:2px solid ' . esc_attr( self::COLOR_CARD_EDGE ) . '; font-family:' . esc_attr( self::FONT_SERIF ) . '; font-size:13px; font-weight:700; line-height:1.3; letter-spacing:1px; text-transform:uppercase; color:' . esc_attr( self::COLOR_INK ) . ';">'
+			. esc_html( $text )
+			. '</p>';
+	}
+
+	/**
+	 * A bold, tappable activity title — the whole line is the link, so the
+	 * digest gives one clear tap per activity straight to its page.
+	 *
+	 * @param string $text Title. Escaped internally.
+	 * @param string $url  Destination URL. Escaped internally.
+	 * @return string Title-link HTML.
+	 */
+	public static function title_link( $text, $url ) {
+		return '<p style="margin:0 0 3px; font-family:' . esc_attr( self::FONT_SERIF ) . '; font-size:18px; font-weight:700; line-height:1.3;">'
+			. '<a href="' . esc_url( $url ) . '" style="color:' . esc_attr( self::COLOR_INK ) . '; text-decoration:none;">'
+			. esc_html( $text )
+			. '</a>'
+			. '</p>';
+	}
+
+	/**
+	 * A compact muted meta line under a title (e.g. "Musing · Sat · Cedar Park").
+	 *
+	 * @param string $text Plain text (may contain "\n").
+	 * @return string Meta-line HTML.
+	 */
+	public static function meta_line( $text ) {
+		return '<p style="margin:0 0 18px; font-family:' . esc_attr( self::FONT_SANS ) . '; font-size:14px; line-height:1.5; color:' . esc_attr( self::COLOR_SLATE ) . ';">'
+			. self::text_with_breaks( $text )
 			. '</p>';
 	}
 
@@ -209,8 +257,8 @@ class Orbit_Email_Template {
 	 */
 	public static function button( $text, $url ) {
 		return '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 26px;">'
-			. '<tr><td align="center" bgcolor="' . esc_attr( self::COLOR_SIENNA ) . '" style="border-radius:9px;">'
-			. '<a href="' . esc_url( $url ) . '" style="display:inline-block; padding:14px 30px; font-family:' . esc_attr( self::FONT_SANS ) . '; font-size:16px; font-weight:600; line-height:1; color:#ffffff; text-decoration:none;">'
+			. '<tr><td align="center" bgcolor="' . esc_attr( self::COLOR_SIENNA ) . '" style="border-radius:6px; border:2px solid ' . esc_attr( self::COLOR_INK ) . ';">'
+			. '<a href="' . esc_url( $url ) . '" style="display:inline-block; padding:13px 28px; font-family:' . esc_attr( self::FONT_SANS ) . '; font-size:16px; font-weight:600; line-height:1; color:#ffffff; text-decoration:none;">'
 			. esc_html( $text )
 			. '</a>'
 			. '</td></tr>'

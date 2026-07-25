@@ -85,11 +85,12 @@ class Orbit_Profile {
 				'display_name'     => sanitize_text_field( $args['display_name'] ),
 				'bio'              => $args['bio'] ? sanitize_textarea_field( $args['bio'] ) : null,
 				'share_token'      => Orbit_Token::generate_random(),
+				'share_code'       => Orbit_Share_Code::generate(),
 				'require_approval' => $args['require_approval'] ? 1 : 0,
 				'created_at'       => $now,
 				'updated_at'       => $now,
 			),
-			array( '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s' )
+			array( '%d', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s' )
 		);
 
 		if ( false === $result ) {
@@ -161,6 +162,46 @@ class Orbit_Profile {
 		return $wpdb->get_row(
 			$wpdb->prepare( "SELECT * FROM {$table} WHERE share_token = %s", $token )
 		);
+	}
+
+	/**
+	 * Get a profile by its memorable share code (the /hi/<code> invite).
+	 *
+	 * @param string $code The share code, e.g. "wiggly-orange-otter".
+	 * @return object|null Profile row or null.
+	 */
+	public static function get_by_share_code( $code ) {
+		global $wpdb;
+
+		if ( '' === (string) $code ) {
+			return null;
+		}
+
+		$table = $wpdb->prefix . ORBIT_TABLE_PROFILES;
+
+		return $wpdb->get_row(
+			$wpdb->prepare( "SELECT * FROM {$table} WHERE share_code = %s", $code )
+		);
+	}
+
+	/**
+	 * The public invite URL for a profile — the memorable /hi/<code> link.
+	 *
+	 * This is the one door into an otherwise-private profile: it lands on the
+	 * subscribe request form, never on the person's whereabouts. Prefer the
+	 * memorable share code; fall back to the (opaque) share token only for a
+	 * profile row that predates the code backfill.
+	 *
+	 * @param object $profile Profile row (needs share_code, or slug+share_token).
+	 * @return string Absolute URL.
+	 */
+	public static function share_url( $profile ) {
+		if ( ! empty( $profile->share_code ) ) {
+			return home_url( '/hi/' . rawurlencode( $profile->share_code ) );
+		}
+
+		// Legacy fallback for any un-backfilled row.
+		return home_url( '/@' . $profile->slug . '/subscribe?token=' . rawurlencode( $profile->share_token ) );
 	}
 
 	/**
@@ -364,6 +405,37 @@ class Orbit_Profile {
 		}
 
 		return $new_token;
+	}
+
+	/**
+	 * Reroll a profile's memorable share code, invalidating outstanding
+	 * /hi/<old-code> invite links. People already approved are unaffected.
+	 *
+	 * @param int $id Profile ID.
+	 * @return string|WP_Error New share code on success.
+	 */
+	public static function reroll_share_code( $id ) {
+		global $wpdb;
+
+		$table    = $wpdb->prefix . ORBIT_TABLE_PROFILES;
+		$new_code = Orbit_Share_Code::generate();
+
+		$result = $wpdb->update(
+			$table,
+			array(
+				'share_code' => $new_code,
+				'updated_at' => current_time( 'mysql', true ),
+			),
+			array( 'id' => (int) $id ),
+			array( '%s', '%s' ),
+			array( '%d' )
+		);
+
+		if ( false === $result ) {
+			return new WP_Error( 'db_error', __( 'Failed to reroll the share link.', 'orbit' ) );
+		}
+
+		return $new_code;
 	}
 
 	/**

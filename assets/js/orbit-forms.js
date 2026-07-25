@@ -266,7 +266,12 @@
 				// it was never actually readable.
 				var willRedirect = ( endpoint === 'activities' && method === 'POST' )
 					|| ( endpoint === 'signup' )
-					|| ( endpoint === 'subscribe' )
+					// Subscribe only navigates away when the server hands back a
+					// destination. A pending request comes back with an empty
+					// redirect_url — the profile is private until approval — so
+					// we keep the requester here and show the "request is in"
+					// message instead of bouncing them.
+					|| ( endpoint === 'subscribe' && !! ( result && result.redirect_url ) )
 					|| ( endpoint === 'profiles/me' );
 
 				if ( ! willRedirect ) {
@@ -306,6 +311,17 @@
 						} catch ( e ) {
 							// Fall through to reload on parse error.
 						}
+						// Cross-origin or unparseable: reload rather than
+						// navigate off-site.
+						window.location.reload();
+						return;
+					}
+					// No destination — a pending subscribe request. The success
+					// message ("request is in") was already shown in place; leave
+					// the requester on it rather than reloading into a fresh form.
+					if ( endpoint === 'subscribe' ) {
+						form.reset();
+						return;
 					}
 					window.location.reload();
 				} else if ( endpoint === 'profiles/me' ) {
@@ -408,6 +424,16 @@
 					button.classList.add( 'orbit-btn-active' );
 						button.setAttribute( 'aria-pressed', 'true' );
 
+					// Keep the RSVP status line in sync with the new choice.
+					var statusLine = container.parentNode
+						&& container.parentNode.querySelector( '.orbit-my-response, .orbit-rsvp-prompt' );
+					if ( statusLine ) {
+						statusLine.className = 'orbit-my-response orbit-my-response--' + response;
+						statusLine.textContent = response === 'going'
+							? orbitForms.strings.statusGoing
+							: orbitForms.strings.statusMaybe;
+					}
+
 					// Show retract button if not already present.
 					if ( ! container.querySelector( '.orbit-btn-retract' ) ) {
 						var retractBtn = document.createElement( 'button' );
@@ -491,6 +517,48 @@
 				button.disabled = false;
 			} );
 	} );
+
+	/**
+	 * Handle "New link" (reroll share code) button on the edit-profile page.
+	 * Mints a fresh /hi/<code> invite link, retiring the old one, and swaps
+	 * the value shown in the readonly share-link input in place.
+	 */
+	document.addEventListener( 'click', function ( e ) {
+		var button = e.target.closest( '[data-orbit-reroll-share-code]' );
+
+		if ( ! button ) {
+			return;
+		}
+
+		var id = button.getAttribute( 'data-orbit-reroll-share-code' );
+
+		if ( ! id ) {
+			return;
+		}
+
+		var confirmMsg = button.getAttribute( 'data-orbit-reroll-confirm' );
+		if ( confirmMsg && ! window.confirm( confirmMsg ) ) {
+			return;
+		}
+
+		button.disabled = true;
+
+		apiRequest( 'profiles/' + id + '/reroll-share-code', 'POST', {} )
+			.then( function ( result ) {
+				var input = document.getElementById( 'orbit-share-link' );
+				if ( input && result && result.share_url ) {
+					input.value = result.share_url;
+				}
+				showMessage( button, ( result && result.message ) || 'Your share link was refreshed.', 'success' );
+			} )
+			.catch( function ( err ) {
+				showMessage( button, err.message, 'error' );
+			} )
+			.finally( function () {
+				button.disabled = false;
+			} );
+	} );
+
 	/**
 	 * Handle "Change phone number" / "Use a different number" buttons in
 	 * the phone verification block — reveal the phone entry form, hide
@@ -753,6 +821,34 @@
 			// can retry without hunting for it.
 			dismissBtn.focus();
 		} );
+	} );
+
+	/**
+	 * Phone number formatting helper. When a phone field loses focus, normalize
+	 * its value toward E.164: keep an optional leading "+", then digits only —
+	 * dropping spaces, dashes, parentheses, and stray characters. Pasting a
+	 * prettily formatted number like "+1 (555) 123-4567" lands as
+	 * "+15551234567". The country code is left to the user (the field's help
+	 * text asks for it), so no digits are ever invented.
+	 */
+	document.addEventListener( 'focusout', function ( e ) {
+		var input = e.target;
+		if ( ! input || ! input.matches || ! input.matches( 'input[type="tel"]' ) ) {
+			return;
+		}
+
+		var raw = input.value.trim();
+		if ( ! raw ) {
+			return;
+		}
+
+		var hasPlus = raw.charAt( 0 ) === '+';
+		var digits  = raw.replace( /[^0-9]/g, '' );
+		var normalized = digits ? ( hasPlus ? '+' : '' ) + digits : '';
+
+		if ( normalized !== input.value ) {
+			input.value = normalized;
+		}
 	} );
 
 	/**

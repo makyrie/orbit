@@ -76,13 +76,15 @@ class Orbit_Activator {
 			display_name varchar(200) NOT NULL,
 			bio text DEFAULT NULL,
 			share_token varchar(64) NOT NULL,
+			share_code varchar(80) DEFAULT NULL,
 			require_approval tinyint(1) NOT NULL DEFAULT 1,
 			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 			PRIMARY KEY  (id),
 			UNIQUE KEY user_id (user_id),
 			UNIQUE KEY slug (slug),
-			UNIQUE KEY share_token (share_token)
+			UNIQUE KEY share_token (share_token),
+			UNIQUE KEY share_code (share_code)
 		) {$charset_collate};";
 
 		// orbit_subscriptions.

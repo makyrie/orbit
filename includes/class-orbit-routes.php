@@ -222,6 +222,7 @@ class Orbit_Routes {
 	public static function is_app_route() {
 		return (bool) (
 			get_query_var( 'orbit_profile_slug' )
+			|| get_query_var( 'orbit_hi_code' )
 			|| get_query_var( 'orbit_activity_id' )
 			|| get_query_var( 'orbit_unsubscribe' )
 		);
@@ -238,10 +239,17 @@ class Orbit_Routes {
 			'top'
 		);
 
-		// /@{slug}/subscribe → subscription form.
+		// /@{slug}/subscribe → subscription form (legacy; requires a valid token).
 		add_rewrite_rule(
 			'^@([^/]+)/subscribe/?$',
 			'index.php?orbit_profile_slug=$matches[1]&orbit_subscribe=1',
+			'top'
+		);
+
+		// /hi/{code} → the memorable invite link → subscription form.
+		add_rewrite_rule(
+			'^hi/([^/]+)/?$',
+			'index.php?orbit_hi_code=$matches[1]',
 			'top'
 		);
 
@@ -258,6 +266,14 @@ class Orbit_Routes {
 			'index.php?orbit_unsubscribe=1',
 			'top'
 		);
+
+		// Self-healing flush: the /hi/ rule is new, so register it once after an
+		// in-place deploy without requiring a plugin re-activation. Bump the
+		// stored value if these rules ever change again.
+		if ( '1' !== get_option( 'orbit_routes_rewrite', '' ) ) {
+			flush_rewrite_rules( false );
+			update_option( 'orbit_routes_rewrite', '1' );
+		}
 	}
 
 	/**
@@ -269,6 +285,7 @@ class Orbit_Routes {
 	public static function add_query_vars( $vars ) {
 		$vars[] = 'orbit_profile_slug';
 		$vars[] = 'orbit_subscribe';
+		$vars[] = 'orbit_hi_code';
 		$vars[] = 'orbit_activity_id';
 		$vars[] = 'orbit_unsubscribe';
 
@@ -286,16 +303,52 @@ class Orbit_Routes {
 		global $wp_query;
 
 		$profile_slug = get_query_var( 'orbit_profile_slug' );
+		$hi_code      = get_query_var( 'orbit_hi_code' );
 		$activity_id  = get_query_var( 'orbit_activity_id' );
 		$unsubscribe  = get_query_var( 'orbit_unsubscribe' );
 
-		if ( $profile_slug ) {
+		if ( $hi_code ) {
+			self::handle_hi_route( $hi_code );
+		} elseif ( $profile_slug ) {
 			self::handle_profile_route( $profile_slug );
 		} elseif ( $activity_id ) {
 			self::handle_activity_route( absint( $activity_id ) );
 		} elseif ( $unsubscribe ) {
 			self::handle_unsubscribe_route();
 		}
+	}
+
+	/**
+	 * Whether the current viewer may see a profile's private surface (the
+	 * profile page and its activities): the owner, or an approved subscriber.
+	 * Everyone else gets nothing — profiles are private by default.
+	 *
+	 * @param object $profile Profile row.
+	 * @return bool
+	 */
+	public static function viewer_can_see_profile( $profile ) {
+		if ( ! is_user_logged_in() ) {
+			return false;
+		}
+
+		$user_id = get_current_user_id();
+		if ( (int) $profile->user_id === $user_id ) {
+			return true;
+		}
+
+		$subscription = Orbit_Subscription::get_by_user_and_profile( $user_id, $profile->id );
+		return $subscription && 'approved' === $subscription->status;
+	}
+
+	/**
+	 * Emit a hard 404 — used to hide private profiles/activities completely,
+	 * revealing nothing (not even that the handle or code exists).
+	 */
+	private static function not_found() {
+		global $wp_query;
+		$wp_query->set_404();
+		status_header( 404 );
+		nocache_headers();
 	}
 
 	/**
@@ -307,21 +360,78 @@ class Orbit_Routes {
 		$profile = Orbit_Profile::get_by_slug( sanitize_title( $slug ) );
 
 		if ( ! $profile ) {
-			global $wp_query;
-			$wp_query->set_404();
-			status_header( 404 );
+			self::not_found();
 			return;
 		}
 
-		// Store profile data for shortcode consumption.
-		set_query_var( 'orbit_current_profile', $profile );
-
 		$is_subscribe = get_query_var( 'orbit_subscribe' );
-		$title        = $is_subscribe
-			? sprintf( __( 'Subscribe to %s', 'orbit' ), $profile->display_name )
-			: $profile->display_name;
 
-		self::render_virtual_page( $title, '[orbit_profile]' );
+		if ( $is_subscribe ) {
+			// Legacy /@slug/subscribe: only valid with a matching share token
+			// (the memorable /hi/<code> link is the primary invite path now).
+			// Without it, reveal nothing — a bare slug is not a capability.
+			$token = isset( $_GET['token'] ) ? sanitize_text_field( wp_unslash( $_GET['token'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			if ( '' === $token || ! hash_equals( (string) $profile->share_token, $token ) ) {
+				self::not_found();
+				return;
+			}
+
+			set_query_var( 'orbit_current_profile', $profile );
+			self::render_virtual_page(
+				sprintf( __( 'Subscribe to %s', 'orbit' ), $profile->display_name ),
+				'[orbit_profile]'
+			);
+			return;
+		}
+
+		// The profile page is private by default: only the owner or an approved
+		// subscriber may see it (and the activity whereabouts it lists).
+		if ( ! self::viewer_can_see_profile( $profile ) ) {
+			self::not_found();
+			return;
+		}
+
+		set_query_var( 'orbit_current_profile', $profile );
+		self::render_virtual_page( $profile->display_name, '[orbit_profile]' );
+	}
+
+	/**
+	 * Handle the memorable invite route, /hi/{code}.
+	 *
+	 * Resolves the profile by its share code and lands on the subscribe request
+	 * form — never on the profile's activities. An unknown code 404s, revealing
+	 * nothing. This is the one public door into an otherwise-private profile.
+	 *
+	 * @param string $code The share code.
+	 */
+	private static function handle_hi_route( $code ) {
+		// Anti-enumeration: cap lookups per source IP. A human opening a link
+		// they were given never trips this; a script walking the code space
+		// does. On limit we 404 rather than 429 — consistent with the route's
+		// "reveal nothing" stance, so a limited request is indistinguishable
+		// from an unknown code.
+		$ip = Orbit_Client_IP::get();
+		$allowed = '' === $ip
+			? Orbit_Rate_Limiter::attempt( 'hi_lookup_anon', '_anon', 10, MINUTE_IN_SECONDS )
+			: Orbit_Rate_Limiter::attempt( 'hi_lookup', $ip, 30, MINUTE_IN_SECONDS );
+		if ( ! $allowed ) {
+			self::not_found();
+			return;
+		}
+
+		$profile = Orbit_Profile::get_by_share_code( sanitize_text_field( wp_unslash( $code ) ) );
+
+		if ( ! $profile ) {
+			self::not_found();
+			return;
+		}
+
+		set_query_var( 'orbit_current_profile', $profile );
+		set_query_var( 'orbit_subscribe', 1 );
+		self::render_virtual_page(
+			sprintf( __( 'Subscribe to %s', 'orbit' ), $profile->display_name ),
+			'[orbit_profile]'
+		);
 	}
 
 	/**
@@ -333,9 +443,15 @@ class Orbit_Routes {
 		$activity = Orbit_Activity::get( $activity_id );
 
 		if ( ! $activity ) {
-			global $wp_query;
-			$wp_query->set_404();
-			status_header( 404 );
+			self::not_found();
+			return;
+		}
+
+		// Activity detail is as private as the profile it belongs to: the owner,
+		// an approved subscriber, or someone holding a valid action token from an
+		// email link. Everyone else gets nothing — not even the title.
+		if ( ! self::viewer_can_see_activity( $activity ) ) {
+			self::not_found();
 			return;
 		}
 
@@ -343,6 +459,47 @@ class Orbit_Routes {
 		set_query_var( 'orbit_current_activity', $activity );
 
 		self::render_virtual_page( $activity->title, '[orbit_activity]' );
+	}
+
+	/**
+	 * Whether the current viewer may see an activity's detail page.
+	 *
+	 * Mirrors the access resolution in the [orbit_activity] shortcode: owner of
+	 * the poster profile, an approved logged-in subscriber, or a request bearing
+	 * a valid action token (?act=) from an email link.
+	 *
+	 * @param object $activity Activity row.
+	 * @return bool
+	 */
+	public static function viewer_can_see_activity( $activity ) {
+		$profile = Orbit_Profile::get( (int) $activity->profile_id );
+		if ( ! $profile ) {
+			return false;
+		}
+
+		// Owner or approved subscriber (logged-in).
+		if ( self::viewer_can_see_profile( $profile ) ) {
+			return true;
+		}
+
+		// Action token from an email link — grants view to the specific
+		// approved subscriber it was minted for, even when logged out.
+		$act_token = isset( $_GET['act'] ) ? sanitize_text_field( wp_unslash( $_GET['act'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( '' !== $act_token ) {
+			$sub_id = Orbit_Token::extract_subscription_id( $act_token );
+			if ( $sub_id ) {
+				$sub = Orbit_Subscription::get( $sub_id );
+				if ( $sub
+					&& 'approved' === $sub->status
+					&& (int) $sub->profile_id === (int) $activity->profile_id
+					&& Orbit_Token::validate_action_token( $act_token, $sub->subscription_secret, (int) $activity->id )
+				) {
+					return true;
+				}
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -413,7 +570,7 @@ class Orbit_Routes {
 		<form method="post" action="<?php echo esc_url( home_url( '/unsubscribe/' ) ); ?>">
 			<input type="hidden" name="token" value="<?php echo esc_attr( $token ); ?>" />
 			<?php wp_nonce_field( 'orbit_unsubscribe', 'orbit_unsubscribe_nonce' ); ?>
-			<button type="submit"><?php esc_html_e( 'Confirm Unsubscribe', 'orbit' ); ?></button>
+			<button type="submit" class="orbit-btn"><?php esc_html_e( 'Confirm Unsubscribe', 'orbit' ); ?></button>
 		</form>
 		<?php
 		$content = ob_get_clean();

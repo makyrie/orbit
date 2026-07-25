@@ -231,7 +231,7 @@ class Orbit_REST_Subscription {
 				__( 'An account with this email already exists. Please log in first.', 'orbit' ),
 				array(
 					'status'    => 409,
-					'login_url' => wp_login_url( home_url( '/@' . $profile->slug . '/subscribe?token=' . $share_token ) ),
+					'login_url' => wp_login_url( Orbit_Profile::share_url( $profile ) ),
 				)
 			);
 		}
@@ -452,15 +452,19 @@ class Orbit_REST_Subscription {
 		$subscription = Orbit_Subscription::get( $subscription_id );
 
 		// Where the JS should forward the user after the success flash.
-		// New accounts land on /dashboard/ (their profile editor / first
-		// step). Existing logged-in subscribers go to the profile they
-		// just subscribed to so they immediately see the content they
-		// signed up for. There's no `Orbit_Profile::get_permalink()` helper
-		// yet — the canonical front-end URL is `/@<slug>/`, see
-		// Orbit_Routes for the rewrite that resolves it.
+		// Where to send them next:
+		// - New accounts land on /dashboard/ (their profile editor / first step).
+		// - Approved existing subscribers go straight to the profile they just
+		//   subscribed to — they can now see it.
+		// - Pending requesters get NO redirect. The profile is private and 404s
+		//   until the poster approves them, so we keep them on the "request is
+		//   in" confirmation rather than bouncing them into a dead end. This is
+		//   the private-by-default promise: a not-yet-approved person sees
+		//   nothing but the acknowledgement that their request was sent.
+		$redirect_url = '';
 		if ( $is_new_account ) {
 			$redirect_url = home_url( '/dashboard/' );
-		} else {
+		} elseif ( 'approved' === $subscription->status ) {
 			$redirect_url = home_url( '/@' . $profile->slug . '/' );
 		}
 
@@ -470,7 +474,7 @@ class Orbit_REST_Subscription {
 				'status'       => $subscription->status,
 				'message'      => 'approved' === $subscription->status
 					? __( 'You are now subscribed!', 'orbit' )
-					: __( 'Your subscription request has been sent for approval.', 'orbit' ),
+					: __( "Your request is in. You'll hear from them once it's approved.", 'orbit' ),
 				'redirect_url' => esc_url_raw( $redirect_url ),
 			),
 			201

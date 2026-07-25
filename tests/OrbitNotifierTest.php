@@ -384,6 +384,71 @@ class OrbitNotifierTest extends WP_UnitTestCase {
 	}
 
 	/**
+	 * A subscriber who has hit their SMS daily cap overflows to the digest
+	 * instead of receiving another text — the per-recipient message-ceiling
+	 * guardrail. With SMS live, a verified sms-preferring subscriber whose cap
+	 * is already met for the day must be routed to a queued digest row.
+	 */
+	public function test_sms_cap_reached_routes_to_digest() {
+		global $wpdb;
+
+		// SMS must be live, or the kill-switch coerces sms -> email before the
+		// cap check is ever reached.
+		update_option( Orbit_Features::OPTION_SMS_ENABLED, '1' );
+
+		$profile_id  = $this->create_profile_with_owner( 'cap-poster' );
+		$activity_id = Orbit_Activity::create(
+			array(
+				'profile_id' => $profile_id,
+				'tier'       => 1,
+				'title'      => 'Capped fan-out',
+			)
+		);
+		$this->assertIsInt( $activity_id );
+
+		$uid = self::factory()->user->create( array( 'role' => 'subscriber' ) );
+		$this->insert_approved_subscription( $uid, $profile_id );
+
+		// Route tier-1 to SMS with a verified phone and a cap of one per day.
+		Orbit_Notifier::update_preferences(
+			$uid,
+			array(
+				'tier1_method'  => 'sms',
+				'sms_daily_cap' => 1,
+			)
+		);
+		update_user_meta( $uid, 'orbit_phone_verified', '1' );
+
+		// One SMS already logged today meets the cap of 1.
+		$log_table = $wpdb->prefix . ORBIT_TABLE_NOTIFICATION_LOG;
+		$wpdb->insert(
+			$log_table,
+			array(
+				'user_id'     => $uid,
+				'activity_id' => $activity_id,
+				'method'      => 'sms',
+				'status'      => 'sent',
+				'created_at'  => current_time( 'mysql', true ),
+			),
+			array( '%d', '%d', '%s', '%s', '%s' )
+		);
+
+		Orbit_Notifier::process_dispatch( $activity_id );
+
+		// The capped subscriber's notification overflowed to the digest.
+		$digest_rows = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM {$log_table} WHERE activity_id = %d AND user_id = %d AND method = 'digest'",
+				$activity_id,
+				$uid
+			)
+		);
+		$this->assertSame( 1, $digest_rows, 'A subscriber at their SMS daily cap must overflow to the digest.' );
+
+		delete_option( Orbit_Features::OPTION_SMS_ENABLED );
+	}
+
+	/**
 	 * `orbit_notification_sent` fires with the expected positional args
 	 * (including the new idempotency_key tail arg) when email handoff
 	 * succeeds.
@@ -535,7 +600,7 @@ class OrbitNotifierTest extends WP_UnitTestCase {
 		// Branded HTML part: wordmark, activity title, the Respond button
 		// carrying the action link, and the footer unsubscribe link.
 		$this->assertStringContainsString( 'Perihelion', $this->html_body( $mailer ) );
-		$this->assertStringContainsString( 'Fraunces', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'Century Gothic', $this->html_body( $mailer ) );
 		$this->assertStringContainsString( 'Saturday morning bike ride', $this->html_body( $mailer ) );
 		$this->assertStringContainsString( 'Respond', $this->html_body( $mailer ) );
 		$this->assertStringContainsString( '/activity/', $this->html_body( $mailer ) );
@@ -596,8 +661,8 @@ class OrbitNotifierTest extends WP_UnitTestCase {
 
 	/**
 	 * The daily digest a subscriber receives is warm and well-formed:
-	 * subject "Your Perihelion digest", the "here's what the people you
-	 * follow are up to" opener, a clean per-poster header (no `--- Name ---`
+	 * a subject naming who posted and how many, the "here's what the people
+	 * you follow are up to" opener, a clean per-poster header (no `--- Name ---`
 	 * ASCII dividers), each queued item's title and tier label, the
 	 * "silence is a complete answer" closer, the manage-subscriptions link,
 	 * and the RFC 8058 one-click unsubscribe headers.
@@ -659,11 +724,12 @@ class OrbitNotifierTest extends WP_UnitTestCase {
 		$subscriber = get_userdata( self::$user_id );
 		$this->assertSame( $subscriber->user_email, $sent->to[0][0] );
 
-		// Sentence-case subject built from the site name (Perihelion).
-		$this->assertSame(
-			sprintf( 'Your %s digest', get_bloginfo( 'name' ) ),
-			$sent->subject
-		);
+		// Subject names who posted and how many, e.g. "Grace and Ada posted
+		// 3 activities". Poster order follows the tier-desc digest ordering,
+		// so assert on the parts rather than a fixed order.
+		$this->assertStringContainsString( 'Ada', $sent->subject );
+		$this->assertStringContainsString( 'Grace', $sent->subject );
+		$this->assertStringContainsString( '3 activities', $sent->subject );
 
 		// Multipart: the digest advertises an HTML part.
 		$this->assertStringContainsString( 'multipart/alternative', $sent->header );
@@ -681,21 +747,24 @@ class OrbitNotifierTest extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Sunday farmers market', $this->alt_body( $mailer ) );
 		$this->assertStringContainsString( 'Evening board games', $this->alt_body( $mailer ) );
 		$this->assertStringContainsString( 'Weekend hiking trip', $this->alt_body( $mailer ) );
-		$this->assertStringContainsString( $tier_labels[2], $this->alt_body( $mailer ) );
+		// The digest shows the neutral badge label (Tempted), not the poster's
+		// first-person "I'll go if you will" phrasing.
+		$this->assertStringContainsString( Orbit_Activity::get_tier_label( 2 ), $this->alt_body( $mailer ) );
 		$this->assertStringContainsString( 'silence is a complete answer', $this->alt_body( $mailer ) );
 		$this->assertStringContainsString( 'Manage your subscriptions:', $this->alt_body( $mailer ) );
 		$this->assertStringNotContainsString( '--- Ada ---', $this->alt_body( $mailer ) );
 		$this->assertStringNotContainsString( '--- Grace ---', $this->alt_body( $mailer ) );
 
-		// Branded HTML part: wordmark, both poster headings, each activity,
-		// the warm closer, a Respond link, and the manage-subscriptions footer.
+		// Branded HTML part: wordmark, both poster headings, each activity as a
+		// tappable title linking to its page, the warm closer, and the
+		// manage-subscriptions footer.
 		$this->assertStringContainsString( 'Perihelion', $this->html_body( $mailer ) );
-		$this->assertStringContainsString( 'Fraunces', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( 'Century Gothic', $this->html_body( $mailer ) );
 		$this->assertStringContainsString( 'Ada', $this->html_body( $mailer ) );
 		$this->assertStringContainsString( 'Grace', $this->html_body( $mailer ) );
 		$this->assertStringContainsString( 'Sunday farmers market', $this->html_body( $mailer ) );
 		$this->assertStringContainsString( 'Weekend hiking trip', $this->html_body( $mailer ) );
-		$this->assertStringContainsString( 'Respond', $this->html_body( $mailer ) );
+		$this->assertStringContainsString( '/activity/', $this->html_body( $mailer ) );
 		$this->assertStringContainsString( 'silence is a complete answer', $this->html_body( $mailer ) );
 		$this->assertStringContainsString( 'Manage your subscriptions', $this->html_body( $mailer ) );
 
