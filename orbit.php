@@ -17,7 +17,7 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Plugin constants.
  */
-define( 'ORBIT_VERSION', '1.9.8' );
+define( 'ORBIT_VERSION', '1.9.9' );
 define( 'ORBIT_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ORBIT_PLUGIN_FILE', __FILE__ );
 
@@ -389,6 +389,7 @@ function orbit_enqueue_scripts() {
 	$dominated_by_orbit = is_page( orbit_get_internal_page_slugs() ) || is_page( 'sign-up' );
 
 	$is_orbit_route = get_query_var( 'orbit_profile_slug' )
+		|| get_query_var( 'orbit_hi_code' )
 		|| get_query_var( 'orbit_activity_id' )
 		|| get_query_var( 'orbit_unsubscribe' );
 

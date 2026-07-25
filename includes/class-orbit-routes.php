@@ -570,7 +570,7 @@ class Orbit_Routes {
 		<form method="post" action="<?php echo esc_url( home_url( '/unsubscribe/' ) ); ?>">
 			<input type="hidden" name="token" value="<?php echo esc_attr( $token ); ?>" />
 			<?php wp_nonce_field( 'orbit_unsubscribe', 'orbit_unsubscribe_nonce' ); ?>
-			<button type="submit"><?php esc_html_e( 'Confirm Unsubscribe', 'orbit' ); ?></button>
+			<button type="submit" class="orbit-btn"><?php esc_html_e( 'Confirm Unsubscribe', 'orbit' ); ?></button>
 		</form>
 		<?php
 		$content = ob_get_clean();

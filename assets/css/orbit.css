@@ -220,6 +220,7 @@ button.orbit-btn-link {
 .orbit-form-group input[type="text"],
 .orbit-form-group input[type="email"],
 .orbit-form-group input[type="tel"],
+.orbit-form-group input[type="url"],
 .orbit-form-group input[type="number"],
 .orbit-form-group input[type="time"],
 .orbit-form-group input[type="datetime-local"],
